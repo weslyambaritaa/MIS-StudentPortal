@@ -1,0 +1,42 @@
+{
+  "realm": "mis-student-portal",
+  "enabled": true,
+  "displayName": "MIS Student Portal",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      {"name":"student"},{"name":"pic"},{"name":"trainer"},{"name":"sales"},
+      {"name":"admin"},{"name":"super_admin"},{"name":"finance"},{"name":"management"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "mis-student-portal-frontend",
+      "name": "MIS Student Portal Frontend",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-client-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/api/auth/callback/keycloak"],
+      "webOrigins": ["http://localhost:3000"],
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "frontend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "mis-student-portal-frontend",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

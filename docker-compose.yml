@@ -1,0 +1,266 @@
+services:
+  student-db:
+    image: postgres:18-alpine
+    container_name: mis-student-db
+
+    environment:
+      POSTGRES_DB: ${STUDENT_DB_NAME}
+      POSTGRES_USER: ${STUDENT_DB_USER}
+      POSTGRES_PASSWORD: ${STUDENT_DB_PASSWORD}
+
+    ports:
+      - "${STUDENT_DB_PORT}:5432"
+
+    volumes:
+      - student-db-data:/var/lib/postgresql
+
+    networks:
+      - external-net
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  internal-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mis-internal-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
+    ports:
+      - "${INTERNAL_DB_PORT}:1433"
+    volumes:
+      - internal-db-data:/var/opt/mssql
+    networks:
+      - internal-net
+
+  keycloak-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mis-keycloak-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
+    ports:
+      - "${KEYCLOAK_DB_PORT}:1433"
+    volumes:
+      - keycloak-db-data:/var/opt/mssql
+    networks:
+      - auth-net
+
+  database-bootstrap:
+    build:
+      context: .
+      dockerfile: infrastructure/database-bootstrap/Dockerfile
+    container_name: mis-database-bootstrap
+    environment:
+      INTERNAL_DB_HOST: internal-db
+      INTERNAL_DB_PORT_INTERNAL: 1433
+      INTERNAL_DB_NAME: ${INTERNAL_DB_NAME}
+      INTERNAL_DB_SA_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
+      KEYCLOAK_DB_HOST: keycloak-db
+      KEYCLOAK_DB_PORT_INTERNAL: 1433
+      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME}
+      KEYCLOAK_DB_SA_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
+    depends_on:
+      - internal-db
+      - keycloak-db
+    networks:
+      - internal-net
+      - auth-net
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    container_name: mis-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_DB: mssql
+      KC_DB_URL: "jdbc:sqlserver://keycloak-db:1433;databaseName=${KEYCLOAK_DB_NAME};encrypt=false;trustServerCertificate=true"
+      KC_DB_USERNAME: sa
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: http://auth.localhost:4000
+      KC_HOSTNAME_ADMIN: http://auth.localhost:4000
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - ./keycloak/themes:/opt/keycloak/themes:ro
+    depends_on:
+      database-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - auth-net
+
+  student-api:
+    build:
+      context: .
+      dockerfile: app/be/student-api/Dockerfile
+    container_name: mis-student-api
+    environment:
+      PORT: 4001
+      NODE_ENV: development
+      DB_HOST: student-db
+      DB_PORT: 5432
+      DB_NAME: ${STUDENT_DB_NAME}
+      DB_USER: ${STUDENT_DB_USER}
+      DB_PASSWORD: ${STUDENT_DB_PASSWORD}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+    expose:
+      - "4001"
+    depends_on:
+      student-db:
+        condition: service_healthy
+    networks:
+      - external-net
+      - event-net
+    volumes:
+      - ./app/be/student-api:/workspace/app/be/student-api
+      - student-api-node-modules:/workspace/node_modules
+
+  internal-api:
+    build:
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+    container_name: mis-internal-api
+    environment:
+      PORT: 4002
+      NODE_ENV: development
+      DB_HOST: internal-db
+      DB_PORT: 1433
+      DB_NAME: ${INTERNAL_DB_NAME}
+      DB_USER: sa
+      DB_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+    expose:
+      - "4002"
+    depends_on:
+      database-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - internal-net
+      - event-net
+    volumes:
+      - ./app/be/internal-api:/workspace/app/be/internal-api
+      - internal-api-node-modules:/workspace/node_modules
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: mis-api-gateway
+    environment:
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:3000
+      STUDENT_API_URL: http://student-api:4001
+      INTERNAL_API_URL: http://internal-api:4002
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_HOST: auth.localhost:4000
+      KEYCLOAK_ISSUER: http://auth.localhost:4000/realms/mis-student-portal
+      KEYCLOAK_JWKS_INTERNAL_URL: http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX: 100
+      CACHE_ENABLED: "false"
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${GATEWAY_PORT}:4000"
+    depends_on:
+      - keycloak
+      - student-api
+      - internal-api
+    networks:
+      edge-net:
+        aliases:
+          - auth.localhost
+          - api.localhost
+      auth-net:
+      external-net:
+      internal-net:
+      gateway-infra-net:
+    volumes:
+      - ./gateway:/workspace/gateway
+      - gateway-node-modules:/workspace/node_modules
+
+  frontend:
+    build:
+      context: .
+      dockerfile: app/fe/Dockerfile
+    container_name: mis-frontend
+    environment:
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_ISSUER: http://auth.localhost:4000/realms/mis-student-portal
+      NEXT_PUBLIC_API_BASE_URL: http://api.localhost:4000
+      NEXT_PUBLIC_KEYCLOAK_ISSUER: http://auth.localhost:4000/realms/mis-student-portal
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - edge-net
+    volumes:
+      - ./app/fe:/workspace/app/fe
+      - frontend-node-modules:/workspace/node_modules
+      - frontend-next:/workspace/app/fe/.next
+
+  redis:
+    image: redis:8-alpine
+    container_name: mis-redis
+    profiles: ["platform"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - gateway-infra-net
+    volumes:
+      - redis-data:/data
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: mis-rabbitmq
+    profiles: ["platform"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "${RABBITMQ_AMQP_PORT}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+    networks:
+      - event-net
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+volumes:
+  student-db-data:
+  internal-db-data:
+  keycloak-db-data:
+  frontend-node-modules:
+  frontend-next:
+  gateway-node-modules:
+  student-api-node-modules:
+  internal-api-node-modules:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  edge-net:
+  auth-net:
+  external-net:
+  internal-net:
+  gateway-infra-net:
+  event-net:

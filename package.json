@@ -1,0 +1,25 @@
+{
+  "name": "mis-student-portal",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "app/fe",
+    "app/be/student-api",
+    "app/be/internal-api",
+    "gateway",
+    "infrastructure/database-bootstrap",
+    "packages/shared-types",
+    "packages/config",
+    "packages/logger"
+  ],
+  "scripts": {
+    "dev": "docker compose up --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "ps": "docker compose ps",
+    "migrate:student": "docker compose exec student-api npm run migrate",
+    "migrate:internal": "docker compose exec internal-api npm run migrate",
+    "migrate": "npm run migrate:student && npm run migrate:internal",
+    "build:shared": "npm run build --workspace packages/shared-types && npm run build --workspace packages/config && npm run build --workspace packages/logger"
+  }
+}
