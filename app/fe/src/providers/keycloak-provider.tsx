@@ -77,10 +77,13 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     );
   }, [authenticated]);
 
-  if (!initialized || !authenticated) {
+  if (!authenticated) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p>Redirecting to login...</p>
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-800" />
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
       </main>
     );
   }
