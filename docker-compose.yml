@@ -78,7 +78,12 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3
     container_name: mis-keycloak
-    command: ["start-dev", "--import-realm"]
+    command:
+      - start-dev
+      - --import-realm
+      - --spi-theme--cache-themes=false
+      - --spi-theme--cache-templates=false
+      - --spi-theme--static-max-age=-1
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}

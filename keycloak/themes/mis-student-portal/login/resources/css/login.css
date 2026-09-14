@@ -1,1 +1,280 @@
-/* Add MIS Student Portal login styling here after auth flow is stable. */
+/* =========================================================
+   MIS Student Portal - Keycloak Login Theme
+   Simple ExecuTrain Style
+   ========================================================= */
+
+/* ---------- PAGE ---------- */
+
+html,
+body {
+  min-height: 100%;
+}
+
+body,
+body.login-pf {
+  margin: 0 !important;
+  background: #ffffff !important;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #333333;
+}
+
+/* Hilangkan background bawaan Keycloak */
+.login-pf {
+  background: #ffffff !important;
+}
+
+/* ---------- MAIN CONTAINER ---------- */
+
+.login-pf-page {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 32px 16px !important;
+  box-sizing: border-box;
+}
+
+/* ---------- HEADER / LOGO ---------- */
+
+#kc-header {
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto !important;
+}
+
+#kc-header-wrapper {
+  width: 100%;
+  height: 110px;
+
+  margin: 0 !important;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Merah untuk logo putih ExecuTrain */
+  background-color: #c62828;
+
+  background-image: url("../img/executrain.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 250px auto;
+
+  /* Hilangkan tulisan MIS Student Portal */
+  font-size: 0 !important;
+  color: transparent !important;
+
+  border-radius: 6px 6px 0 0;
+
+  box-sizing: border-box;
+}
+
+/* ---------- KEYCLOAK CONTAINER ---------- */
+
+#kc-content,
+#kc-content-wrapper,
+#kc-container,
+#kc-container-wrapper {
+  width: 100% !important;
+  max-width: 390px !important;
+
+  margin-left: auto !important;
+  margin-right: auto !important;
+
+  box-sizing: border-box;
+}
+
+/* ---------- LOGIN CARD ---------- */
+
+.card-pf {
+  width: 100% !important;
+  max-width: 390px !important;
+
+  margin: 0 auto !important;
+  padding: 32px 28px 28px !important;
+
+  background: #ffffff !important;
+
+  border: 1px solid #dddddd !important;
+  border-top: none !important;
+
+  border-radius: 0 0 6px 6px !important;
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+
+  box-sizing: border-box;
+}
+
+/* ---------- TITLE ---------- */
+
+#kc-page-title {
+  margin: 0 0 26px !important;
+
+  color: #333333 !important;
+
+  font-size: 22px !important;
+  font-weight: 600 !important;
+
+  text-align: center;
+}
+
+/* ---------- FORM ---------- */
+
+#kc-form,
+#kc-form-wrapper {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.form-group {
+  margin-bottom: 18px !important;
+}
+
+label,
+.pf-c-form__label-text {
+  color: #444444 !important;
+
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* ---------- INPUT ---------- */
+
+.form-control,
+.pf-c-form-control {
+  width: 100% !important;
+
+  height: 42px !important;
+  min-height: 42px !important;
+
+  padding: 8px 10px !important;
+
+  background: #f8f8f8 !important;
+
+  border: 1px solid #cccccc !important;
+  border-radius: 2px !important;
+
+  box-shadow: none !important;
+
+  font-size: 14px !important;
+
+  box-sizing: border-box;
+}
+
+.form-control:focus,
+.pf-c-form-control:focus {
+  background: #ffffff !important;
+
+  border-color: #c62828 !important;
+
+  outline: none !important;
+
+  box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.12) !important;
+}
+
+/* ---------- PASSWORD ---------- */
+
+#kc-form-password {
+  width: 100%;
+}
+
+.pf-c-input-group {
+  width: 100%;
+}
+
+/* Tombol mata password */
+.pf-c-button.pf-m-control {
+  background: #f8f8f8 !important;
+  border-color: #cccccc !important;
+}
+
+/* ---------- FORGOT PASSWORD ---------- */
+
+#kc-form-options {
+  margin-top: -5px;
+  margin-bottom: 18px;
+}
+
+#kc-form-options a,
+a {
+  color: #c62828 !important;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+#kc-form-options a:hover,
+a:hover {
+  color: #a61f1f !important;
+  text-decoration: underline;
+}
+
+/* ---------- SIGN IN BUTTON ---------- */
+
+#kc-login {
+  width: 100% !important;
+
+  min-height: 42px !important;
+
+  margin-top: 4px;
+
+  background: #c62828 !important;
+
+  color: #ffffff !important;
+
+  border: none !important;
+  border-radius: 2px !important;
+
+  font-size: 14px !important;
+  font-weight: 600 !important;
+
+  box-shadow: none !important;
+
+  cursor: pointer;
+}
+
+#kc-login:hover {
+  background: #a61f1f !important;
+}
+
+#kc-login:active {
+  background: #8e1919 !important;
+}
+
+/* ---------- ALERT ---------- */
+
+.alert {
+  max-width: 100%;
+  margin-bottom: 20px;
+}
+
+/* ---------- MOBILE ---------- */
+
+@media (max-width: 480px) {
+  .login-pf-page {
+    justify-content: flex-start;
+    padding: 24px 16px !important;
+  }
+
+  #kc-header,
+  #kc-content,
+  #kc-content-wrapper,
+  #kc-container,
+  #kc-container-wrapper,
+  .card-pf {
+    max-width: 100% !important;
+  }
+
+  #kc-header-wrapper {
+    height: 95px;
+    background-size: 210px auto;
+  }
+
+  .card-pf {
+    padding: 26px 22px 24px !important;
+  }
+
+  #kc-page-title {
+    font-size: 20px !important;
+  }
+}
