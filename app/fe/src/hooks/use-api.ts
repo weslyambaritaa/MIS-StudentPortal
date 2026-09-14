@@ -1,13 +1,23 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/providers/keycloak-provider";
 import { apiRequest } from "@/lib/api/client";
 
 export function useApi() {
-  const { data: session } = useSession();
+  const { keycloak } = useAuth();
 
   return async function request<T>(path: string, init?: RequestInit) {
-    if (!session?.accessToken) throw new Error("No access token available");
-    return apiRequest<T>(path, session.accessToken, init);
+    try {
+      await keycloak.updateToken(30);
+    } catch {
+      await keycloak.login();
+      throw new Error("Session expired");
+    }
+
+    if (!keycloak.token) {
+      throw new Error("No Keycloak access token available");
+    }
+
+    return apiRequest<T>(path, keycloak.token, init);
   };
 }
