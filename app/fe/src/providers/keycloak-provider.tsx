@@ -2,31 +2,20 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import Keycloak from "keycloak-js";
+import type KeycloakType from "keycloak-js";
 
 import keycloak, { initializeKeycloak } from "@/lib/auth/keycloak";
 
-const BUSINESS_ROLES = [
-  "student",
-  "pic",
-  "trainer",
-  "sales",
-  "admin",
-  "super_admin",
-  "finance",
-  "management",
-] as const;
+import { isBusinessRole, type BusinessRole } from "@/lib/auth/roles";
 
 type AuthContextValue = {
-  keycloak: Keycloak;
-  roles: string[];
+  keycloak: KeycloakType;
+  roles: BusinessRole[];
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
-  const [initialized, setInitialized] = useState(false);
-
   const [authenticated, setAuthenticated] = useState(false);
 
   const [, forceRender] = useState(0);
@@ -41,18 +30,15 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
         }
 
         setAuthenticated(isAuthenticated);
-        setInitialized(true);
       })
       .catch(() => {
-        if (active) {
-          setInitialized(true);
+        if (!active) {
+          return;
         }
+
+        setAuthenticated(false);
       });
 
-    /*
-     * Sama konsepnya dengan project SMK:
-     * refresh token sebelum expired.
-     */
     keycloak.onTokenExpired = () => {
       void keycloak
         .updateToken(30)
@@ -69,12 +55,10 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const roles = useMemo(() => {
+  const roles = useMemo<BusinessRole[]>(() => {
     const realmRoles = keycloak.realmAccess?.roles ?? [];
 
-    return realmRoles.filter((role) =>
-      BUSINESS_ROLES.includes(role as (typeof BUSINESS_ROLES)[number])
-    );
+    return realmRoles.filter(isBusinessRole);
   }, [authenticated]);
 
   if (!authenticated) {
@@ -82,6 +66,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       <main className="flex min-h-screen items-center justify-center">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-800" />
+
           <p className="text-sm text-gray-600">Loading...</p>
         </div>
       </main>
