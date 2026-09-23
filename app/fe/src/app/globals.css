@@ -1,12 +1,93 @@
 @import "tailwindcss";
 
+/* =========================================================
+   MIS ExecuTrain Design Tokens
+   ========================================================= */
+
 :root {
+  /* Brand */
+  --color-primary: #de1641;
+  --color-primary-hover: #d91445;
+  --color-primary-active: #bf123c;
+  --color-primary-soft: #fde8ee;
+
+  /* Background */
+  --color-background: #f7f7f8;
+  --color-surface: #ffffff; 
+
+  /* Text */
+  --color-text-primary: #171717;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Border */
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+
+  /* State */
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* Layout */
+  --navbar-height: 64px;
+
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 72px;
+
+  /* Transition */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+
   color-scheme: light;
 }
 
+/* =========================================================
+   BASE
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+
   font-family: Arial, Helvetica, sans-serif;
-  background: #f7f7f8;
-  color: #111827;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  text-decoration: none;
 }

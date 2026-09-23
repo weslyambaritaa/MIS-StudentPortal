@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const dashboardTitle = getDashboardTitle(roles);
 
   return (
-    <AppShell>
+    <AppShell title="Dashboard">
       <h1 className="text-3xl font-semibold">{dashboardTitle}</h1>
 
       <div className="mt-6 space-y-2">

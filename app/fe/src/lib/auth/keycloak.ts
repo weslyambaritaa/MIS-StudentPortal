@@ -26,7 +26,7 @@ export function initializeKeycloak() {
       checkLoginIframe: false,
       pkceMethod: "S256",
 
-      redirectUri: window.location.origin,
+      redirectUri: `${window.location.origin}${window.location.pathname}`,
     });
   }
 
