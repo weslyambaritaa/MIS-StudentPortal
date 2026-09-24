@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+}
+
 /* =========================================================
    MIS ExecuTrain Design Tokens
    ========================================================= */
@@ -71,7 +75,7 @@ body {
   background: var(--color-background);
   color: var(--color-text-primary);
 
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-dm-sans), sans-serif;
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

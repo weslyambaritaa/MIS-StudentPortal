@@ -24,29 +24,30 @@ export function DeleteConfirmationModal({
   return (
     <Modal open={open} onClose={onClose}>
       <div className="flex items-start justify-between gap-4">
-        <h2 className="text-xl font-medium text-[var(--color-text-primary)]">
+        <h2 className="text-2xl font-medium text-gray-600">
           Are you sure you want to delete?
         </h2>
 
         <IconButton label="Close" size="sm" icon={<X size={20} />} onClick={onClose} />
       </div>
 
-      <div className="my-4 h-px bg-[var(--color-border)]" />
+      <div className="my-4 h-px bg-zinc-950/20" />
 
-      <p className="text-sm text-[var(--color-text-secondary)]">
+      <p className="text-sm text-zinc-950/60">
         The following content &quot;{itemName}&quot; will be deleted permanently, with its child...
       </p>
 
-      <div className="mt-6 flex items-center justify-between gap-4">
-        <Button onClick={onClose} className="min-w-[180px]">
+      <div className="mt-6 flex items-center gap-3">
+        <Button onClick={onClose} className="min-w-0 flex-1">
           No, Cancel
         </Button>
 
         <Button
-          variant="danger"
+          variant="ghost"
           onClick={onConfirm}
           disabled={loading}
           rightIcon={<Trash2 size={17} />}
+          className="min-w-0 flex-1"
         >
           {loading ? "Deleting..." : "Yes, Delete"}
         </Button>

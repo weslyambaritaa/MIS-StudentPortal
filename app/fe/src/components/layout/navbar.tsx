@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { LogOut, Menu } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -13,12 +13,16 @@ type NavbarProps = {
   title?: string;
 
   onMenuClick?: () => void;
+  sidebarCollapsed?: boolean;
+  onSidebarToggle?: () => void;
 };
 
 export function Navbar({
   title = "Dashboard",
 
   onMenuClick,
+  sidebarCollapsed = false,
+  onSidebarToggle,
 }: NavbarProps) {
   const { keycloak } = useAuth();
 
@@ -29,8 +33,8 @@ export function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-[var(--navbar-height)] items-center border-b border-[var(--color-border)] bg-white px-4 md:px-6">
-      <div className="flex flex-1 items-center gap-4">
+    <header className="sticky top-0 z-40 flex min-h-[68px] items-center justify-between border-b border-rose-50 bg-white px-4 py-3 md:px-8">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         {/* Mobile Hamburger */}
         <div className="md:hidden">
           <IconButton
@@ -42,25 +46,33 @@ export function Navbar({
 
         {/* Logo */}
         <Image
-          src="/brand/mis-executrain.png"
-          alt="MIS ExecuTrain"
-          width={250}
-          height={50}
+          src="/brand/ExecuTrain_logo.png"
+          alt="ExecuTrain"
+          width={553}
+          height={140}
           priority
-          className="h-auto w-[220px] object-contain"
+          className="h-10 w-40 shrink-0 object-contain"
         />
 
         {/* Separator */}
-        <div className="hidden h-7 w-px bg-[var(--color-border)] md:block" />
+        <div className="hidden h-6 w-px bg-zinc-950/20 md:block" />
 
-        {/* Page Name */}
-        <span className="hidden text-sm text-[#45465F] md:block">{title}</span>
+        <div className="hidden min-w-0 items-center gap-2 md:flex">
+          <IconButton
+            label={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+            variant="ghost-red"
+            icon={sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            onClick={onSidebarToggle}
+          />
+          <span className="truncate text-sm font-normal text-zinc-950/60">&ldquo;{title}&rdquo;</span>
+        </div>
       </div>
 
       {/* Logout */}
       <Button
-        variant="navigation"
-        size="sm"
+        variant="danger"
+        size="default"
         leftIcon={<LogOut size={16} strokeWidth={1.7} />}
         onClick={handleLogout}
       >

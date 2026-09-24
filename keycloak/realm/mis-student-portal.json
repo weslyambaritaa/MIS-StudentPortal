@@ -2,6 +2,8 @@
   "realm": "mis-student-portal",
   "enabled": true,
   "displayName": "MIS Student Portal",
+  "loginTheme": "mis-student-portal",
+  "loginWithEmailAllowed": true,
   "registrationAllowed": false,
   "resetPasswordAllowed": true,
   "roles": {

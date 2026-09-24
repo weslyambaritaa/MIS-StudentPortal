@@ -28,11 +28,10 @@ export function Modal({ open, onClose, children, className = "" }: ModalProps) {
         aria-modal="true"
         className={[
           "relative z-10",
-          "w-full max-w-md",
-          "rounded-3xl",
+          "w-full max-w-[480px]",
+          "rounded-3xl border border-rose-50",
           "bg-white",
           "p-5",
-          "shadow-xl",
           className,
         ].join(" ")}
       >

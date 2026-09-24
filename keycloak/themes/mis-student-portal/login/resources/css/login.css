@@ -1,280 +1,468 @@
-/* =========================================================
-   MIS Student Portal - Keycloak Login Theme
-   Simple ExecuTrain Style
-   ========================================================= */
+@font-face {
+  font-family: "DM Sans";
+  src: url("../fonts/dm-sans-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
 
-/* ---------- PAGE ---------- */
+:root {
+  color-scheme: light;
+  font-family: "DM Sans", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #4b5563;
+  background: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
 
 html,
 body {
+  width: 100%;
+  min-width: 320px;
   min-height: 100%;
+  margin: 0;
 }
 
-body,
-body.login-pf {
-  margin: 0 !important;
-  background: #ffffff !important;
-  font-family: Arial, Helvetica, sans-serif;
-  color: #333333;
-}
-
-/* Hilangkan background bawaan Keycloak */
-.login-pf {
-  background: #ffffff !important;
-}
-
-/* ---------- MAIN CONTAINER ---------- */
-
-.login-pf-page {
-  display: flex !important;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+body.mis-login-page {
   min-height: 100vh;
-  padding: 32px 16px !important;
-  box-sizing: border-box;
+  font-family: "DM Sans", Arial, sans-serif;
+  background: #fff;
 }
 
-/* ---------- HEADER / LOGO ---------- */
-
-#kc-header {
+.login-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 496px);
   width: 100%;
-  max-width: 390px;
-  margin: 0 auto !important;
+  min-height: 100vh;
 }
 
-#kc-header-wrapper {
-  width: 100%;
-  height: 110px;
-
-  margin: 0 !important;
-
+.promo-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-
-  /* Merah untuk logo putih ExecuTrain */
-  background-color: #c62828;
-
-  background-image: url("../img/executrain.png");
-  background-repeat: no-repeat;
+  min-width: 0;
+  min-height: 100vh;
+  padding: 48px;
+  background-image: linear-gradient(rgba(12, 12, 12, 0.22), rgba(12, 12, 12, 0.22)), url("../img/login-page.png");
   background-position: center;
-  background-size: 250px auto;
-
-  /* Hilangkan tulisan MIS Student Portal */
-  font-size: 0 !important;
-  color: transparent !important;
-
-  border-radius: 6px 6px 0 0;
-
-  box-sizing: border-box;
+  background-size: cover;
 }
 
-/* ---------- KEYCLOAK CONTAINER ---------- */
-
-#kc-content,
-#kc-content-wrapper,
-#kc-container,
-#kc-container-wrapper {
-  width: 100% !important;
-  max-width: 390px !important;
-
-  margin-left: auto !important;
-  margin-right: auto !important;
-
-  box-sizing: border-box;
-}
-
-/* ---------- LOGIN CARD ---------- */
-
-.card-pf {
-  width: 100% !important;
-  max-width: 390px !important;
-
-  margin: 0 auto !important;
-  padding: 32px 28px 28px !important;
-
-  background: #ffffff !important;
-
-  border: 1px solid #dddddd !important;
-  border-top: none !important;
-
-  border-radius: 0 0 6px 6px !important;
-
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-
-  box-sizing: border-box;
-}
-
-/* ---------- TITLE ---------- */
-
-#kc-page-title {
-  margin: 0 0 26px !important;
-
-  color: #333333 !important;
-
-  font-size: 22px !important;
-  font-weight: 600 !important;
-
+.promo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 384px);
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
   text-align: center;
 }
 
-/* ---------- FORM ---------- */
-
-#kc-form,
-#kc-form-wrapper {
-  width: 100% !important;
-  max-width: none !important;
+.promo-icon {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
 }
 
-.form-group {
-  margin-bottom: 18px !important;
+.promo-symbol {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
-label,
-.pf-c-form__label-text {
-  color: #444444 !important;
-
-  font-size: 13px !important;
-  font-weight: 600 !important;
+.promo-symbol.is-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
-/* ---------- INPUT ---------- */
-
-.form-control,
-.pf-c-form-control {
-  width: 100% !important;
-
-  height: 42px !important;
-  min-height: 42px !important;
-
-  padding: 8px 10px !important;
-
-  background: #f8f8f8 !important;
-
-  border: 1px solid #cccccc !important;
-  border-radius: 2px !important;
-
-  box-shadow: none !important;
-
-  font-size: 14px !important;
-
-  box-sizing: border-box;
+.promo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.form-control:focus,
-.pf-c-form-control:focus {
-  background: #ffffff !important;
-
-  border-color: #c62828 !important;
-
-  outline: none !important;
-
-  box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.12) !important;
+.promo-copy h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.28;
 }
 
-/* ---------- PASSWORD ---------- */
+.promo-copy p {
+  margin: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
 
-#kc-form-password {
+.promo-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 16px;
+  margin-top: 2px;
+}
+
+.promo-pagination button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+  transition: width 160ms ease, background-color 160ms ease;
+}
+
+.promo-pagination button.is-active {
+  width: 24px;
+  background: #fff;
+}
+
+.promo-pagination button:focus-visible,
+.password-toggle:focus-visible,
+#kc-login:focus-visible,
+.reset-submit:focus-visible,
+.back-to-login:focus-visible,
+.forgot-password a:focus-visible {
+  outline: 3px solid #fca5a5;
+  outline-offset: 3px;
+}
+
+.form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 100vh;
+  padding: 48px;
+  border: 1px solid #f5f5f5;
+  background: #fff;
+}
+
+.login-form-wrap {
+  width: min(100%, 384px);
+}
+
+.brand-logo {
+  display: block;
+  width: 160px;
+  height: 40px;
+  margin-bottom: 24px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+#login-title {
+  margin: 0 0 24px;
+  color: #4b5563;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+#kc-form-login {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   width: 100%;
 }
 
-.pf-c-input-group {
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.field-group label {
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.field-group input {
+  display: block;
   width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid #e11d48;
+  border-radius: 999px;
+  outline: 0;
+  background: #fafafa;
+  color: #27272a;
+  font: 400 14px/20px "DM Sans", Arial, sans-serif;
 }
 
-/* Tombol mata password */
-.pf-c-button.pf-m-control {
-  background: #f8f8f8 !important;
-  border-color: #cccccc !important;
+.field-group input::placeholder {
+  color: rgba(15, 23, 42, 0.42);
+  opacity: 1;
 }
 
-/* ---------- FORGOT PASSWORD ---------- */
-
-#kc-form-options {
-  margin-top: -5px;
-  margin-bottom: 18px;
+.field-group input:focus {
+  border-color: #de1641;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.12);
 }
 
-#kc-form-options a,
-a {
-  color: #c62828 !important;
-  font-size: 13px;
-  text-decoration: none;
+.field-group input[aria-invalid="true"] {
+  border-color: #dc2626;
 }
 
-#kc-form-options a:hover,
-a:hover {
-  color: #a61f1f !important;
-  text-decoration: underline;
+.password-control {
+  position: relative;
 }
 
-/* ---------- SIGN IN BUTTON ---------- */
+.password-control input {
+  padding-right: 44px;
+}
 
-#kc-login {
-  width: 100% !important;
-
-  min-height: 42px !important;
-
-  margin-top: 4px;
-
-  background: #c62828 !important;
-
-  color: #ffffff !important;
-
-  border: none !important;
-  border-radius: 2px !important;
-
-  font-size: 14px !important;
-  font-weight: 600 !important;
-
-  box-shadow: none !important;
-
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(24, 24, 27, 0.65);
   cursor: pointer;
 }
 
-#kc-login:hover {
-  background: #a61f1f !important;
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-#kc-login:active {
-  background: #8e1919 !important;
+.field-error {
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
-/* ---------- ALERT ---------- */
-
-.alert {
-  max-width: 100%;
-  margin-bottom: 20px;
+.remember-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4b5563;
+  font-size: 14px;
 }
 
-/* ---------- MOBILE ---------- */
+.remember-control input {
+  accent-color: #e11d48;
+}
 
-@media (max-width: 480px) {
-  .login-pf-page {
-    justify-content: flex-start;
-    padding: 24px 16px !important;
+.form-divider {
+  width: 100%;
+  height: 1px;
+  margin: 0 0 -4px;
+  background: rgba(24, 24, 27, 0.2);
+}
+
+#kc-login,
+.reset-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at 50% 0%, #f87171 0%, #e11d48 78%);
+  color: #fff;
+  font: 500 16px/24px "DM Sans", Arial, sans-serif;
+  cursor: pointer;
+  transition: filter 150ms ease;
+}
+
+#kc-login:hover,
+.reset-submit:hover {
+  filter: brightness(1.04);
+}
+
+#kc-login svg,
+.reset-submit svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.forgot-password {
+  margin: -4px 0 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.forgot-password a {
+  color: #e11d48;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.login-message {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.login-message-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.login-message-warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.login-message-success {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.login-message-info {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.forgot-promo-panel {
+  background-image: linear-gradient(rgba(12, 12, 12, 0.22), rgba(12, 12, 12, 0.22)), url("../img/forgot-password-page.png");
+}
+
+.forgot-promo-icon {
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
+}
+
+.reset-form-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 24px;
+}
+
+.reset-form-wrap .brand-logo {
+  margin-bottom: 0;
+}
+
+.reset-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reset-heading h2 {
+  margin: 0;
+  color: #4b5563;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.reset-heading p {
+  margin: 0;
+  color: rgba(24, 24, 27, 0.6);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reset-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.reset-submit {
+  margin-top: 0;
+}
+
+.back-to-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  color: #e11d48;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .login-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 44%);
   }
 
-  #kc-header,
-  #kc-content,
-  #kc-content-wrapper,
-  #kc-container,
-  #kc-container-wrapper,
-  .card-pf {
-    max-width: 100% !important;
+  .promo-panel {
+    padding: 32px;
   }
 
-  #kc-header-wrapper {
-    height: 95px;
-    background-size: 210px auto;
+  .form-panel {
+    padding: 40px 32px;
+  }
+}
+
+@media (max-width: 680px) {
+  .login-shell {
+    display: block;
   }
 
-  .card-pf {
-    padding: 26px 22px 24px !important;
+  .promo-panel {
+    display: none;
   }
 
-  #kc-page-title {
-    font-size: 20px !important;
+  .form-panel {
+    min-height: 100vh;
+    padding: 32px 24px;
+    border: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

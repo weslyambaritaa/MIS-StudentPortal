@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 type PaginationProps = {
   page: number;
   totalPages: number;
@@ -24,46 +26,38 @@ export function Pagination({
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-[var(--color-text-secondary)]">
+      <p className="text-sm text-zinc-950/60">
         Showing {Math.min(pageSize, totalItems)} from {totalItems} data.
       </p>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
+        <Button
+          variant="navigation"
+          leftIcon={<ChevronLeft size={20} />}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          className="flex items-center gap-2 text-sm text-[var(--color-primary)] disabled:opacity-40"
         >
-          <ChevronLeft size={17} />
           Previous
-        </button>
+        </Button>
 
         {visiblePages.map((pageNumber) => (
-          <button
+          <Button
             key={pageNumber}
-            type="button"
+            variant={pageNumber === page ? "primary" : "ghost"}
             onClick={() => onPageChange(pageNumber)}
-            className={[
-              "flex h-9 w-9 items-center justify-center rounded-full text-sm",
-              pageNumber === page
-                ? "bg-[var(--color-primary)] text-white"
-                : "text-[var(--color-text-primary)]",
-            ].join(" ")}
+            size="icon"
           >
             {pageNumber}
-          </button>
+          </Button>
         ))}
 
-        <button
-          type="button"
+        <Button
+          rightIcon={<ChevronRight size={20} />}
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
-          className="flex h-10 items-center gap-3 rounded-full bg-[var(--color-primary)] px-5 text-sm text-white disabled:opacity-40"
         >
           Next
-          <ChevronRight size={17} />
-        </button>
+        </Button>
       </div>
     </div>
   );

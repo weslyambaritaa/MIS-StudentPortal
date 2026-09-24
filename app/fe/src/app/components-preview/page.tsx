@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Home, Plus, Search } from "lucide-react";
+import { ChevronDown, Home, Plus, Search } from "lucide-react";
 
+import { Box } from "@/components/ui/box";
 import { Button } from "@/components/ui/button";
+import { DropBox } from "@/components/ui/drop-box";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
 import { MultipleList } from "@/components/ui/multiple-list";
 import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
+import { RadioGroup } from "@/components/ui/radio-group";
 
 export default function ComponentsPreviewPage() {
   const [page, setPage] = useState(1);
@@ -17,6 +20,10 @@ export default function ComponentsPreviewPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const [items, setItems] = useState([""]);
+
+  const [upload, setUpload] = useState<File | null>(null);
+
+  const [course, setCourse] = useState("course-2");
 
   return (
     <main className="min-h-screen space-y-10 bg-white p-10">
@@ -41,11 +48,41 @@ export default function ComponentsPreviewPage() {
       <section className="max-w-sm space-y-4">
         <h2 className="text-xl font-semibold">Form</h2>
 
+        <Box label="Label" placeholder="Placeholder" leftIcon={<Search size={17} />} rightIcon={<Search size={17} />} />
+
+        <Box
+          label="Label"
+          placeholder="Placeholder"
+          options={[{ label: "Option 1", value: "option-1" }]}
+          rightIcon={<ChevronDown size={18} />}
+        />
+
+        <Box label="Label" placeholder="Placeholder" multiline />
+
         <Input label="Label" placeholder="Placeholder" leftIcon={<Search size={17} />} />
 
         <Input label="Label" placeholder="Placeholder" />
 
         <Textarea label="Label" placeholder="Placeholder" />
+      </section>
+
+      <section className="max-w-sm space-y-4">
+        <h2 className="text-xl font-semibold">Drop Box</h2>
+        <DropBox file={upload} onFileChange={setUpload} accept=".pdf,.png,.jpg,.jpeg" />
+      </section>
+
+      <section className="max-w-sm space-y-4">
+        <h2 className="text-xl font-semibold">Radio</h2>
+        <RadioGroup
+          ariaLabel="Pick a course"
+          name="course"
+          value={course}
+          onValueChange={setCourse}
+          options={[
+            { label: "Pick a Course", value: "course-1" },
+            { label: "Pick a Course", value: "course-2" },
+          ]}
+        />
       </section>
 
       <section>

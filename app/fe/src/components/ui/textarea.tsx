@@ -6,19 +6,15 @@ type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
 
 export function Textarea({ label, className = "", ...props }: TextareaProps) {
   return (
-    <label className="block space-y-2">
-      {label && <span className="block text-sm">{label}</span>}
+    <label className="block space-y-[3px]">
+      {label && <span className="block text-sm text-gray-600">{label}</span>}
 
       <textarea
         className={[
-          "min-h-24 w-full resize-y",
-          "rounded-2xl",
-          "border border-[var(--color-primary)]",
-          "bg-white px-3 py-3",
-          "text-sm outline-none",
-          "placeholder:text-[var(--color-text-muted)]",
+          "min-h-16 w-full resize-y rounded-xl border border-rose-600 bg-neutral-50 px-3 py-2.5",
+          "text-sm text-slate-900 outline-none placeholder:text-slate-900/40",
           "focus:ring-2",
-          "focus:ring-[var(--color-primary-soft)]",
+          "focus:ring-rose-100",
           className,
         ].join(" ")}
         {...props}

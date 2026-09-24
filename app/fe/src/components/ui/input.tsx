@@ -11,17 +11,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   ref
 ) {
   return (
-    <label className="block space-y-2">
-      {label && <span className="block text-sm text-[var(--color-text-primary)]">{label}</span>}
+    <label className="block space-y-[3px]">
+      {label && <span className="block text-sm text-gray-600">{label}</span>}
 
       <div
         className={[
-          "flex min-h-10 items-center gap-2",
-          "rounded-full",
-          "border border-[var(--color-primary)]",
-          "bg-white px-3",
+          "flex h-9 items-center gap-2",
+          "rounded-[100px] border border-rose-600 bg-neutral-50 px-3",
           "focus-within:ring-2",
-          "focus-within:ring-[var(--color-primary-soft)]",
+          "focus-within:ring-rose-100",
           className,
         ].join(" ")}
       >
@@ -31,7 +29,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
         <input
           ref={ref}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-text-muted)]"
+          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-900/40"
           {...props}
         />
 

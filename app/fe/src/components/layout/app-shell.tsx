@@ -13,17 +13,16 @@ type AppShellProps = {
 export function AppShell({ children, title = "Dashboard" }: AppShellProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  /*
-   * Untuk development sementara.
-   *
-   * Nanti bisa dibuat toggle berdasarkan
-   * design final dari UI/UX.
-   */
-  const [sidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#f7f7f8]">
-      <Navbar title={title} onMenuClick={() => setMobileSidebarOpen(true)} />
+      <Navbar
+        title={title}
+        onMenuClick={() => setMobileSidebarOpen(true)}
+        sidebarCollapsed={sidebarCollapsed}
+        onSidebarToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+      />
 
       <div className="flex min-h-[calc(100vh-var(--navbar-height))] gap-4 p-3">
         <Sidebar
