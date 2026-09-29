@@ -40,7 +40,17 @@ Biasanya `*.localhost` resolve otomatis. Jika `auth.localhost` atau `api.localho
 
 ## Menjalankan
 
-1. Ubah secret development di `.env` jika perlu.
+1. Siapkan file konfigurasi lokal dari template; jangan commit file `.env`:
+
+```text
+.env.example                         -> .env
+app/be/internal-api/.env.example     -> app/be/internal-api/.env
+app/be/student-api/.env.example      -> app/be/student-api/.env
+keycloak/.env.example                -> keycloak/.env
+```
+
+Root `.env` dipakai Compose untuk interpolation/orchestration seperti published ports, database bootstrap, dan credential awal database container. Backend runtime mengambil koneksi dari `.env` masing-masing service. Samakan database name/user/password di konfigurasi API dengan database container development yang dibuat oleh root Compose environment. `keycloak/.env` mengatur runtime Keycloak; password koneksinya harus sama dengan password Keycloak DB.
+
 2. Install dependency root/workspaces:
 
 ```bash
@@ -91,6 +101,15 @@ npm run migrate:internal
 ```
 
 The root scripts execute Sequelize CLI inside the running backend containers, so the migration receives the same DB environment used by the service.
+
+Development/test seed data (tidak membuat user atau subject Keycloak):
+
+```bash
+npm run seed:internal
+npm run seed:student
+```
+
+Seeder menolak berjalan ketika `NODE_ENV=production`.
 
 ## Optional Redis/RabbitMQ
 

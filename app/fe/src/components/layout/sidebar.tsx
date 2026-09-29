@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { Building2, ClipboardList, FileText, Home, Network, User, Users, X } from "lucide-react";
+import { Home, User, X } from "lucide-react";
 
 import { IconButton } from "@/components/ui/icon-button";
+import { navigationByRole, type NavigationItem } from "@/config/navigation";
 import { useAuth } from "@/providers/keycloak-provider";
 
 type SidebarProps = {
@@ -14,29 +15,12 @@ type SidebarProps = {
   onMobileClose?: () => void;
 };
 
-type NavItem = {
-  label: string;
-  href: string;
-  icon: ReactNode;
-};
+function getIcon(item: NavigationItem): ReactNode {
+  if (item.icon === "dashboard") return <Home size={20} />;
+  return null;
+}
 
-const groups: { title: string; items: NavItem[] }[] = [
-  {
-    title: "Main Feature",
-    items: [
-      { label: "Quotation", href: "/quotation", icon: <FileText size={20} /> },
-      { label: "Request Form", href: "/request-form", icon: <ClipboardList size={20} /> },
-    ],
-  },
-  {
-    title: "Manage",
-    items: [
-      { label: "Industry", href: "/industry", icon: <Building2 size={20} /> },
-      { label: "Account", href: "/account", icon: <Network size={20} /> },
-      { label: "Person In Charge", href: "/pic", icon: <Users size={20} /> },
-    ],
-  },
-];
+type RenderedNavigationItem = Omit<NavigationItem, "icon"> & { icon: ReactNode };
 
 function NavLink({
   item,
@@ -44,7 +28,7 @@ function NavLink({
   collapsed,
   onNavigate,
 }: {
-  item: NavItem;
+  item: RenderedNavigationItem;
   active: boolean;
   collapsed: boolean;
   onNavigate?: () => void;
@@ -77,40 +61,44 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { keycloak, roles } = useAuth();
-  const sections = groups;
+  const { keycloak, activeRole } = useAuth();
+  const navigation = activeRole ? navigationByRole[activeRole] : null;
   const username =
     typeof keycloak.tokenParsed?.preferred_username === "string"
       ? keycloak.tokenParsed.preferred_username
       : "-";
-  const roleNames = roles.length > 0 ? roles.join(", ") : "-";
+  const roleNames = activeRole ?? "-";
 
   return (
     <div className="flex h-full flex-col justify-between p-5">
       <div className={collapsed ? "flex flex-col items-center gap-6" : "flex flex-col gap-6"}>
-        <NavLink
-          item={{ label: "Dashboard", href: "/dashboard", icon: <Home size={20} /> }}
-          active={pathname === "/dashboard"}
-          collapsed={collapsed}
-          onNavigate={onNavigate}
-        />
+        {navigation && (
+          <NavLink
+            item={{ ...navigation.dashboard, icon: getIcon(navigation.dashboard) }}
+            active={pathname === navigation.dashboard.href}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+        )}
 
-        {sections.map((section) => (
+        {(navigation?.sections ?? []).map((section) => (
           <section key={section.title} className={collapsed ? "w-10" : "w-full"}>
-            <p
-              className={
-                collapsed
-                  ? "mb-3 text-center text-xs font-medium text-slate-900/40"
-                  : "mb-2 text-xs font-medium uppercase text-slate-900/40"
-              }
-            >
-              {collapsed ? "---" : section.title}
-            </p>
+            {section.title && (
+              <p
+                className={
+                  collapsed
+                    ? "mb-3 text-center text-xs font-medium text-slate-900/40"
+                    : "mb-2 text-xs font-medium uppercase text-slate-900/40"
+                }
+              >
+                {collapsed ? "---" : section.title}
+              </p>
+            )}
             <div className={collapsed ? "flex flex-col items-center gap-2" : "flex flex-col gap-2"}>
               {section.items.map((item) => (
                 <NavLink
                   key={item.href}
-                  item={item}
+                  item={{ ...item, icon: getIcon(item) }}
                   active={pathname.startsWith(item.href)}
                   collapsed={collapsed}
                   onNavigate={onNavigate}

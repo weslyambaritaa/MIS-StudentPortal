@@ -3,11 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "npm run build --workspace @mis/shared-types",
     "dev": "tsx watch src/server.ts",
+    "prebuild": "npm run build --workspace @mis/shared-types",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "prestart": "npm run build --workspace @mis/shared-types",
+    "start": "node dist/server.js",
+    "test": "npm run build && node --test test/active-role.test.cjs"
   },
   "dependencies": {
+    "@mis/shared-types": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

@@ -27,7 +27,12 @@ export const app = express();
  * Aman digunakan untuk seluruh request.
  */
 app.use(requestId);
-app.use(pinoHttp());
+app.use(pinoHttp({
+  redact: {
+    paths: ["req.headers.authorization", "req.headers.x-gateway-secret", "req.headers.x-service-secret"],
+    censor: "[REDACTED]",
+  },
+}));
 
 /*
  * =====================================================

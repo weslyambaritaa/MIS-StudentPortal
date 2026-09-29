@@ -5,12 +5,20 @@ import pinoHttp from "pino-http";
 import { routes } from "./routes";
 import { notFound } from "./middlewares/not-found.middleware";
 import { errorHandler } from "./middlewares/error-handler.middleware";
+import { internalApiError } from "./middlewares/internal-api-error.middleware";
+import "./database/models";
 
 export const app = express();
 app.use(helmet());
 app.use(cors());
-app.use(pinoHttp());
+app.use(pinoHttp({
+  redact: {
+    paths: ["req.headers.authorization", "req.headers.x-gateway-secret", "req.headers.x-service-secret"],
+    censor: "[REDACTED]",
+  },
+}));
 app.use(express.json());
 app.use(routes);
 app.use(notFound);
+app.use(internalApiError);
 app.use(errorHandler);

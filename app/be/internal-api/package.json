@@ -3,14 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "npm run build --workspace @mis/shared-types",
     "dev": "tsx watch src/server.ts",
+    "prebuild": "npm run build --workspace @mis/shared-types",
     "build": "tsc",
+    "prestart": "npm run build --workspace @mis/shared-types",
     "start": "node dist/server.js",
+    "test": "npm run build && node --test test/*.test.cjs",
     "migrate": "sequelize-cli db:migrate --config config/database.cjs",
     "migrate:undo": "sequelize-cli db:migrate:undo --config config/database.cjs",
     "seed": "sequelize-cli db:seed:all --config config/database.cjs"
   },
   "dependencies": {
+    "@mis/shared-types": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

@@ -47,6 +47,13 @@ services:
     volumes:
       - internal-db-data:/var/opt/mssql
 
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -b || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
     networks:
       - internal-net
 
@@ -68,6 +75,13 @@ services:
 
     volumes:
       - keycloak-db-data:/var/opt/mssql
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -b || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
     networks:
       - auth-net
@@ -96,8 +110,10 @@ services:
       KEYCLOAK_DB_SA_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
 
     depends_on:
-      - internal-db
-      - keycloak-db
+      internal-db:
+        condition: service_healthy
+      keycloak-db:
+        condition: service_healthy
 
     networks:
       - internal-net
@@ -113,6 +129,9 @@ services:
     image: quay.io/keycloak/keycloak:26.7.3
     container_name: mis-keycloak
 
+    env_file:
+      - ./keycloak/.env
+
     command:
       - start-dev
       - --import-realm
@@ -121,31 +140,6 @@ services:
       - --spi-theme--cache-themes=false
       - --spi-theme--cache-templates=false
       - --spi-theme--static-max-age=-1
-
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}
-
-      KC_DB: mssql
-
-      KC_DB_URL: >-
-        jdbc:sqlserver://keycloak-db:1433;
-        databaseName=${KEYCLOAK_DB_NAME};
-        encrypt=false;
-        trustServerCertificate=true
-
-      KC_DB_USERNAME: sa
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
-
-      # Keycloak accessed through API Gateway
-      KC_HTTP_ENABLED: "true"
-
-      KC_HOSTNAME: http://auth.localhost:4000
-      KC_HOSTNAME_ADMIN: http://auth.localhost:4000
-
-      KC_PROXY_HEADERS: xforwarded
-
-      KC_HEALTH_ENABLED: "true"
 
     ports:
       - "${KEYCLOAK_PORT}:8080"
@@ -175,6 +169,9 @@ services:
       context: .
       dockerfile: app/be/student-api/Dockerfile
 
+    env_file:
+      - ./app/be/student-api/.env
+
     container_name: mis-student-api
 
     environment:
@@ -183,11 +180,6 @@ services:
 
       DB_HOST: student-db
       DB_PORT: 5432
-      DB_NAME: ${STUDENT_DB_NAME}
-      DB_USER: ${STUDENT_DB_USER}
-      DB_PASSWORD: ${STUDENT_DB_PASSWORD}
-
-      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
 
     expose:
       - "4001"
@@ -202,6 +194,7 @@ services:
 
     volumes:
       - ./app/be/student-api:/workspace/app/be/student-api
+      - ./packages/shared-types:/workspace/packages/shared-types
       - student-api-node-modules:/workspace/node_modules
 
 
@@ -215,6 +208,9 @@ services:
       context: .
       dockerfile: app/be/internal-api/Dockerfile
 
+    env_file:
+      - ./app/be/internal-api/.env
+
     container_name: mis-internal-api
 
     environment:
@@ -223,14 +219,9 @@ services:
 
       DB_HOST: internal-db
       DB_PORT: 1433
-      DB_NAME: ${INTERNAL_DB_NAME}
-      DB_USER: sa
-      DB_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
 
       DB_ENCRYPT: "false"
       DB_TRUST_SERVER_CERTIFICATE: "true"
-
-      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
 
     expose:
       - "4002"
@@ -245,6 +236,7 @@ services:
 
     volumes:
       - ./app/be/internal-api:/workspace/app/be/internal-api
+      - ./packages/shared-types:/workspace/packages/shared-types
       - internal-api-node-modules:/workspace/node_modules
 
 
@@ -320,6 +312,7 @@ services:
 
     volumes:
       - ./gateway:/workspace/gateway
+      - ./packages/shared-types:/workspace/packages/shared-types
       - gateway-node-modules:/workspace/node_modules
 
 
@@ -357,6 +350,7 @@ services:
 
     volumes:
       - ./app/fe:/workspace/app/fe
+      - ./packages/shared-types:/workspace/packages/shared-types
       - frontend-node-modules:/workspace/node_modules
       - frontend-next:/workspace/app/fe/.next
 

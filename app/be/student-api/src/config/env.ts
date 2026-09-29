@@ -13,4 +13,6 @@ export const env = {
   dbUser: required("DB_USER"),
   dbPassword: required("DB_PASSWORD"),
   gatewaySharedSecret: required("GATEWAY_SHARED_SECRET"),
+  internalApiUrl: required("INTERNAL_API_URL"),
+  serviceSharedSecret: required("SERVICE_SHARED_SECRET"),
 };

@@ -1,7 +1,9 @@
+import type { ActiveRoleAuthContext } from "@mis/shared-types";
+
 declare global {
   namespace Express {
     interface Request {
-      auth?: { userId: string; email?: string; roles: string[] };
+      auth?: ActiveRoleAuthContext;
     }
   }
 }

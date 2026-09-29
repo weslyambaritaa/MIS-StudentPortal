@@ -1,3 +1,5 @@
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+
 module.exports = {
   development: {
     dialect: "postgres",

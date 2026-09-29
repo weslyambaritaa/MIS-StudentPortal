@@ -2,37 +2,34 @@
 
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/providers/keycloak-provider";
+import { ROLES, type BusinessRole } from "@mis/shared-types";
 
-function getDashboardTitle(roles: string[]) {
-  if (roles.includes("super_admin")) {
-    return "Super Admin Dashboard";
-  }
-
-  if (roles.includes("admin")) {
+function getDashboardTitle(role: BusinessRole | null) {
+  if (role === ROLES.ADMIN) {
     return "Admin Dashboard";
   }
 
-  if (roles.includes("management")) {
+  if (role === ROLES.MANAGEMENT) {
     return "Management Dashboard";
   }
 
-  if (roles.includes("finance")) {
+  if (role === ROLES.FINANCE) {
     return "Finance Dashboard";
   }
 
-  if (roles.includes("sales")) {
+  if (role === ROLES.SALES) {
     return "Sales Dashboard";
   }
 
-  if (roles.includes("trainer")) {
+  if (role === ROLES.TRAINER) {
     return "Trainer Dashboard";
   }
 
-  if (roles.includes("pic")) {
+  if (role === ROLES.PIC) {
     return "PIC Dashboard";
   }
 
-  if (roles.includes("student")) {
+  if (role === ROLES.STUDENT) {
     return "Student Dashboard";
   }
 
@@ -40,7 +37,7 @@ function getDashboardTitle(roles: string[]) {
 }
 
 export default function DashboardPage() {
-  const { keycloak, roles } = useAuth();
+  const { keycloak, availableRoles, activeRole } = useAuth();
 
   const email = typeof keycloak.tokenParsed?.email === "string" ? keycloak.tokenParsed.email : "";
 
@@ -49,7 +46,7 @@ export default function DashboardPage() {
       ? keycloak.tokenParsed.preferred_username
       : "";
 
-  const dashboardTitle = getDashboardTitle(roles);
+  const dashboardTitle = getDashboardTitle(activeRole);
 
   return (
     <AppShell title="Dashboard">
@@ -65,7 +62,11 @@ export default function DashboardPage() {
         </p>
 
         <p>
-          <strong>Roles:</strong> {roles.length > 0 ? roles.join(", ") : "-"}
+          <strong>Roles:</strong> {availableRoles.length > 0 ? availableRoles.join(", ") : "-"}
+        </p>
+
+        <p>
+          <strong>Active role:</strong> {activeRole ?? "-"}
         </p>
       </div>
     </AppShell>

@@ -3,12 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "npm run build --workspace @mis/shared-types",
     "dev": "next dev --turbopack",
+    "prebuild": "npm run build --workspace @mis/shared-types",
     "build": "next build",
+    "prestart": "npm run build --workspace @mis/shared-types",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "pretest": "npm run build --workspace @mis/shared-types",
+    "test": "tsx --test test/active-role.test.ts test/api-client.test.ts"
   },
   "dependencies": {
+    "@mis/shared-types": "*",
     "jose": "^5.9.6",
     "keycloak-js": "^26.2.3",
     "lucide-react": "^1.47.0",
@@ -26,6 +32,7 @@
     "eslint-config-next": "15.5.25",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
 }

@@ -20,6 +20,9 @@
     "migrate:student": "docker compose exec student-api npm run migrate",
     "migrate:internal": "docker compose exec internal-api npm run migrate",
     "migrate": "npm run migrate:student && npm run migrate:internal",
+    "seed:student": "docker compose exec student-api npm run seed",
+    "seed:internal": "docker compose exec internal-api npm run seed",
+    "seed": "npm run seed:internal && npm run seed:student",
     "build:shared": "npm run build --workspace packages/shared-types && npm run build --workspace packages/config && npm run build --workspace packages/logger"
   }
 }

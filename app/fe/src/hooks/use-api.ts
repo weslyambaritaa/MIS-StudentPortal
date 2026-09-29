@@ -4,7 +4,7 @@ import { useAuth } from "@/providers/keycloak-provider";
 import { apiRequest } from "@/lib/api/client";
 
 export function useApi() {
-  const { keycloak } = useAuth();
+  const { keycloak, activeRole } = useAuth();
 
   return async function request<T>(path: string, init?: RequestInit) {
     try {
@@ -18,6 +18,10 @@ export function useApi() {
       throw new Error("No Keycloak access token available");
     }
 
-    return apiRequest<T>(path, keycloak.token, init);
+    if (!activeRole) {
+      throw new Error("No active business role is available");
+    }
+
+    return apiRequest<T>(path, keycloak.token, activeRole, init);
   };
 }

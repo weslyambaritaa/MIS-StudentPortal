@@ -1,1 +1,11 @@
-declare global { namespace Express { interface Request { auth?: { userId: string; email?: string; roles: string[] }; } } } export {};
+import type { ActiveRoleAuthContext } from "@mis/shared-types";
+
+declare global {
+  namespace Express {
+    interface Request {
+      auth?: ActiveRoleAuthContext;
+    }
+  }
+}
+
+export {};

@@ -5,4 +5,5 @@ export const env = {
   dbHost: required("DB_HOST"), dbPort: Number(process.env.DB_PORT ?? 1433), dbName: required("DB_NAME"), dbUser: required("DB_USER"), dbPassword: required("DB_PASSWORD"),
   dbEncrypt: process.env.DB_ENCRYPT === "true", dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === "true",
   gatewaySharedSecret: required("GATEWAY_SHARED_SECRET"),
+  serviceSharedSecret: required("SERVICE_SHARED_SECRET"),
 };

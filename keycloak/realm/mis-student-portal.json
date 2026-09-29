@@ -9,7 +9,7 @@
   "roles": {
     "realm": [
       {"name":"student"},{"name":"pic"},{"name":"trainer"},{"name":"sales"},
-      {"name":"admin"},{"name":"super_admin"},{"name":"finance"},{"name":"management"}
+      {"name":"admin"},{"name":"finance"},{"name":"management"}
     ]
   },
   "clients": [

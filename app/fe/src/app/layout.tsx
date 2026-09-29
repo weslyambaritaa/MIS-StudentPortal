@@ -3,6 +3,7 @@ import { DM_Sans } from "next/font/google";
 import "./globals.css";
 
 import { KeycloakAuthProvider } from "@/providers/keycloak-provider";
+import { ActiveRoleRouteGuard } from "@/components/auth/active-role-route-guard";
 
 export const metadata: Metadata = {
   title: "MIS Student Portal",
@@ -23,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={dmSans.variable}>
-        <KeycloakAuthProvider>{children}</KeycloakAuthProvider>
+        <KeycloakAuthProvider>
+          <ActiveRoleRouteGuard>{children}</ActiveRoleRouteGuard>
+        </KeycloakAuthProvider>
       </body>
     </html>
   );
