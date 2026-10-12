@@ -9,8 +9,8 @@ export type PicIdentityResolution =
 export async function resolvePicIdentity(subject: unknown): Promise<PicIdentityResolution> {
   const keycloakSubject = requireIdentitySubject(subject);
   const profile = await PicProfile.findOne({
-    attributes: ["id", "keycloak_subject"],
-    where: { keycloak_subject: keycloakSubject },
+    attributes: ["id", "keycloak_subject", "status"],
+    where: { keycloak_subject: keycloakSubject, status: "ACTIVE" },
   });
 
   if (!profile) return { status: "missing" };

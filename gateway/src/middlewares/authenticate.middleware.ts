@@ -37,7 +37,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // Remove client-selected context and replace every trusted downstream header.
     overwriteTrustedAuthHeaders(
       req.headers,
-      { userId: typed.sub, email: typed.email, roles, activeRole },
+      { userId: typed.sub, email: typed.email, roles, activeRole, clientIp: req.ip },
       env.gatewaySharedSecret,
     );
 

@@ -3,22 +3,19 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { knownFrontendRoutes, navigationByRole } from "@/config/navigation";
+import {
+  canActiveRoleAccessRoute,
+  isRegisteredFrontendRoute,
+} from "@/lib/routing/route-access";
 import { useAuth } from "@/providers/keycloak-provider";
 
-function routeMatches(pathname: string, route: string) {
-  return pathname === route || pathname.startsWith(`${route}/`);
-}
-
 export function ActiveRoleRouteGuard({ children }: { children: ReactNode }) {
-  const { activeRole } = useAuth();
+  const { activeRole, hasAccessLogAdminRole } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
-  const isKnownRoute = knownFrontendRoutes.some((route) => routeMatches(pathname, route));
-  const roleCanAccessRoute = activeRole
-    ? navigationByRole[activeRole].routes.some((route) => routeMatches(pathname, route))
-    : pathname === "/no-access";
+  const isKnownRoute = isRegisteredFrontendRoute(pathname);
+  const roleCanAccessRoute = canActiveRoleAccessRoute(pathname, activeRole, undefined, hasAccessLogAdminRole);
 
   useEffect(() => {
     if (isKnownRoute && !roleCanAccessRoute) {

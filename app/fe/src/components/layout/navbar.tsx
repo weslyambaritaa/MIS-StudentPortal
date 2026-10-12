@@ -2,12 +2,11 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, LogOut, Menu } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-
+import { LogoutConfirmationModal } from "@/components/ui/logout-confirmation-modal";
 import { useAuth } from "@/providers/keycloak-provider";
 import { getSelectableActiveRole } from "@/lib/auth/active-role";
 
@@ -28,6 +27,7 @@ export function Navbar({
 }: NavbarProps) {
   const { keycloak, availableRoles, activeRole, setActiveRole } = useAuth();
   const router = useRouter();
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
 
   const handleLogout = () => {
     void keycloak.logout({
@@ -90,7 +90,7 @@ export function Navbar({
             >
               {availableRoles.map((role) => (
                 <option key={role} value={role}>
-                  {role === "admin" ? "Admin QPD" : role[0].toUpperCase() + role.slice(1)}
+                  {role === "admin" ? "Admin" : role[0].toUpperCase() + role.slice(1)}
                 </option>
               ))}
             </select>
@@ -101,11 +101,17 @@ export function Navbar({
           variant="danger"
           size="default"
           leftIcon={<LogOut size={16} strokeWidth={1.7} />}
-          onClick={handleLogout}
+          onClick={() => setLogoutConfirmationOpen(true)}
         >
           Logout
         </Button>
       </div>
+
+      <LogoutConfirmationModal
+        open={logoutConfirmationOpen}
+        onClose={() => setLogoutConfirmationOpen(false)}
+        onConfirm={handleLogout}
+      />
     </header>
   );
 }

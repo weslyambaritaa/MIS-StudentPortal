@@ -1,0 +1,9 @@
+@page { size: 612pt 792pt; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: white; }
+.page { position: relative; width: 612pt; height: 792pt; overflow: hidden; break-after: page; }
+.page:last-child { break-after: auto; }
+.artwork, .fields { position: absolute; left: 0; top: 0; width: 612pt; height: 792pt; display: block; }
+.fields text { fill: black; font-family: QuotationCalibri, Arial, sans-serif; font-size: 11.04px; }
+.fields .bold { font-family: QuotationCalibriBold, QuotationCalibri, Arial, sans-serif; }
+.fields .aptos { font-family: QuotationAptos, QuotationCalibri, Arial, sans-serif; }

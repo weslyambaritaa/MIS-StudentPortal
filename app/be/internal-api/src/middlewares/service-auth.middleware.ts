@@ -32,6 +32,7 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Invalid service actor context" });
   }
 
-  req.auth = { userId, roles, activeRole };
+  const email = req.header("x-actor-user-email");
+  req.auth = { userId, roles, activeRole, ...(email ? { email } : {}) };
   return next();
 }

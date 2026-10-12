@@ -1,0 +1,52 @@
+[
+  {
+    "family": "QuotationCalibri",
+    "file": "private-calibri.ttf",
+    "unicodeRange": "U+D,U+20,U+21,U+22,U+25,U+26,U+28,U+29,U+2C,U+2E,U+2F,U+30,U+31,U+32,U+33,U+34,U+3A,U+3B,U+41,U+42,U+43,U+44,U+45,U+46,U+48,U+49,U+4A,U+4B,U+4C,U+4D,U+4E,U+4F,U+50,U+51,U+52,U+54,U+56,U+57,U+59,U+5B,U+5D,U+61,U+62,U+63,U+64,U+65,U+66,U+67,U+68,U+69,U+6A,U+6B,U+6C,U+6D,U+6E,U+6F,U+70,U+71,U+72,U+73,U+74,U+75,U+76,U+77,U+78,U+79,U+A0,U+B2,U+B3,U+B9,U+131,U+237,U+1D2C,U+1D2E,U+1D30,U+1D31,U+1D34,U+1D35,U+1D36,U+1D37,U+1D38,U+1D39,U+1D3A,U+1D3C,U+1D3E,U+1D3F,U+1D40,U+1D42,U+2009,U+2019,U+2044,U+2070,U+2074,U+207D,U+207E,U+207F,U+2080,U+2081,U+2082,U+2083,U+2084,U+208D,U+208E,U+25CC,U+FB00,U+FB01,U+FB02,U+FB03,U+FB04"
+  },
+  {
+    "family": "QuotationCalibriBold",
+    "file": "private-calibri-bold.ttf",
+    "unicodeRange": "U+D,U+20,U+21,U+22,U+26,U+28,U+29,U+2C,U+2D,U+2E,U+2F,U+30,U+31,U+32,U+34,U+35,U+36,U+37,U+38,U+3A,U+41,U+42,U+43,U+44,U+45,U+47,U+49,U+4A,U+4B,U+4D,U+4E,U+4F,U+50,U+51,U+52,U+53,U+54,U+55,U+56,U+59,U+61,U+62,U+63,U+64,U+65,U+66,U+67,U+68,U+69,U+6A,U+6B,U+6C,U+6D,U+6E,U+6F,U+70,U+72,U+73,U+74,U+75,U+78,U+79,U+A0,U+AD,U+B2,U+B9,U+131,U+237,U+1D2C,U+1D2E,U+1D30,U+1D31,U+1D33,U+1D35,U+1D36,U+1D37,U+1D39,U+1D3A,U+1D3C,U+1D3E,U+1D3F,U+1D40,U+1D41,U+2009,U+2010,U+2044,U+2070,U+2074,U+2075,U+2076,U+2077,U+2078,U+207D,U+207E,U+207F,U+2080,U+2081,U+2082,U+2084,U+2085,U+2086,U+2087,U+2088,U+208D,U+208E,U+25CC,U+FB00,U+FB01,U+FB02,U+FB03,U+FB04"
+  },
+  {
+    "family": "QuotationAptos",
+    "file": "private-aptos.ttf",
+    "unicodeRange": "U+20,U+21,U+22,U+2A,U+2C,U+2E,U+30,U+31,U+32,U+33,U+34,U+35,U+36,U+38,U+3A,U+41,U+42,U+44,U+45,U+4A,U+4C,U+4D,U+4F,U+50,U+53,U+54,U+61,U+62,U+63,U+64,U+65,U+66,U+67,U+69,U+6C,U+6D,U+6E,U+6F,U+72,U+73,U+74,U+75,U+78,U+79,U+AA,U+B2,U+B3,U+B9,U+BA,U+C1,U+131,U+307,U+2013,U+2070,U+2074,U+2075,U+2076,U+2078,U+2080,U+2081,U+2082,U+2083,U+2084,U+2085,U+2086,U+2088,U+FB01,U+FB02"
+  },
+  {
+    "family": "QuotationCalibri",
+    "file": "public-calibri.ttf",
+    "unicodeRange": "U+2A,U+35,U+53,U+2013,U+2075,U+2085"
+  },
+  {
+    "family": "QuotationCalibriBold",
+    "file": "public-calibri-bold.ttf",
+    "unicodeRange": "U+33,U+39,U+B3,U+2079,U+2083,U+2089"
+  },
+  {
+    "family": "QuotationCalibriBold",
+    "file": "online-calibri-bold.ttf",
+    "unicodeRange": "U+4C,U+7A,U+1D38"
+  },
+  {
+    "family": "QuotationCalibri",
+    "file": "online-calibri.ttf",
+    "unicodeRange": "U+36,U+37,U+38,U+39,U+2076,U+2077,U+2078,U+2079,U+2086,U+2087,U+2088,U+2089"
+  },
+  {
+    "family": "QuotationCalibri",
+    "file": "inhouse-calibri.ttf",
+    "unicodeRange": "U+47,U+1D33"
+  },
+  {
+    "family": "QuotationCalibriBold",
+    "file": "inhouse-calibri-bold.ttf",
+    "unicodeRange": "U+48,U+1D34"
+  },
+  {
+    "family": "QuotationAptos",
+    "file": "inhouse-aptos.ttf",
+    "unicodeRange": "U+2D,U+46,U+48,U+4E,U+52,U+68,U+6B,U+76,U+2116"
+  }
+]

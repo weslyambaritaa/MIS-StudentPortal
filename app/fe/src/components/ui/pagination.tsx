@@ -17,11 +17,14 @@ export function Pagination({
   totalItems,
   onPageChange,
 }: PaginationProps) {
+  const visiblePageCount = Math.min(totalPages, 3);
+  const firstVisiblePage = Math.min(
+    Math.max(page - Math.floor(visiblePageCount / 2), 1),
+    Math.max(totalPages - visiblePageCount + 1, 1)
+  );
   const visiblePages = Array.from(
-    {
-      length: Math.min(totalPages, 3),
-    },
-    (_, index) => index + 1
+    { length: visiblePageCount },
+    (_, index) => firstVisiblePage + index
   );
 
   return (

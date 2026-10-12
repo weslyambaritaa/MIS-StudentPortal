@@ -6,6 +6,7 @@ import { corsMiddleware } from "./middlewares/cors.middleware";
 import { requestId } from "./middlewares/request-id.middleware";
 import { apiRateLimit } from "./middlewares/rate-limit.middleware";
 import { authenticate } from "./middlewares/authenticate.middleware";
+import { authenticateUserProvisioner } from "./middlewares/authenticate-user-provisioner.middleware";
 import { authorizeBoundary } from "./middlewares/authorize-boundary.middleware";
 
 import { EXTERNAL_ROLES, INTERNAL_ROLES } from "./auth/roles";
@@ -14,6 +15,7 @@ import { realmProxy, resourcesProxy, adminProxy } from "./proxy/keycloak.proxy";
 
 import { externalProxy } from "./proxy/external.proxy";
 import { internalProxy } from "./proxy/internal.proxy";
+import { accountAdminProxy, accessLogsAdminProxy } from "./proxy/admin.proxy";
 
 import { routes } from "./routes";
 
@@ -70,6 +72,10 @@ app.use(routes);
  */
 
 app.use("/api/v1", apiRateLimit);
+
+// Separate administrative identity route; it intentionally does not select or union a business activeRole.
+app.use("/api/v1/admin/accounts", authenticateUserProvisioner, accountAdminProxy);
+app.use("/api/v1/admin/access-logs", authenticateUserProvisioner, accessLogsAdminProxy);
 
 app.use("/api/v1/external", authenticate, authorizeBoundary(EXTERNAL_ROLES), externalProxy);
 

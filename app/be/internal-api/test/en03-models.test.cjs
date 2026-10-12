@@ -14,6 +14,12 @@ test("EN-03 domain models register required SQL Server tables", () => {
   }
 });
 
+test("SQL Server models with enabled triggers request OUTPUT INTO-compatible writes", () => {
+  for (const model of [models.Account, models.Industry, models.Training]) {
+    assert.equal(model.options.hasTrigger, true, `${model.name} must set hasTrigger for SQL Server DML`);
+  }
+});
+
 test("EN-03 same-database relations and invariants are represented in models", () => {
   assert.equal(models.Course.associations.category?.target, models.CourseCategory);
   assert.equal(models.Training.associations.requestForm?.target, models.RequestForm);
@@ -33,7 +39,9 @@ test("existing actor identity stays logical and Trainer certification is a nulla
 test("Training models Course and Request Form relations with the allowed Training Type", () => {
   assert.equal(models.Training.rawAttributes.course_id.type.key, "UUID");
   assert.equal(models.Training.rawAttributes.request_form_id.type.key, "UUID");
-  assert.equal(models.Training.rawAttributes.training_type.allowNull, true, "legacy rows remain migratable; domain flows must require type");
+  assert.equal(models.Training.rawAttributes.course_id.allowNull, false);
+  assert.equal(models.Training.rawAttributes.request_form_id.allowNull, false);
+  assert.equal(models.Training.rawAttributes.training_type.allowNull, false);
   assert.equal(models.Training.associations.course?.target, models.Course);
   assert.equal(models.Training.associations.requestForm?.target, models.RequestForm);
 });

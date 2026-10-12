@@ -4,12 +4,34 @@
   "displayName": "MIS Student Portal",
   "loginTheme": "mis-student-portal",
   "loginWithEmailAllowed": true,
+  "registrationEmailAsUsername": false,
   "registrationAllowed": false,
   "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "bruteForceStrategy": "MULTIPLE",
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 300,
+  "eventsEnabled": true,
+  "eventsExpiration": 34560000,
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR",
+    "RESET_PASSWORD", "RESET_PASSWORD_ERROR", "SEND_RESET_PASSWORD", "SEND_RESET_PASSWORD_ERROR",
+    "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR", "UPDATE_CREDENTIAL", "UPDATE_CREDENTIAL_ERROR",
+    "EXECUTE_ACTIONS", "EXECUTE_ACTIONS_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "attributes": {
+    "adminEventsExpiration": "34560000",
+    "actionTokenGeneratedByUserLifespan.reset-credentials": "900"
+  },
   "roles": {
     "realm": [
       {"name":"student"},{"name":"pic"},{"name":"trainer"},{"name":"sales"},
-      {"name":"admin"},{"name":"finance"},{"name":"management"}
+      {"name":"admin"},{"name":"finance"},{"name":"management"},
+      {"name":"mis-user-provisioner","description":"Administrative identity role for MIS account provisioning; not a business role"}
     ]
   },
   "clients": [
@@ -23,7 +45,10 @@
       "secret": "local-dev-client-secret-change-me",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost:3000/api/auth/callback/keycloak"],
+      "redirectUris": [
+        "http://localhost:3000/api/auth/callback/keycloak",
+        "http://localhost:3000/dashboard"
+      ],
       "webOrigins": ["http://localhost:3000"],
       "fullScopeAllowed": true,
       "protocolMappers": [
@@ -39,6 +64,32 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "mis-account-provisioner",
+      "name": "MIS Account Provisioner Service",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": []
+    },
+    {
+      "clientId": "mis-audit-reader",
+      "name": "MIS Keycloak Audit Reader",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": []
     }
   ]
 }

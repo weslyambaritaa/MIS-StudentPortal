@@ -66,15 +66,15 @@ test("Trainer resolver rejects an empty subject and propagates database failures
 test("PIC identity resolves by authenticated Keycloak subject and does not assign an Account", async () => {
   const originalFindOne = PicProfile.findOne;
   const originalCreate = PicProfile.create;
-  const profile = { id: "pic-profile-1", keycloak_subject: "kc-pic-1" };
+  const profile = { id: "pic-profile-1", keycloak_subject: "kc-pic-1", status: "ACTIVE" };
   let query;
   PicProfile.findOne = async (options) => { query = options; return profile; };
   PicProfile.create = async () => { throw new Error("PIC resolver must not create profiles"); };
 
   try {
     const result = await resolvePicIdentity("kc-pic-1");
-    assert.deepEqual(query.where, { keycloak_subject: "kc-pic-1" });
-    assert.deepEqual(query.attributes, ["id", "keycloak_subject"]);
+    assert.deepEqual(query.where, { keycloak_subject: "kc-pic-1", status: "ACTIVE" });
+    assert.deepEqual(query.attributes, ["id", "keycloak_subject", "status"]);
     assert.deepEqual(result, { status: "resolved", profile, profileId: "pic-profile-1" });
   } finally {
     PicProfile.findOne = originalFindOne;

@@ -8,8 +8,8 @@ import { TrainingSession } from "./training-session.model";
 const timestamps = { timestamps: true, createdAt: "created_at", updatedAt: "updated_at" };
 const id = { type: DataTypes.UUID, primaryKey: true, allowNull: false, defaultValue: DataTypes.UUIDV4 };
 
-export class Industry extends Model { declare id: string; declare name: string; declare status: "ACTIVE" | "INACTIVE"; declare created_at: Date; declare updated_at: Date; }
-Industry.init({ id, name: { type: DataTypes.STRING(150), allowNull: false }, status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "ACTIVE" } }, { sequelize, tableName: "industry", ...timestamps, indexes: [{ name: "uq_industry_name", unique: true, fields: ["name"] }] });
+export class Industry extends Model { declare id: string; declare industry_code: string; declare name: string; declare status: "ACTIVE" | "INACTIVE"; declare created_at: Date; declare updated_at: Date; }
+Industry.init({ id, industry_code: { type: DataTypes.STRING(20), allowNull: false }, name: { type: DataTypes.STRING(150), allowNull: false }, status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "ACTIVE", validate: { isIn: [["ACTIVE", "INACTIVE"]] } } }, { sequelize, tableName: "industry", hasTrigger: true, ...timestamps, indexes: [{ name: "uq_industry_code", unique: true, fields: ["industry_code"] }, { name: "uq_industry_name", unique: true, fields: ["name"] }] });
 
 export class CourseCategory extends Model { declare id: string; declare name: string; declare created_at: Date; declare updated_at: Date; }
 CourseCategory.init({ id, name: { type: DataTypes.STRING(150), allowNull: false } }, { sequelize, tableName: "course_category", ...timestamps, indexes: [{ name: "uq_course_category_name", unique: true, fields: ["name"] }] });
@@ -21,12 +21,13 @@ Course.init({ id, category_id: { type: DataTypes.UUID, allowNull: false }, name:
 export class Syllabus extends Model { declare id: string; declare course_id: string; declare file_url: string; declare created_at: Date; declare updated_at: Date; }
 Syllabus.init({ id, course_id: { type: DataTypes.UUID, allowNull: false }, file_url: { type: DataTypes.STRING(255), allowNull: false } }, { sequelize, tableName: "syllabus", ...timestamps });
 
-export type QuotationStatus = "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | "EXPIRED";
-export class Quotation extends Model { declare id: string; declare account_id: string; declare created_by_subject: string | null; declare status: QuotationStatus; declare sent_at: Date | null; declare created_at: Date; declare updated_at: Date; }
+export type QuotationStatus = "DRAFT" | "SENT" | "WAITING" | "SEND_FAILED" | "APPROVED" | "CANCELLED" | "REVISION" | "REJECTED" | "EXPIRED";
+export class Quotation extends Model { declare id: string; declare account_id: string; declare created_by_subject: string | null; declare status: QuotationStatus; declare sent_at: Date | null; declare quotation_code: string; declare pic_profile_id: string; declare class_type: "PRIVATE" | "PUBLIC" | "INHOUSE" | "ONLINE"; declare deleted_at: Date | null; declare created_at: Date; declare updated_at: Date; }
 Quotation.init({ id, account_id: { type: DataTypes.UUID, allowNull: false }, created_by_subject: { type: DataTypes.STRING(255), allowNull: true }, status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "DRAFT" }, sent_at: { type: DataTypes.DATE, allowNull: true } }, { sequelize, tableName: "quotation", ...timestamps });
 
 export type TrainingType = "PUBLIC" | "PRIVATE";
-export class QuotationOrder extends Model { declare id: string; declare quotation_id: string; declare course_id: string; declare class_type: TrainingType; declare amount_student: number; declare price: string; declare location: string | null; declare created_at: Date; declare updated_at: Date; }
+export type QuotationClassType = TrainingType | "INHOUSE" | "ONLINE";
+export class QuotationOrder extends Model { declare id: string; declare quotation_id: string; declare course_id: string; declare class_type: QuotationClassType; declare amount_student: number; declare price: string; declare location: string | null; declare created_at: Date; declare updated_at: Date; }
 QuotationOrder.init({ id, quotation_id: { type: DataTypes.UUID, allowNull: false }, course_id: { type: DataTypes.UUID, allowNull: false }, class_type: { type: DataTypes.STRING(20), allowNull: false }, amount_student: { type: DataTypes.INTEGER, allowNull: false }, price: { type: DataTypes.DECIMAL(19, 4), allowNull: false }, location: { type: DataTypes.STRING(255), allowNull: true } }, { sequelize, tableName: "quotation_order", ...timestamps });
 
 export class RequestForm extends Model { declare id: string; declare quotation_id: string | null; declare created_by_subject: string | null; declare reviewed_by_subject: string | null; declare attachment_file: string | null; declare training_title: string; declare request_date: Date; declare language: string | null; declare training_type: TrainingType; declare number_student: number; declare room_rental: boolean; declare special_instruction: string | null; declare approved_at: Date | null; declare created_at: Date; declare updated_at: Date; }
@@ -60,8 +61,42 @@ Invoice.init({ id, account_id: { type: DataTypes.UUID, allowNull: false }, creat
 export class InvoiceDetail extends Model { declare id: string; declare invoice_id: string; declare training_id: string | null; declare participant_id: string | null; declare description: string; declare quantity: number; declare unit_price: string; declare amount: string; declare created_at: Date; declare updated_at: Date; }
 InvoiceDetail.init({ id, invoice_id: { type: DataTypes.UUID, allowNull: false }, training_id: { type: DataTypes.UUID, allowNull: true }, participant_id: { type: DataTypes.UUID, allowNull: true }, description: { type: DataTypes.STRING(255), allowNull: false }, quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }, unit_price: { type: DataTypes.DECIMAL(19, 4), allowNull: false }, amount: { type: DataTypes.DECIMAL(19, 4), allowNull: false } }, { sequelize, tableName: "invoice_detail", ...timestamps, indexes: [{ name: "ix_invoice_detail_invoice_id", fields: ["invoice_id"] }, { name: "ix_invoice_detail_training_id", fields: ["training_id"] }, { name: "ix_invoice_detail_participant_id", fields: ["participant_id"] }] });
 
-export class AuditTrail extends Model { declare id: string; declare actor_subject: string | null; declare action: string; declare object_type: string; declare object_id: string | null; declare data_before: string | null; declare data_after: string | null; declare created_at: Date; }
-AuditTrail.init({ id, actor_subject: { type: DataTypes.STRING(255), allowNull: true }, action: { type: DataTypes.STRING(50), allowNull: false }, object_type: { type: DataTypes.STRING(50), allowNull: false }, object_id: { type: DataTypes.STRING(100), allowNull: true }, data_before: { type: DataTypes.TEXT("long"), allowNull: true }, data_after: { type: DataTypes.TEXT("long"), allowNull: true }, created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW } }, { sequelize, tableName: "audit_trail", timestamps: false, indexes: [{ name: "ix_audit_trail_actor_created", fields: ["actor_subject", "created_at"] }, { name: "ix_audit_trail_object", fields: ["object_type", "object_id"] }] });
+export class AuditTrail extends Model {
+  declare id: string;
+  declare actor_subject: string | null;
+  declare actor_name: string | null;
+  declare actor_type: string;
+  declare active_role: string | null;
+  declare process_name: string | null;
+  declare action: string;
+  declare object_type: string;
+  declare object_id: string | null;
+  declare ip_address: string | null;
+  declare source_service: string;
+  declare data_before: string | null;
+  declare data_after: string | null;
+  declare created_at: Date;
+}
+AuditTrail.init({
+  id,
+  actor_subject: { type: DataTypes.STRING(255), allowNull: true },
+  actor_name: { type: DataTypes.STRING(255), allowNull: true },
+  actor_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "USER" },
+  active_role: { type: DataTypes.STRING(50), allowNull: true },
+  process_name: { type: DataTypes.STRING(128), allowNull: true },
+  action: { type: DataTypes.STRING(50), allowNull: false },
+  object_type: { type: DataTypes.STRING(50), allowNull: false },
+  object_id: { type: DataTypes.STRING(100), allowNull: true },
+  ip_address: { type: DataTypes.STRING(45), allowNull: true },
+  source_service: { type: DataTypes.STRING(50), allowNull: false, defaultValue: "internal-api" },
+  data_before: { type: DataTypes.TEXT("long"), allowNull: true },
+  data_after: { type: DataTypes.TEXT("long"), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+}, { sequelize, tableName: "audit_trail", timestamps: false, indexes: [
+  { name: "ix_audit_trail_actor_created", fields: ["actor_subject", "created_at"] },
+  { name: "ix_audit_trail_object", fields: ["object_type", "object_id"] },
+  { name: "ix_audit_trail_role_created", fields: ["active_role", "created_at"] },
+] });
 
 export class ImportBatch extends Model { declare id: string; declare created_by_subject: string | null; declare filename: string; declare uploaded_at: Date; declare status: string; declare created_at: Date; declare updated_at: Date; }
 ImportBatch.init({ id, created_by_subject: { type: DataTypes.STRING(255), allowNull: true }, filename: { type: DataTypes.STRING(255), allowNull: false }, uploaded_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }, status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "PENDING" } }, { sequelize, tableName: "import_batches", ...timestamps });

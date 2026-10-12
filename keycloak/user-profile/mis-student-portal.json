@@ -1,0 +1,25 @@
+{
+  "unmanagedAttributePolicy": "DISABLED",
+  "attributes": [
+    {
+      "name": "mis_account_source",
+      "displayName": "MIS account source",
+      "required": {
+        "roles": ["admin"]
+      },
+      "validations": {
+        "options": {
+          "options": ["MANUAL", "AUTOMATIC"]
+        }
+      },
+      "permissions": {
+        "view": ["admin"],
+        "edit": ["admin"]
+      },
+      "annotations": {
+        "inputType": "select"
+      }
+    }
+  ],
+  "groups": []
+}

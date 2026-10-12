@@ -1,5 +1,6 @@
 import { Account } from "../../database/models/account.model";
 import { PicAccountAssignment } from "../../database/models/pic-account-assignment.model";
+import { PicProfile } from "../../database/models/pic-profile.model";
 import { Training } from "../../database/models/training.model";
 
 /** Returns only trainings owned by the PIC's one active Account assignment. */
@@ -23,6 +24,7 @@ export function findTrainingsInPicScope(picProfileId: string) {
             attributes: [],
             required: true,
             where: { pic_profile_id: picProfileId, ended_at: null },
+            include: [{ model: PicProfile, as: "picProfile", attributes: [], required: true, where: { status: "ACTIVE" } }],
           },
         ],
       },

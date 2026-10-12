@@ -79,10 +79,16 @@ test("student route authorization uses activeRole only", () => {
 test("/me returns the validated student auth context", async (t) => {
   const { app } = require("../dist/app.js");
   const { StudentProfile } = require("../dist/database/models/student-profile.model.js");
+  const { sequelize } = require("../dist/database/sequelize.js");
+  const auditOutbox = require("../dist/modules/audit-trail/audit-outbox.service.js");
   const originalFindOne = StudentProfile.findOne;
   const originalCreate = StudentProfile.create;
+  const originalTransaction = sequelize.transaction;
+  const originalEnqueue = auditOutbox.enqueueAuditEvent;
   let created = false;
   StudentProfile.findOne = async () => null;
+  sequelize.transaction = async (callback) => callback({});
+  auditOutbox.enqueueAuditEvent = async () => {};
   StudentProfile.create = async (values) => {
     created = true;
     return { student_id: "student-id-1", ...values };
@@ -92,6 +98,8 @@ test("/me returns the validated student auth context", async (t) => {
   t.after(async () => {
     StudentProfile.findOne = originalFindOne;
     StudentProfile.create = originalCreate;
+    sequelize.transaction = originalTransaction;
+    auditOutbox.enqueueAuditEvent = originalEnqueue;
     await new Promise((resolve) => server.close(resolve));
   });
 

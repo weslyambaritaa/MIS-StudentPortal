@@ -69,6 +69,7 @@ function makeRequest(token, activeRole, extraHeaders = {}) {
   };
   const req = {
     headers: { ...headers },
+    ip: "198.51.100.22",
     header(name) {
       return headers[name.toLowerCase()];
     },
@@ -109,6 +110,7 @@ test("Gateway validates JWT, active role membership, and overwrites spoofed auth
     "x-auth-user-email": "spoof@example.test",
     "x-auth-user-roles": "finance",
     "x-auth-active-role": "management",
+    "x-auth-client-ip": "spoofed-ip",
     "x-gateway-secret": "spoofed-secret",
   });
 
@@ -120,6 +122,7 @@ test("Gateway validates JWT, active role membership, and overwrites spoofed auth
   assert.equal(result.req.headers["x-auth-user-email"], "person@example.test");
   assert.equal(result.req.headers["x-auth-user-roles"], "management,sales");
   assert.equal(result.req.headers["x-auth-active-role"], "sales");
+  assert.equal(result.req.headers["x-auth-client-ip"], "198.51.100.22");
   assert.equal(result.req.headers["x-gateway-secret"], "gateway-test-secret");
   assert.equal(result.req.headers["x-active-role"], undefined);
 });

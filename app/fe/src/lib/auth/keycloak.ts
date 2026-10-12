@@ -26,7 +26,9 @@ export function initializeKeycloak() {
       checkLoginIframe: false,
       pkceMethod: "S256",
 
-      redirectUri: `${window.location.origin}${window.location.pathname}`,
+      // Login always returns to the role-aware home; deep links are opened after
+      // the user has entered the application and selected an active role.
+      redirectUri: `${window.location.origin}/dashboard`,
     });
   }
 

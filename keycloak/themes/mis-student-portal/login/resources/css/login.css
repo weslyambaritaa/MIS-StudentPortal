@@ -136,10 +136,25 @@ body.mis-login-page {
   background: #fff;
 }
 
+.promo-pagination span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.promo-pagination span.is-active {
+  width: 24px;
+  background: #fff;
+}
+
 .promo-pagination button:focus-visible,
 .password-toggle:focus-visible,
 #kc-login:focus-visible,
 .reset-submit:focus-visible,
+.info-continue:focus-visible,
+.cancel-password-update:focus-visible,
 .back-to-login:focus-visible,
 .forgot-password a:focus-visible {
   outline: 3px solid #fca5a5;
@@ -286,7 +301,8 @@ body.mis-login-page {
 }
 
 #kc-login,
-.reset-submit {
+.reset-submit,
+.info-continue {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -304,12 +320,14 @@ body.mis-login-page {
 }
 
 #kc-login:hover,
-.reset-submit:hover {
+.reset-submit:hover,
+.info-continue:hover {
   filter: brightness(1.04);
 }
 
 #kc-login svg,
-.reset-submit svg {
+.reset-submit svg,
+.info-continue svg {
   width: 20px;
   height: 20px;
   fill: none;
@@ -371,6 +389,12 @@ body.mis-login-page {
   flex: 0 0 112px;
 }
 
+.update-password-icon {
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
+}
+
 .reset-form-wrap {
   display: flex;
   flex-direction: column;
@@ -426,6 +450,75 @@ body.mis-login-page {
   font-weight: 500;
   line-height: 24px;
   text-decoration: none;
+}
+
+.update-password-form-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.update-password-form-wrap .brand-logo {
+  margin-bottom: 0;
+}
+
+.update-password-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.update-password-heading h2 {
+  margin: 0;
+  color: #4b5563;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.update-password-heading p {
+  margin: 0;
+  color: rgba(24, 24, 27, 0.6);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.info-continue {
+  text-decoration: none;
+}
+
+.update-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.logout-sessions-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.logout-sessions-control input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #e11d48;
+}
+
+.cancel-password-update {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #e11d48;
+  font: 500 16px/24px "DM Sans", Arial, sans-serif;
+  cursor: pointer;
 }
 
 @media (max-width: 900px) {

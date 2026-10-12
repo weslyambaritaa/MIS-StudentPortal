@@ -53,6 +53,7 @@ export async function requestInternalApi<T>(
   const headers = new Headers({
     "x-service-secret": env.serviceSharedSecret,
     "x-actor-user-id": actor.userId,
+    "x-actor-user-email": actor.email ?? "",
     "x-actor-roles": actor.roles.join(","),
     "x-actor-active-role": actor.activeRole,
   });

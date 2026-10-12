@@ -9,5 +9,5 @@ export function ensureStudentIdentityForActiveRole(req: Request, _res: Response,
   if (!auth) return next(new Error("Authenticated context is required"));
   if (auth.activeRole !== ROLES.STUDENT) return next();
 
-  ensureStudentIdentity(auth).then(() => next(), next);
+  ensureStudentIdentity(auth, req.header("x-auth-client-ip") ?? null).then(() => next(), next);
 }

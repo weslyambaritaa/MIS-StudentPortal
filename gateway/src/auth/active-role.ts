@@ -15,6 +15,7 @@ export function isRoleWithinBoundary(activeRole: Role | undefined, allowedRoles:
 export type TrustedAuthContext = {
   userId: string;
   email?: string;
+  clientIp?: string;
   roles: readonly Role[];
   activeRole: Role;
 };
@@ -29,5 +30,7 @@ export function overwriteTrustedAuthHeaders(
   headers["x-auth-user-email"] = auth.email ?? "";
   headers["x-auth-user-roles"] = auth.roles.join(",");
   headers["x-auth-active-role"] = auth.activeRole;
+  delete headers["x-auth-client-ip"];
+  headers["x-auth-client-ip"] = auth.clientIp ?? "";
   headers["x-gateway-secret"] = gatewaySecret;
 }

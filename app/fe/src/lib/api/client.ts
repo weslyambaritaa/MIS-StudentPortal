@@ -19,8 +19,23 @@ export async function apiRequest<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    const body = await response.text();
+    let message = `API request failed: ${response.status}`;
+    if (body) {
+      try {
+        const payload = JSON.parse(body) as { message?: unknown };
+        if (typeof payload.message === "string" && payload.message.trim()) message = payload.message;
+      } catch {
+        // Keep the status-based message when the server returns non-JSON text.
+      }
+    }
+    throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  // DELETE endpoints may legitimately return 204 No Content. Do not ask the
+  // browser to parse an empty response body as JSON.
+  if (response.status === 204) return undefined as T;
+
+  const body = await response.text();
+  return body ? (JSON.parse(body) as T) : (undefined as T);
 }

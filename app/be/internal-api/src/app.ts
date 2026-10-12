@@ -6,4 +6,4 @@ export const app = express(); app.use(helmet()); app.use(cors()); app.use(pinoHt
     paths: ["req.headers.authorization", "req.headers.x-gateway-secret", "req.headers.x-service-secret"],
     censor: "[REDACTED]",
   },
-})); app.use(express.json()); app.use(routes); app.use(notFound); app.use(errorHandler);
+})); app.use(express.json({ limit: "15mb" })); app.use(routes); app.use(notFound); app.use(errorHandler);

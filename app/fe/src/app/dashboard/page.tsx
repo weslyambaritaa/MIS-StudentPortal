@@ -41,10 +41,14 @@ export default function DashboardPage() {
 
   const email = typeof keycloak.tokenParsed?.email === "string" ? keycloak.tokenParsed.email : "";
 
+  const fullName = typeof keycloak.tokenParsed?.name === "string" ? keycloak.tokenParsed.name : "";
+
   const username =
     typeof keycloak.tokenParsed?.preferred_username === "string"
       ? keycloak.tokenParsed.preferred_username
       : "";
+
+  const displayName = fullName || username || email || "Pengguna";
 
   const dashboardTitle = getDashboardTitle(activeRole);
 
@@ -52,23 +56,17 @@ export default function DashboardPage() {
     <AppShell title="Dashboard">
       <h1 className="text-3xl font-semibold">{dashboardTitle}</h1>
 
-      <div className="mt-6 space-y-2">
-        <p>
-          <strong>Username:</strong> {username || "-"}
+      <section className="mt-6 rounded-3xl border border-rose-50 bg-white p-6">
+        <h2 className="text-2xl font-medium text-zinc-950">
+          Halo, selamat datang, {displayName}!
+        </h2>
+        <p className="mt-3 text-sm text-zinc-950/60">
+          Role Anda: {availableRoles.length > 0 ? availableRoles.join(", ") : "-"}
         </p>
-
-        <p>
-          <strong>Email:</strong> {email || "-"}
+        <p className="mt-1 text-sm text-zinc-950/60">
+          Anda sedang menggunakan role: <span className="font-medium text-rose-600">{activeRole ?? "-"}</span>
         </p>
-
-        <p>
-          <strong>Roles:</strong> {availableRoles.length > 0 ? availableRoles.join(", ") : "-"}
-        </p>
-
-        <p>
-          <strong>Active role:</strong> {activeRole ?? "-"}
-        </p>
-      </div>
+      </section>
     </AppShell>
   );
 }

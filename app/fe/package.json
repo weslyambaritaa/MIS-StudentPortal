@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "pretest": "npm run build --workspace @mis/shared-types",
-    "test": "tsx --test test/active-role.test.ts test/api-client.test.ts"
+    "test": "tsx --test test/active-role.test.ts test/api-client.test.ts test/route-access.test.ts"
   },
   "dependencies": {
     "@mis/shared-types": "*",
@@ -20,7 +20,8 @@
     "lucide-react": "^1.47.0",
     "next": "15.5.25",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

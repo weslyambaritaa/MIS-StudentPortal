@@ -3,10 +3,38 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { Home, User, X } from "lucide-react";
+import {
+  Award,
+  Bell,
+  BookOpen,
+  Briefcase,
+  Building2,
+  CalendarDays,
+  ChartNetwork,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  GraduationCap,
+  History,
+  Home,
+  KeyRound,
+  Layers,
+  Monitor,
+  Network,
+  User,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
 import { IconButton } from "@/components/ui/icon-button";
-import { navigationByRole, type NavigationItem } from "@/config/navigation";
+import {
+  navigationByRole,
+  type NavigationIcon,
+  type NavigationItem,
+} from "@/config/navigation";
 import { useAuth } from "@/providers/keycloak-provider";
 
 type SidebarProps = {
@@ -15,9 +43,34 @@ type SidebarProps = {
   onMobileClose?: () => void;
 };
 
-function getIcon(item: NavigationItem): ReactNode {
-  if (item.icon === "dashboard") return <Home size={20} />;
-  return null;
+const navigationIcons: Record<NavigationIcon, LucideIcon> = {
+  dashboard: Home,
+  file: FileText,
+  clipboard: ClipboardList,
+  business: Briefcase,
+  account: Building2,
+  people: Users,
+  student: GraduationCap,
+  course: BookOpen,
+  category: Layers,
+  room: Building2,
+  calendar: CalendarDays,
+  certificate: Award,
+  notification: Bell,
+  credentials: KeyRound,
+  audit: History,
+  complete: CheckCircle2,
+  monitor: Monitor,
+  profile: User,
+  remote: FlaskConical,
+  path: Network,
+  report: ChartNetwork,
+  matrix: ClipboardCheck,
+};
+
+function getIcon(icon: NavigationIcon): ReactNode {
+  const Icon = navigationIcons[icon];
+  return <Icon size={20} strokeWidth={1.7} />;
 }
 
 type RenderedNavigationItem = Omit<NavigationItem, "icon"> & { icon: ReactNode };
@@ -33,22 +86,44 @@ function NavLink({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
+  const className = [
+    "flex items-center gap-3 rounded-[100px] px-3 py-2.5 text-base font-medium transition-all duration-150",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-2",
+    collapsed ? "size-10 justify-center px-0" : "w-full justify-start",
+    active
+      ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]"
+      : "text-gray-600 hover:bg-rose-100 hover:text-rose-700",
+  ].join(" ");
+
+  const content = (
+    <>
+      <span className="flex size-5 shrink-0 items-center justify-center">{item.icon}</span>
+      {!collapsed && <span className="truncate font-['DM_Sans']">{item.label}</span>}
+    </>
+  );
+
+  if (!item.href || item.disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        title={collapsed ? `${item.label} - Segera tersedia` : "Halaman belum tersedia"}
+        aria-label={`${item.label}, belum tersedia`}
+        className={`${className} cursor-not-allowed`}
+      >
+        {content}
+      </button>
+    );
+  }
+
   return (
     <Link
       href={item.href}
       title={collapsed ? item.label : undefined}
       onClick={onNavigate}
-      className={[
-        "flex items-center gap-3 rounded-[100px] px-3 py-2.5 text-base font-medium transition-all duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-2",
-        collapsed ? "size-10 justify-center px-0" : "w-full justify-start",
-        active
-          ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]"
-          : "text-gray-600 hover:bg-rose-100 hover:text-rose-700",
-      ].join(" ")}
+      className={className}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center">{item.icon}</span>
-      {!collapsed && <span className="truncate font-['DM_Sans']">{item.label}</span>}
+      {content}
     </Link>
   );
 }
@@ -61,24 +136,57 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { keycloak, activeRole } = useAuth();
+  const { keycloak, activeRole, hasAccessLogAdminRole } = useAuth();
   const navigation = activeRole ? navigationByRole[activeRole] : null;
-  const username =
-    typeof keycloak.tokenParsed?.preferred_username === "string"
-      ? keycloak.tokenParsed.preferred_username
-      : "-";
+  const displayName =
+    (typeof keycloak.tokenParsed?.name === "string" && keycloak.tokenParsed.name) ||
+    (typeof keycloak.tokenParsed?.preferred_username === "string" &&
+      keycloak.tokenParsed.preferred_username) ||
+    (typeof keycloak.tokenParsed?.email === "string" && keycloak.tokenParsed.email) ||
+    "-";
   const roleNames = activeRole ?? "-";
 
   return (
     <div className="flex h-full flex-col justify-between p-5">
       <div className={collapsed ? "flex flex-col items-center gap-6" : "flex flex-col gap-6"}>
-        {navigation && (
+        {navigation && !navigation.dashboardSectionTitle && (
           <NavLink
-            item={{ ...navigation.dashboard, icon: getIcon(navigation.dashboard) }}
+            item={{ ...navigation.dashboard, icon: getIcon(navigation.dashboard.icon) }}
             active={pathname === navigation.dashboard.href}
             collapsed={collapsed}
             onNavigate={onNavigate}
           />
+        )}
+
+        {navigation?.dashboardSectionTitle && (
+          <section className={collapsed ? "w-10" : "w-full"}>
+            <p
+              className={
+                collapsed
+                  ? "mb-3 text-center text-xs font-medium text-slate-900/40"
+                  : "mb-2 text-xs font-medium uppercase text-slate-900/40"
+              }
+            >
+              {collapsed ? "---" : navigation.dashboardSectionTitle}
+            </p>
+            <div className={collapsed ? "flex flex-col items-center gap-2" : "flex flex-col gap-2"}>
+              <NavLink
+                item={{ ...navigation.dashboard, icon: getIcon(navigation.dashboard.icon) }}
+                active={pathname === navigation.dashboard.href}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+              {(navigation.dashboardSectionItems ?? []).map((item) => (
+                <NavLink
+                  key={item.key}
+                  item={{ ...item, icon: getIcon(item.icon) }}
+                  active={Boolean(item.href && pathname.startsWith(item.href))}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         {(navigation?.sections ?? []).map((section) => (
@@ -97,9 +205,9 @@ function SidebarContent({
             <div className={collapsed ? "flex flex-col items-center gap-2" : "flex flex-col gap-2"}>
               {section.items.map((item) => (
                 <NavLink
-                  key={item.href}
-                  item={{ ...item, icon: getIcon(item) }}
-                  active={pathname.startsWith(item.href)}
+                  key={item.key}
+                  item={{ ...item, icon: getIcon(item.icon) }}
+                  active={Boolean(item.href && pathname.startsWith(item.href))}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
                 />
@@ -107,13 +215,25 @@ function SidebarContent({
             </div>
           </section>
         ))}
+
+        {hasAccessLogAdminRole && (
+          <section className={collapsed ? "w-10" : "w-full"}>
+            {!collapsed && <p className="mb-2 text-xs font-medium uppercase text-slate-900/40">Administration</p>}
+            <NavLink
+              item={{ key: "access-logs", label: "Access Logs", icon: getIcon("audit"), href: "/admin/access-logs" }}
+              active={pathname.startsWith("/admin/access-logs")}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          </section>
+        )}
       </div>
 
       <div className={collapsed ? "flex justify-center" : "flex items-center justify-end gap-3"}>
         {!collapsed && <div className="h-10 w-[3px] rounded-[1px] bg-sky-500" />}
         {!collapsed && (
           <div className="min-w-0 flex-1 text-right">
-            <p className="truncate text-base font-medium text-sky-500">{username}</p>
+            <p className="truncate text-base font-medium text-sky-500">{displayName}</p>
             <p className="truncate text-sm text-zinc-950/60">{roleNames}</p>
           </div>
         )}

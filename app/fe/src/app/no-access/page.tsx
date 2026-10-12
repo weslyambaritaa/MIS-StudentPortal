@@ -1,12 +1,16 @@
 "use client";
 
 import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LogoutConfirmationModal } from "@/components/ui/logout-confirmation-modal";
 import { useAuth } from "@/providers/keycloak-provider";
 
 export default function NoAccessPage() {
-  const { keycloak } = useAuth();
+  const { keycloak, hasAccessLogAdminRole } = useAuth();
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
 
   const handleLogout = () => {
     void keycloak.logout({ redirectUri: `${window.location.origin}/` });
@@ -20,15 +24,26 @@ export default function NoAccessPage() {
           Anda berhasil masuk, tetapi akun ini belum mempunyai business role MIS. Hubungi administrator
           Keycloak untuk meminta assignment role yang sesuai.
         </p>
+        {hasAccessLogAdminRole && (
+          <Link className="mt-5 inline-flex rounded-full border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50" href="/admin/access-logs">
+            Buka Access Logs
+          </Link>
+        )}
         <Button
           className="mt-6"
           variant="danger"
           leftIcon={<LogOut size={16} strokeWidth={1.7} />}
-          onClick={handleLogout}
+          onClick={() => setLogoutConfirmationOpen(true)}
         >
           Logout
         </Button>
       </section>
+
+      <LogoutConfirmationModal
+        open={logoutConfirmationOpen}
+        onClose={() => setLogoutConfirmationOpen(false)}
+        onConfirm={handleLogout}
+      />
     </main>
   );
 }

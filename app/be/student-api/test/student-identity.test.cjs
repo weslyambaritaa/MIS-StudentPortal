@@ -12,6 +12,8 @@ process.env.SERVICE_SHARED_SECRET ??= "service-test-secret";
 process.env.INTERNAL_API_URL ??= "http://internal-api:4002";
 
 const { StudentProfile } = require("../dist/database/models/student-profile.model.js");
+const { sequelize } = require("../dist/database/sequelize.js");
+const auditOutbox = require("../dist/modules/audit-trail/audit-outbox.service.js");
 const {
   ensureStudentIdentity,
   findStudentIdentity,
@@ -58,29 +60,44 @@ test("existing StudentProfile is reused without creating another row", async () 
 test("missing StudentProfile is lazily created only for activeRole student", async () => {
   const originalFindOne = StudentProfile.findOne;
   const originalCreate = StudentProfile.create;
+  const originalTransaction = sequelize.transaction;
+  const originalEnqueue = auditOutbox.enqueueAuditEvent;
   const profile = { student_id: "student-id-new", keycloak_subject: "kc-student-123" };
   let findCalls = 0;
   let createValues;
   StudentProfile.findOne = async () => (++findCalls === 1 ? null : profile);
   StudentProfile.create = async (values) => { createValues = values; return profile; };
+  sequelize.transaction = async (callback) => callback({});
+  let auditEvent;
+  auditOutbox.enqueueAuditEvent = async (...values) => { auditEvent = values; };
 
   try {
     assert.equal(await ensureStudentIdentity(studentAuth()), profile);
     assert.deepEqual(createValues, { keycloak_subject: "kc-student-123" });
     assert.equal(findCalls, 1);
+    assert.equal(auditEvent[0].userId, "kc-student-123");
+    assert.equal(auditEvent[1].objectType, "STUDENT_PROFILE");
+    assert.equal(auditEvent[1].action, "CREATE");
+    assert.equal(auditEvent[1].dataAfter.student_id, profile.student_id);
   } finally {
     StudentProfile.findOne = originalFindOne;
     StudentProfile.create = originalCreate;
+    sequelize.transaction = originalTransaction;
+    auditOutbox.enqueueAuditEvent = originalEnqueue;
   }
 });
 
 test("second Student request reuses the identity created by the first request", async () => {
   const originalFindOne = StudentProfile.findOne;
   const originalCreate = StudentProfile.create;
+  const originalTransaction = sequelize.transaction;
+  const originalEnqueue = auditOutbox.enqueueAuditEvent;
   const profile = { student_id: "student-id-new", keycloak_subject: "kc-student-123" };
   let exists = false;
   let createCalls = 0;
   StudentProfile.findOne = async () => (exists ? profile : null);
+  sequelize.transaction = async (callback) => callback({});
+  auditOutbox.enqueueAuditEvent = async () => {};
   StudentProfile.create = async () => { createCalls += 1; exists = true; return profile; };
 
   try {
@@ -90,16 +107,22 @@ test("second Student request reuses the identity created by the first request", 
   } finally {
     StudentProfile.findOne = originalFindOne;
     StudentProfile.create = originalCreate;
+    sequelize.transaction = originalTransaction;
+    auditOutbox.enqueueAuditEvent = originalEnqueue;
   }
 });
 
 test("concurrent first Student requests recover from unique-subject conflict", async () => {
   const originalFindOne = StudentProfile.findOne;
   const originalCreate = StudentProfile.create;
+  const originalTransaction = sequelize.transaction;
+  const originalEnqueue = auditOutbox.enqueueAuditEvent;
   const profile = { student_id: "student-id-race", keycloak_subject: "kc-student-123" };
   let findCalls = 0;
   let createCalls = 0;
   StudentProfile.findOne = async () => (++findCalls <= 2 ? null : profile);
+  sequelize.transaction = async (callback) => callback({});
+  auditOutbox.enqueueAuditEvent = async () => {};
   StudentProfile.create = async () => {
     createCalls += 1;
     if (createCalls === 1) return profile;
@@ -116,6 +139,8 @@ test("concurrent first Student requests recover from unique-subject conflict", a
   } finally {
     StudentProfile.findOne = originalFindOne;
     StudentProfile.create = originalCreate;
+    sequelize.transaction = originalTransaction;
+    auditOutbox.enqueueAuditEvent = originalEnqueue;
   }
 });
 

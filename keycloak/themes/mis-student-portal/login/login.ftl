@@ -54,8 +54,8 @@
                     <form id="kc-form-login" action="${url.loginAction}" method="post" onsubmit="login.disabled = true; return true;">
                         <#if !usernameHidden??>
                             <div class="field-group">
-                                <label for="username">Email</label>
-                                <input id="username" name="username" type="text" value="${(login.username!'')}" autocomplete="username" autofocus dir="ltr" aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>" placeholder="your@mail.com">
+                                <label for="username">Username or email</label>
+                                <input id="username" name="username" type="text" value="${(login.username!'')}" autocomplete="username" autofocus dir="ltr" aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>" placeholder="Username or your@mail.com">
                                 <#if messagesPerField.existsError('username','password')>
                                     <span class="field-error" role="alert">${kcSanitize(messagesPerField.getFirstError('username','password'))?no_esc}</span>
                                 </#if>

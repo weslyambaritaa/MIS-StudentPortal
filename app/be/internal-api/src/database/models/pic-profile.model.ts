@@ -5,6 +5,10 @@ import { sequelize } from "../sequelize";
 export class PicProfile extends Model {
   declare id: string;
   declare keycloak_subject: string;
+  declare name: string;
+  declare email: string;
+  declare status: "PENDING" | "ACTIVE" | "INACTIVE";
+  declare activation_expires_at: Date | null;
   declare position: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -23,6 +27,10 @@ PicProfile.init(
       allowNull: false,
       unique: "uq_pic_profile_keycloak_subject",
     },
+    name: { type: DataTypes.STRING(200), allowNull: false },
+    email: { type: DataTypes.STRING(254), allowNull: false },
+    status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "PENDING", validate: { isIn: [["PENDING", "ACTIVE", "INACTIVE"]] } },
+    activation_expires_at: { type: DataTypes.DATE, allowNull: true },
     position: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -34,5 +42,6 @@ PicProfile.init(
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
+    indexes: [{ name: "uq_pic_profile_email", unique: true, fields: ["email"] }],
   },
 );

@@ -45,7 +45,7 @@ test("Internal API client constructs trusted headers from auth context, not inco
   assert.equal(requestInit.headers.get("x-actor-roles"), "trainer,management");
   assert.equal(requestInit.headers.get("x-actor-active-role"), "trainer");
   assert.equal(requestInit.headers.get("x-actor-user-id"), "kc-trainer-1");
-  assert.equal(requestInit.headers.get("x-actor-user-email"), null);
+  assert.equal(requestInit.headers.get("x-actor-user-email"), "not-forwarded@example.test");
   assert.equal(result.ok, true);
 });
 

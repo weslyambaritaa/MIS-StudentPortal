@@ -157,6 +157,7 @@ services:
 
     networks:
       - auth-net
+      - keycloak-admin-net
 
 
   # =========================================================
@@ -233,6 +234,7 @@ services:
     networks:
       - internal-net
       - event-net
+      - keycloak-admin-net
 
     volumes:
       - ./app/be/internal-api:/workspace/app/be/internal-api
@@ -442,3 +444,6 @@ networks:
 
   # APIs ↔ RabbitMQ
   event-net:
+
+  # Internal API reaches Keycloak Admin API without joining the Keycloak DB network.
+  keycloak-admin-net:

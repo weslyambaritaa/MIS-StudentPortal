@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 type DeleteConfirmationModalProps = {
   open: boolean;
   itemName: string;
+  description?: string;
   onClose: () => void;
   onConfirm: () => void;
   loading?: boolean;
@@ -17,6 +18,7 @@ type DeleteConfirmationModalProps = {
 export function DeleteConfirmationModal({
   open,
   itemName,
+  description,
   onClose,
   onConfirm,
   loading = false,
@@ -34,7 +36,7 @@ export function DeleteConfirmationModal({
       <div className="my-4 h-px bg-zinc-950/20" />
 
       <p className="text-sm text-zinc-950/60">
-        The following content &quot;{itemName}&quot; will be deleted permanently, with its child...
+        {description ?? `The following content “${itemName}” will be deleted permanently, with its child...`}
       </p>
 
       <div className="mt-6 flex items-center gap-3">

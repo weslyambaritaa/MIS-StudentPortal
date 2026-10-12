@@ -33,7 +33,18 @@ const ids = {
 
 async function insertIfMissing(qi, table, row) {
   const [rows] = await qi.sequelize.query(`SELECT id FROM ${table} WHERE id = :id`, { replacements: { id: row.id } });
-  if (!rows.length) await qi.bulkInsert(table, [row]);
+  if (!rows.length) {
+    let insertRow = row;
+    if (table === "industry" && !insertRow.industry_code) {
+      const [sequence] = await qi.sequelize.query("SELECT NEXT VALUE FOR [dbo].[industry_code_seq] AS [value]");
+      insertRow = { ...insertRow, industry_code: `IND-${String(sequence[0].value).padStart(2, "0")}` };
+    }
+    if (table === "account" && !insertRow.account_code) {
+      const [sequence] = await qi.sequelize.query("SELECT NEXT VALUE FOR [dbo].[account_code_seq] AS [value]");
+      insertRow = { ...insertRow, account_code: `ACC-${String(sequence[0].value).padStart(6, "0")}` };
+    }
+    await qi.bulkInsert(table, [insertRow]);
+  }
 }
 
 module.exports = {
@@ -42,13 +53,15 @@ module.exports = {
     if (!["development", "test"].includes(environment)) throw new Error("EN-03 sample data is restricted to development/test.");
     const now = new Date();
     const ts = { created_at: now, updated_at: now };
+    const [personalIndustries] = await qi.sequelize.query("SELECT TOP (1) [id] FROM [dbo].[industry] WHERE [industry_code] = 'IND-PERSONAL'");
+    if (!personalIndustries.length) throw new Error("Apply the ST-11 migration before seeding Account samples");
     const rows = [
-      ["industry", { id: ids.industry, name: "Technology", status: "ACTIVE", ...ts }],
+      ["industry", { id: ids.industry, industry_code: "IND-01", name: "Technology", status: "ACTIVE", ...ts }],
       ["course_category", { id: ids.category, name: "Core Skills", ...ts }],
       ["course", { id: ids.course, category_id: ids.category, name: "Communication Fundamentals", duration_minutes: 480, level: "BEGINNER", module_url: null, status: "ACTIVE", ...ts }],
       ["syllabus", { id: ids.syllabus, course_id: ids.course, file_url: "https://example.invalid/syllabus/communication.pdf", ...ts }],
       ["account", { id: ids.corp, name: "Sample Corporate Account", account_type: "CORPORATE", industry_id: ids.industry, status: "ACTIVE", created_at: now, updated_at: now }],
-      ["account", { id: ids.personal, name: "Sample Personal Account", account_type: "PERSONAL", industry_id: null, status: "ACTIVE", created_at: now, updated_at: now }],
+      ["account", { id: ids.personal, name: "Sample Personal Account", account_type: "PERSONAL", industry_id: personalIndustries[0].id, status: "ACTIVE", created_at: now, updated_at: now }],
       ["quotation", { id: ids.quotation, account_id: ids.corp, created_by_subject: null, status: "APPROVED", sent_at: now, ...ts }],
       ["quotation_order", { id: ids.quotationOrder, quotation_id: ids.quotation, course_id: ids.course, class_type: "PUBLIC", amount_student: 10, price: 1000000, location: "Jakarta", ...ts }],
       ["request_form", { id: ids.rfPublic, quotation_id: ids.quotation, created_by_subject: null, reviewed_by_subject: null, attachment_file: null, training_title: "Sample Public Training", request_date: now, language: "id", training_type: "PUBLIC", number_student: 10, room_rental: false, special_instruction: null, approved_at: now, ...ts }],
