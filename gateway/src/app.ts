@@ -10,11 +10,12 @@ import { authenticateUserProvisioner } from "./middlewares/authenticate-user-pro
 import { authorizeBoundary } from "./middlewares/authorize-boundary.middleware";
 
 import { EXTERNAL_ROLES, INTERNAL_ROLES } from "./auth/roles";
+import { ROLES } from "@mis/shared-types";
 
 import { realmProxy, resourcesProxy, adminProxy } from "./proxy/keycloak.proxy";
 
 import { externalProxy } from "./proxy/external.proxy";
-import { internalProxy } from "./proxy/internal.proxy";
+import { internalProxy, trainerPortalProxy } from "./proxy/internal.proxy";
 import { accountAdminProxy, accessLogsAdminProxy } from "./proxy/admin.proxy";
 
 import { routes } from "./routes";
@@ -76,6 +77,10 @@ app.use("/api/v1", apiRateLimit);
 // Separate administrative identity route; it intentionally does not select or union a business activeRole.
 app.use("/api/v1/admin/accounts", authenticateUserProvisioner, accountAdminProxy);
 app.use("/api/v1/admin/access-logs", authenticateUserProvisioner, accessLogsAdminProxy);
+
+// Trainer profile data lives in the internal database, so route only this
+// trainer-owned login sync to the internal API while retaining external-role authorization.
+app.use("/api/v1/external/trainers", authenticate, authorizeBoundary([ROLES.TRAINER]), trainerPortalProxy);
 
 app.use("/api/v1/external", authenticate, authorizeBoundary(EXTERNAL_ROLES), externalProxy);
 

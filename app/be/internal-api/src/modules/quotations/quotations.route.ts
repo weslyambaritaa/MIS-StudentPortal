@@ -15,7 +15,7 @@ import { keycloakAccountProvisioner } from "../accounts/keycloak-account-provisi
 import { generateQuotationPdf, type QuotationPdfInput, type QuotationType } from "./quotation-document";
 
 export const quotationsRouter = Router();
-const TYPES: QuotationType[] = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE"];
+const TYPES: QuotationType[] = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE_PUBLIC", "ONLINE_PRIVATE"];
 type LineInput = { courseId: string; amountStudent: number; pricePerPax: number; location: string };
 type Input = { quotationCode: string; accountId: string; picId: string; classType: QuotationType; lines: LineInput[] };
 type Quote = { id: string; quotation_code: string; account_id: string; created_by_subject: string; pic_profile_id: string; class_type: QuotationType; status: string; deleted_at: Date | null };
@@ -165,7 +165,7 @@ quotationsRouter.post("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.CREAT
     await assertAvailableCode(code, id, transaction);
     const now = new Date();
     await sequelize.query("INSERT INTO [dbo].[quotation] ([id],[account_id],[created_by_subject],[status],[sent_at],[quotation_code],[pic_profile_id],[class_type],[deleted_at],[created_at],[updated_at]) VALUES (:id,:accountId,:subject,'SEND_FAILED',NULL,:code,:picId,:classType,NULL,:now,:now)", { replacements: { id, accountId: input.accountId, subject: req.auth!.userId, code, picId: input.picId, classType: input.classType, now }, transaction });
-    for (const line of input.lines) await sequelize.query("INSERT INTO [dbo].[quotation_order] ([id],[quotation_id],[course_id],[class_type],[amount_student],[price],[location],[created_at],[updated_at]) VALUES (:id,:quoteId,:courseId,:classType,:amount,:price,:location,:now,:now)", { replacements: { id: randomUUID(), quoteId: id, courseId: line.courseId, classType: input.classType, amount: line.amountStudent, price: line.pricePerPax, location: line.location, now }, transaction });
+    for (const line of input.lines) await sequelize.query("INSERT INTO [dbo].[quotation_order] ([id],[quotation_id],[course_id],[class_type],[amount_student],[price],[location],[created_at],[updated_at]) VALUES (:id,:quoteId,:courseId,:classType,:amount,:price,:location,:now,:now)", { replacements: { id: randomUUID(), quoteId: id, courseId: line.courseId, classType: input.classType.startsWith("ONLINE_") ? "ONLINE" : input.classType, amount: line.amountStudent, price: line.pricePerPax, location: line.location, now }, transaction });
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "QUOTATION", objectId: id, after: { quotation_code: code, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED" }, processName: "quotation-create" }, transaction);
   });
   try { const delivery = await deliver(id, req.auth!.userId); return res.status(201).json({ item: { id, quotation_code: code, status: delivery.status, delivery_status: "SENT" }, message: "Quotation sent to PIC" }); }
@@ -180,7 +180,7 @@ quotationsRouter.put("/:id", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDI
     const now = new Date();
     await sequelize.query("UPDATE [dbo].[quotation] SET [quotation_code]=:code,[account_id]=:accountId,[pic_profile_id]=:picId,[class_type]=:classType,[status]='SEND_FAILED' WHERE [id]=:id", { replacements: { code: input.quotationCode, accountId: input.accountId, picId: input.picId, classType: input.classType, id: req.params.id }, transaction });
     await sequelize.query("DELETE FROM [dbo].[quotation_order] WHERE [quotation_id]=:id", { replacements: { id: req.params.id }, transaction });
-    for (const line of input.lines) await sequelize.query("INSERT INTO [dbo].[quotation_order] ([id],[quotation_id],[course_id],[class_type],[amount_student],[price],[location],[created_at],[updated_at]) VALUES (:id,:quoteId,:courseId,:classType,:amount,:price,:location,:now,:now)", { replacements: { id: randomUUID(), quoteId: req.params.id, courseId: line.courseId, classType: input.classType, amount: line.amountStudent, price: line.pricePerPax, location: line.location, now }, transaction });
+    for (const line of input.lines) await sequelize.query("INSERT INTO [dbo].[quotation_order] ([id],[quotation_id],[course_id],[class_type],[amount_student],[price],[location],[created_at],[updated_at]) VALUES (:id,:quoteId,:courseId,:classType,:amount,:price,:location,:now,:now)", { replacements: { id: randomUUID(), quoteId: req.params.id, courseId: line.courseId, classType: input.classType.startsWith("ONLINE_") ? "ONLINE" : input.classType, amount: line.amountStudent, price: line.pricePerPax, location: line.location, now }, transaction });
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "QUOTATION", objectId: req.params.id, before: { quotation_code: old.quotation_code, account_id: old.account_id, pic_profile_id: old.pic_profile_id, class_type: old.class_type, status: old.status }, after: { quotation_code: input.quotationCode, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED" }, processName: "quotation-edit-resend" }, transaction);
   });
   const delivery = await deliver(req.params.id, req.auth!.userId);

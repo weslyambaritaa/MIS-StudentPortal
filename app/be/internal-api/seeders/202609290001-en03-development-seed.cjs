@@ -78,7 +78,7 @@ module.exports = {
       ["evaluation", { id: ids.evaluationPrivate, participant_id: ids.participantPrivate, training_id: ids.trainingPrivate, score: 85, comment: "Sample evaluation", submitted_at: now, ...ts }],
       ["certificate_template", { id: ids.certificateTemplate, template_name: "Sample Completion Template", design_file: null, series_format: "DEMO-{YEAR}-{SEQUENCE}", signature: null, publish_criteria: "Training completion", ...ts }],
       ["certificate", { id: ids.certificate, template_id: ids.certificateTemplate, training_id: ids.trainingPublic, participant_id: ids.participantPublic, alias_name: null, is_alias: false, serial_number: "DEMO-2026-0001", publish_date: now, ...ts }],
-      ["room", { id: ids.room, name: "Demo Room", capacity: 20, facilities: "Projector", status: "AVAILABLE", ...ts }],
+      ["room", { id: ids.room, room_code: "TR-01", name: "Demo Room", capacity: 20, facilities: "Projector", status: "ACTIVE", ...ts }],
       ["booking_room", { id: ids.booking, session_id: ids.sessionPrivate, room_id: ids.room, booking_name: "Sample Session Booking", detail_booking: null, start_time: "09:00:00", end_time: "10:00:00", ...ts }],
       ["class_material", { id: ids.material, training_id: ids.trainingPublic, material_url: "https://example.invalid/material/intro.pdf", ...ts }],
       ["invoice", { id: ids.invoice, account_id: ids.personal, created_by_subject: null, sales_subject: null, bill_to_name: "Sample Personal Account", bill_to_address: null, description: "Sample training invoice", subtotal: 500000, grand_total: 500000, status: "DRAFT", due_date: null, publish_date: null, ...ts }],

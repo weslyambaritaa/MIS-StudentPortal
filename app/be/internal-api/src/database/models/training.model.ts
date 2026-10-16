@@ -8,6 +8,7 @@ export class Training extends Model {
   declare account_id: string;
   declare name: string;
   declare course_id: string;
+  declare syllabus_id: string | null;
   declare request_form_id: string;
   declare training_type: "PUBLIC" | "PRIVATE";
   declare status: "DRAFT" | "SCHEDULED" | "ONGOING" | "COMPLETED" | "CANCELLED";
@@ -21,6 +22,7 @@ Training.init(
     account_id: { type: DataTypes.UUID, allowNull: false },
     name: { type: DataTypes.STRING(200), allowNull: false },
     course_id: { type: DataTypes.UUID, allowNull: false },
+    syllabus_id: { type: DataTypes.UUID, allowNull: true },
     request_form_id: { type: DataTypes.UUID, allowNull: false },
     training_type: { type: DataTypes.STRING(20), allowNull: false, validate: { isIn: [["PUBLIC", "PRIVATE"]] } },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "DRAFT", validate: { isIn: [["DRAFT", "SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"]] } },

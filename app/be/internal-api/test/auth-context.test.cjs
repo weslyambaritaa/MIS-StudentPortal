@@ -15,6 +15,8 @@ const { authorizeActiveRole } = require("../dist/middlewares/authorize.middlewar
 function invokeMiddleware(middleware, values, initialAuth) {
   const req = {
     auth: initialAuth,
+    method: values.method,
+    originalUrl: values.originalUrl,
     header(name) { return values[name.toLowerCase()]; },
   };
   const res = {
@@ -76,6 +78,38 @@ test("internal API validates active role membership and internal boundary", () =
     roles: ["sales", "management"],
     activeRole: "sales",
   });
+});
+
+test("trainer role is accepted only for the trainer portal-login sync route", () => {
+  const headers = {
+    "x-gateway-secret": "gateway-test-secret",
+    "x-auth-user-id": "trainer-123",
+    "x-auth-user-roles": "trainer",
+    "x-auth-active-role": "trainer",
+  };
+  const allowed = invokeMiddleware(authContext, {
+    ...headers,
+    method: "POST",
+    originalUrl: "/api/v1/internal/trainers/portal-login",
+  });
+  assert.equal(allowed.nextCalled, true);
+  assert.equal(allowed.req.auth.activeRole, "trainer");
+
+  const wrongPath = invokeMiddleware(authContext, {
+    ...headers,
+    method: "POST",
+    originalUrl: "/api/v1/internal/trainers",
+  });
+  assert.equal(wrongPath.res.statusCode, 403);
+  assert.equal(wrongPath.nextCalled, false);
+
+  const wrongMethod = invokeMiddleware(authContext, {
+    ...headers,
+    method: "GET",
+    originalUrl: "/api/v1/internal/trainers/portal-login",
+  });
+  assert.equal(wrongMethod.res.statusCode, 403);
+  assert.equal(wrongMethod.nextCalled, false);
 });
 
 test("route authorization uses only activeRole, not another role in the context", () => {

@@ -120,7 +120,8 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
 
   // Sales
   { key: "quotation", label: "Quotation", icon: "file", roles: [ROLES.SALES], route: "/sales/quotation", placementByRole: { [ROLES.SALES]: { kind: "section", title: "Main Feature" } } },
-  comingSoon("request-form", "Request Form", "clipboard", [ROLES.SALES], "Main Feature"),
+  { key: "request-form", label: "Request Form", icon: "clipboard", roles: [ROLES.SALES], route: "/sales/request-form", placementByRole: { [ROLES.SALES]: { kind: "section", title: "Main Feature" } } },
+  { key: "registration-form", label: "Registration Form", icon: "clipboard", roles: [ROLES.SALES], route: "/sales/registration-form", placementByRole: { [ROLES.SALES]: { kind: "section", title: "Main Feature" } } },
   {
     key: "industry",
     label: "Industry",
@@ -148,10 +149,11 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
 
   // Admin QPD
   { key: "student", label: "Student", icon: "student", roles: [ROLES.ADMIN], route: "/admin/students", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
-  comingSoon("course", "Course", "course", [ROLES.ADMIN], "Master Data"),
-  comingSoon("course-category", "Course Category", "category", [ROLES.ADMIN], "Master Data"),
-  comingSoon("trainer", "Trainer", "people", [ROLES.ADMIN], "Master Data"),
-  comingSoon("training-room", "Training Room", "room", [ROLES.ADMIN], "Master Data"),
+  { key: "course", label: "Course", icon: "course", roles: [ROLES.ADMIN], route: "/admin/courses", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
+  { key: "course-category", label: "Course Category", icon: "category", roles: [ROLES.ADMIN], route: "/admin/course-categories", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
+  { key: "trainer", label: "Trainer", icon: "people", roles: [ROLES.ADMIN], route: "/admin/trainers", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
+  { key: "training-room", label: "Training Room", icon: "room", roles: [ROLES.ADMIN], route: "/admin/training-rooms", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
+  { key: "request-form-review", label: "Request Form Review", icon: "clipboard", roles: [ROLES.ADMIN], route: "/admin/request-forms", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Training" } } },
   comingSoon("booking-room", "Booking Room", "calendar", [ROLES.ADMIN], "Master Data"),
   comingSoon("list-training", "List Training", "course", [ROLES.ADMIN], "Training"),
   comingSoon("training-calendar", "Training Calendar", "calendar", [ROLES.ADMIN], "Training"),

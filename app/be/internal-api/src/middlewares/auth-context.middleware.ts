@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { isBusinessRole, isInternalRole, type Role } from "@mis/shared-types";
+import { isBusinessRole, isInternalRole, ROLES, type Role } from "@mis/shared-types";
 import { env } from "../config/env";
 
 export function authContext(req: Request, res: Response, next: NextFunction) {
@@ -19,7 +19,13 @@ export function authContext(req: Request, res: Response, next: NextFunction) {
 
   const roles = forwardedRoles as Role[];
   const activeRole = req.header("x-auth-active-role");
-  if (!isInternalRole(activeRole) || !roles.includes(activeRole)) {
+  // Trainer login sync is the only external-role operation intentionally
+  // routed through this API. Keep the exception bound to its exact method/path.
+  const isTrainerLoginSync = req.method === "POST"
+    && req.originalUrl?.split("?")[0] === "/api/v1/internal/trainers/portal-login";
+  const activeRoleAllowed = isInternalRole(activeRole)
+    || (isTrainerLoginSync && activeRole === ROLES.TRAINER);
+  if (!activeRoleAllowed || !roles.includes(activeRole as Role)) {
     return res.status(403).json({ message: "Active role is not allowed for the internal API" });
   }
 

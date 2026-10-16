@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium, type Page } from "playwright-core";
 
-export type QuotationType = "PRIVATE" | "PUBLIC" | "INHOUSE" | "ONLINE";
+export type QuotationType = "PRIVATE" | "PUBLIC" | "INHOUSE" | "ONLINE" | "ONLINE_PUBLIC" | "ONLINE_PRIVATE";
 export type QuotationPdfLine = { name: string; durationMinutes: number; amountStudent: number; pricePerPax: number; location: string };
 export type QuotationPdfInput = {
   code: string; accountName: string; picName: string; picEmail: string; salesName: string;
@@ -11,7 +11,7 @@ export type QuotationPdfInput = {
 
 // Intentionally shared, as requested; edit this one value when bank details change.
 export const BANK_TRANSFER_DETAILS = "Bank Permata - Account No. : 205129.014 (IDR)";
-export const VAT_RATE: Record<QuotationType, number> = { PUBLIC: .11, ONLINE: .11, PRIVATE: .12, INHOUSE: .12 };
+export const VAT_RATE: Record<QuotationType, number> = { PUBLIC: .11, ONLINE: .11, ONLINE_PUBLIC: .11, ONLINE_PRIVATE: .12, PRIVATE: .12, INHOUSE: .12 };
 
 type Layout = {
   date: number; code: number; account: number; pic?: number; intro: number;
@@ -20,7 +20,7 @@ type Layout = {
   bank: number; sales: number; weeks: number;
 };
 // Coordinates in PDF points, measured from the supplied master documents.
-const layouts: Record<QuotationType, Layout> = {
+const layouts: Record<Exclude<QuotationType, "ONLINE_PUBLIC" | "ONLINE_PRIVATE">, Layout> = {
   PRIVATE: { date:119.18, code:133.70, account:156.14, pic:169.58, intro:232.94,
     tableTop:315.18, tableHeight:140.52, columns:[90.024,325.9,410.2,482.1,565.22], capacity:2,
     clientPage:2, clientTop:96.98, confirmation:181.46, reschedule:208.22, bank:351.65, sales:547.27, weeks:1 },
@@ -34,6 +34,8 @@ const layouts: Record<QuotationType, Layout> = {
     tableTop:315.18, tableHeight:66.52, columns:[90.024,325.9,410.2,477.8,565.22], capacity:1,
     clientPage:1, clientTop:618.70, confirmation:136.94, reschedule:163.82, bank:307.13, sales:502.75, weeks:2 },
 };
+type LayoutType = keyof typeof layouts;
+const layoutTypeFor = (type: QuotationType): LayoutType => type === "ONLINE_PUBLIC" || type === "ONLINE_PRIVATE" ? "ONLINE" : type;
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]!));
 const money = (value: number) => Math.round(value).toLocaleString("en-US");
 const days = (minutes: number) => Math.max(1, Math.ceil(minutes / 480));
@@ -76,7 +78,7 @@ function client(input:QuotationPdfInput,layout:Layout):string {
 }
 
 function courseTable(input:QuotationPdfInput,lines:QuotationPdfLine[],top:number,height:number):string {
-  const layout=layouts[input.type], xs=layout.columns;
+  const layout=layouts[layoutTypeFor(input.type)], xs=layout.columns;
   let content=`<g data-course-table="" data-table-top="${top}" data-master-height="${height}" data-columns="${xs.join(',')}"><rect data-table-mask="" x="${xs[0]}" y="${top}" width="${xs[xs.length-1]-xs[0]}" height="${height}" fill="white"/>`;
   let consumedHeight=0;
   for(let index=0;index<lines.length;index++) {
@@ -172,22 +174,24 @@ function compactArtwork(svg:Buffer,prefix:string,layout:Layout):string {
 
 export async function renderQuotationHtml(input:QuotationPdfInput):Promise<string> {
   if(!input.lines.length)throw new Error('A quotation PDF requires at least one course');
-  const layout=layouts[input.type];
+  const layoutType=layoutTypeFor(input.type);
+  const renderInput={...input,type:layoutType};
+  const layout=layouts[layoutType];
   if(!layout)throw new Error('Unsupported quotation type');
-  const name=input.type.toLowerCase();
+  const name=layoutType.toLowerCase();
   const [template,styles,page1,page2]=await Promise.all([asset(`${name}.html`),stylesheet(),asset(`artwork/${name}-1.svg`),asset(`artwork/${name}-2.svg`)]);
   const firstLines=input.lines.slice(0,layout.capacity);
-  let first=identity(input,layout)+courseTable(input,firstLines,layout.tableTop,layout.tableHeight);
+  let first=identity(renderInput,layout)+courseTable(renderInput,firstLines,layout.tableTop,layout.tableHeight);
   let tailFields=layout.clientPage===1?client(input,layout):'';
   if(input.type==='INHOUSE')tailFields+=rectangle(90.024,444.75,468,15.5)+`<text x="90.024" y="453.78" data-max-width="468">Onsite Training will be held at <tspan class="bold">${escapeHtml(input.accountName)}</tspan></text>`;
   first+=`<g data-master-tail-fields="">${tailFields}</g>`;
   const remaining=input.lines.slice(layout.capacity);
   const continuation:string[]=[];
-  const continuationCapacity=input.type==='ONLINE'?4:5;
+  const continuationCapacity=layoutType==='ONLINE'?4:5;
   for(let offset=0;offset<remaining.length;offset+=continuationCapacity) {
     const lines=remaining.slice(offset,offset+continuationCapacity);
-    const height=(input.type==='ONLINE'?95.36:74)*lines.length;
-    let fields=rectangle(89.5,layout.tableTop,476.5,732-layout.tableTop)+identity(input,layout)+courseTable(input,lines,layout.tableTop,height);
+    const height=(layoutType==='ONLINE'?95.36:74)*lines.length;
+    let fields=rectangle(89.5,layout.tableTop,476.5,732-layout.tableTop)+identity(renderInput,layout)+courseTable(renderInput,lines,layout.tableTop,height);
     fields+=`<g data-master-tail-fields="">${replace(`Price Excluding VAT ${Math.round(VAT_RATE[input.type]*100)}%`,90.024,layout.tableTop+height+4,layout.columns.at(-1)!-90.024,14,{bold:true,center:true})}</g>`;
     fields+=replace(String(continuation.length+2),315,733.54,18,14,{center:true});
     continuation.push(`<section class="page">${artwork(page1,`${name}-continued-${offset}`)}${overlay(fields)}</section>`);

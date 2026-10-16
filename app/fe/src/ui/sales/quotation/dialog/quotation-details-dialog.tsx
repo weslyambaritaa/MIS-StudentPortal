@@ -52,7 +52,6 @@ type Props = {
   onDelete: (quotation: QuotationListItem) => void;
   onEdit: (quotation: QuotationListItem) => void;
   onResend: (quotation: QuotationListItem) => void;
-  onUpdateStatus: (quotation: QuotationListItem, status: "APPROVED" | "CANCELLED" | "REVISION") => void;
   onOpenDocument: (quotationId: string, version: number) => void;
 };
 
@@ -97,7 +96,6 @@ export function QuotationDetailsDialog({
   onDelete,
   onEdit,
   onResend,
-  onUpdateStatus,
   onOpenDocument,
 }: Props) {
   if (!quotation) return null;
@@ -136,56 +134,10 @@ export function QuotationDetailsDialog({
                       {quotation.item.account_name}
                     </div>
                   </div>
-                  <details className="relative ml-auto">
-                    <summary className="list-none cursor-pointer">
-                      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusStyle(quotation.item.status)}`}>
-                        <span className="size-1.5 rounded-full bg-current" />
-                        {statusLabel(quotation.item.status)}
-                      </span>
-                    </summary>
-                    <div className="absolute right-0 top-full z-20 mt-2 flex min-w-40 flex-col rounded-xl border border-rose-50 bg-white p-2 shadow-lg">
-                      {quotation.item.status === "SEND_FAILED" && (
-                        <button
-                          type="button"
-                          className="rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-rose-50"
-                          disabled={busy}
-                          onClick={() => onResend(quotation.item)}
-                        >
-                          Resend quotation
-                        </button>
-                      )}
-                      {["WAITING", "APPROVED", "CANCELLED", "REVISION"].includes(quotation.item.status) && quotation.item.status !== "CANCELLED" && (
-                        <button
-                          type="button"
-                          className="rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-rose-50"
-                          disabled={busy}
-                          onClick={() => onUpdateStatus(quotation.item, "CANCELLED")}
-                        >
-                          Cancel quotation
-                        </button>
-                      )}
-                      {["WAITING", "APPROVED", "CANCELLED", "REVISION"].includes(quotation.item.status) && quotation.item.status !== "APPROVED" && (
-                        <button
-                          type="button"
-                          className="rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-rose-50"
-                          disabled={busy}
-                          onClick={() => onUpdateStatus(quotation.item, "APPROVED")}
-                        >
-                          Approve quotation
-                        </button>
-                      )}
-                      {["WAITING", "APPROVED", "CANCELLED", "REVISION"].includes(quotation.item.status) && quotation.item.status !== "REVISION" && (
-                        <button
-                          type="button"
-                          className="rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-rose-50"
-                          disabled={busy}
-                          onClick={() => onUpdateStatus(quotation.item, "REVISION")}
-                        >
-                          Mark for revision
-                        </button>
-                      )}
-                    </div>
-                  </details>
+                  <span className={`ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusStyle(quotation.item.status)}`}>
+                    <span className="size-1.5 rounded-full bg-current" />
+                    {statusLabel(quotation.item.status)}
+                  </span>
                 </div>
                 <div className="h-px w-full bg-zinc-950/20" />
                 <div className="flex items-start gap-2">
@@ -263,7 +215,13 @@ export function QuotationDetailsDialog({
           </div>
         </div>
 
-        <div className="mt-4 flex shrink-0 gap-3 pt-2">
+        <div className="mt-4 flex shrink-0 flex-col gap-3 pt-2">
+          {quotation.item.status === "SEND_FAILED" && (
+            <Button variant="soft" disabled={busy} onClick={() => onResend(quotation.item)}>
+              Resend Quotation
+            </Button>
+          )}
+          <div className="flex gap-3">
           <Button
             variant="danger"
             leftIcon={<Trash2 size={18} />}
@@ -279,6 +237,7 @@ export function QuotationDetailsDialog({
           >
             Edit Quotation
           </Button>
+          </div>
         </div>
       </aside>
     </div>

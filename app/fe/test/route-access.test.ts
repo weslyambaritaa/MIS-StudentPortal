@@ -29,6 +29,16 @@ test("Sales Industry route is available only in the Sales active-role context", 
   assert.equal(isRegisteredFrontendRoute("/sales/industry"), true);
 });
 
+test("Sales Request and Registration Form routes are separate views", () => {
+  for (const route of ["/sales/request-form", "/sales/registration-form"]) {
+    assert.equal(canActiveRoleAccessRoute(route, ROLES.SALES), true);
+    assert.equal(canActiveRoleAccessRoute(route, ROLES.ADMIN), false);
+    assert.equal(isRegisteredFrontendRoute(route), true);
+  }
+  const registration = navigationByRole[ROLES.SALES].sections.flatMap((section) => section.items).find((entry) => entry.key === "registration-form");
+  assert.equal(registration?.href, "/sales/registration-form");
+});
+
 test("Account management routes are available only under their intended active roles", () => {
   assert.equal(canActiveRoleAccessRoute("/sales/accounts", ROLES.SALES), true);
   assert.equal(canActiveRoleAccessRoute("/sales/accounts", ROLES.ADMIN), false);
@@ -42,6 +52,33 @@ test("Sales PIC management route is unavailable to other active roles", () => {
   assert.equal(isRegisteredFrontendRoute("/sales/person-in-charge"), true);
 });
 
+test("Course Category route is available only in the Admin active-role context", () => {
+  assert.equal(canActiveRoleAccessRoute("/admin/course-categories", ROLES.ADMIN), true);
+  assert.equal(canActiveRoleAccessRoute("/admin/course-categories", ROLES.SALES), false);
+  assert.equal(isRegisteredFrontendRoute("/admin/course-categories"), true);
+  const item = navigationByRole[ROLES.ADMIN].sections.flatMap((section) => section.items).find((entry) => entry.key === "course-category");
+  assert.equal(item?.href, "/admin/course-categories");
+  assert.equal(item?.disabled, undefined);
+});
+
+test("Training Room route is available only in the Admin active-role context", () => {
+  assert.equal(canActiveRoleAccessRoute("/admin/training-rooms", ROLES.ADMIN), true);
+  assert.equal(canActiveRoleAccessRoute("/admin/training-rooms", ROLES.SALES), false);
+  assert.equal(isRegisteredFrontendRoute("/admin/training-rooms"), true);
+  const item = navigationByRole[ROLES.ADMIN].sections.flatMap((section) => section.items).find((entry) => entry.key === "training-room");
+  assert.equal(item?.href, "/admin/training-rooms");
+  assert.equal(item?.disabled, undefined);
+});
+
+test("Trainer master route is available only in the Admin active-role context", () => {
+  assert.equal(canActiveRoleAccessRoute("/admin/trainers", ROLES.ADMIN), true);
+  assert.equal(canActiveRoleAccessRoute("/admin/trainers", ROLES.TRAINER), false);
+  assert.equal(isRegisteredFrontendRoute("/admin/trainers"), true);
+  const item = navigationByRole[ROLES.ADMIN].sections.flatMap((section) => section.items).find((entry) => entry.key === "trainer");
+  assert.equal(item?.href, "/admin/trainers");
+  assert.equal(item?.disabled, undefined);
+});
+
 test("sidebar navigation lists future features without making them navigable", () => {
   for (const role of BUSINESS_ROLES) {
     const navigation = navigationByRole[role];
@@ -52,7 +89,8 @@ test("sidebar navigation lists future features without making them navigable", (
     ];
 
     assert.equal(navigation.dashboard.href, "/dashboard");
-    for (const item of menuItems.filter((item) => !["dashboard", "audit-trail", "industry", "account", "person-in-charge", "personal-account-links"].includes(item.key))) {
+    const implementedKeys = new Set(FEATURE_ACCESS_MATRIX.filter((entry) => entry.route).map((entry) => entry.key));
+    for (const item of menuItems.filter((item) => !implementedKeys.has(item.key))) {
       assert.equal(item.disabled, true, `${role}: ${item.label} should be disabled until its page exists`);
       assert.equal(item.href, undefined, `${role}: ${item.label} must not point to a fake route`);
     }
@@ -66,6 +104,7 @@ test("role sidebars use the menus read from the supplied designs", () => {
   assert.deepEqual(menuLabels(ROLES.SALES), [
     "Quotation",
     "Request Form",
+    "Registration Form",
     "Industry",
     "Account",
     "Person In Charge",
@@ -78,6 +117,7 @@ test("role sidebars use the menus read from the supplied designs", () => {
     "Training Room",
     "Booking Room",
     "Personal Account Students",
+    "Request Form Review",
     "List Training",
     "Training Calendar",
     "Generate Certificate",

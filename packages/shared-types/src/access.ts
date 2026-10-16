@@ -13,6 +13,7 @@ export const RESOURCE_GROUPS = [
   "ACCOUNT",
   "PIC",
   "STUDENT",
+  "TRAINER",
   "INDUSTRY",
   "COURSE",
   "COURSE_CATEGORY",

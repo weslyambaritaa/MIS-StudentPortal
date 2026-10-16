@@ -20,5 +20,5 @@ export {
   Attendance, AuditTrail, BookingRoom, Certificate, CertificateTemplate, ClassMaterial, Course,
   CourseCategory, Evaluation, ImportBatch, ImportRow, Industry, Invoice, InvoiceDetail,
   NotificationLog, NotificationTemplate, ProvisioningLog, Quotation, QuotationOrder, RequestForm,
-  Room, Syllabus,
+  RequestFormCourse, RequestFormSession, RequestFormAttachment, Room, Syllabus,
 } from "./en03-domain.models";

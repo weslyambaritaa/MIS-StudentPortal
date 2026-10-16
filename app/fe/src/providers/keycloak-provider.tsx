@@ -37,6 +37,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   const activeRoleRef = useRef<BusinessRole | null>(null);
   const studentLoginSyncedSubjectRef = useRef<string | null>(null);
   const hasStudentRole = availableRoles.includes(ROLES.STUDENT);
+  const hasTrainerRole = availableRoles.includes(ROLES.TRAINER);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -184,6 +185,24 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     void recordStudentLogin();
     return () => { cancelled = true; };
   }, [authenticated, hasStudentRole, rolesReady]);
+
+  useEffect(() => {
+    if (!authenticated || !rolesReady || !hasTrainerRole || !keycloak.token) return;
+    const subject = keycloak.tokenParsed?.sub;
+    if (!subject) return;
+    let cancelled = false;
+    const syncTrainerLogin = async () => {
+      try {
+        await keycloak.updateToken(30);
+        if (!keycloak.token || cancelled) return;
+        await apiRequest("/api/v1/external/trainers/portal-login", keycloak.token, ROLES.TRAINER, { method: "POST" });
+      } catch (error) {
+        console.error("Could not record successful Trainer portal login", error);
+      }
+    };
+    void syncTrainerLogin();
+    return () => { cancelled = true; };
+  }, [authenticated, hasTrainerRole, rolesReady]);
 
   if (authError) {
     return (

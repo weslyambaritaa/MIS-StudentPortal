@@ -27,9 +27,9 @@ type Quote = QuotationListItem;
 type PageResult = { items: Quote[]; page: number; pageSize: number; total: number };
 type QuoteDetail = QuotationDetail;
 const BLANK: PageResult = { items: [], page: 1, pageSize: 8, total: 0 };
-const TYPES = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE"] as const;
+const TYPES = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE_PUBLIC", "ONLINE_PRIVATE"] as const;
 const typeLabel = (value: string) =>
-  ({ PRIVATE: "Private", PUBLIC: "Public", INHOUSE: "Inhouse", ONLINE: "Online" })[value] ?? value;
+  ({ PRIVATE: "Private", PUBLIC: "Public", INHOUSE: "In-house", ONLINE: "Online", ONLINE_PUBLIC: "Online Public", ONLINE_PRIVATE: "Online Private" })[value] ?? value;
 const statusLabel = (value: Status) =>
   ({
     WAITING: "Waiting",
@@ -77,12 +77,14 @@ export default function QuotationPage() {
     accountId: string;
     picId: string;
     classType: (typeof TYPES)[number];
+    status: "WAITING" | "APPROVED" | "CANCELLED" | "REVISION";
     lines: Line[];
   }>({
     quotationCode: "",
     accountId: "",
     picId: "",
     classType: "PRIVATE",
+    status: "WAITING",
     lines: [{ courseId: "", amountStudent: 1, pricePerPax: 0, location: "" }],
   });
 
@@ -150,6 +152,7 @@ export default function QuotationPage() {
         accountId: "",
         picId: "",
         classType: "PRIVATE",
+        status: "WAITING",
         lines: [{ courseId: "", amountStudent: 1, pricePerPax: 0, location: "" }],
       });
       setEditor(null);
@@ -163,6 +166,7 @@ export default function QuotationPage() {
         accountId: detail.item.account_id,
         picId: detail.item.pic_profile_id,
         classType: detail.item.class_type as (typeof TYPES)[number],
+        status: ["WAITING", "APPROVED", "CANCELLED", "REVISION"].includes(detail.item.status) ? detail.item.status as "WAITING" | "APPROVED" | "CANCELLED" | "REVISION" : "WAITING",
         lines: detail.lines.map((line) => ({
           courseId: line.course_id,
           amountStudent: Number(line.amount_student),
@@ -184,10 +188,16 @@ export default function QuotationPage() {
     const created = editor === null;
     try {
       const body = JSON.stringify(form);
-      await api(
+      const saved = await api<{ item: { id: string } }>(
         created ? "/api/v1/internal/quotations" : `/api/v1/internal/quotations/${editor!.item.id}`,
         { method: created ? "POST" : "PUT", body }
       );
+      if (!created) {
+        await api(`/api/v1/internal/quotations/${saved.item.id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: form.status }),
+        });
+      }
       setEditor(undefined);
       await load();
     } catch (cause) {
@@ -216,22 +226,6 @@ export default function QuotationPage() {
       window.open(result.url, "_blank", "noopener,noreferrer");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not open sent PDF");
-    }
-  };
-  const updateStatus = async (quote: Quote, value: "APPROVED" | "CANCELLED" | "REVISION") => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/api/v1/internal/quotations/${quote.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: value }),
-      });
-      setSelected(null);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not update status");
-    } finally {
-      setBusy(false);
     }
   };
   const resend = async (quote: Quote) => {
@@ -447,7 +441,7 @@ export default function QuotationPage() {
       <Modal
         open={editor !== undefined}
         onClose={() => !busy && setEditor(undefined)}
-        className="max-h-[92vh] !max-w-96 overflow-y-auto"
+        className="max-h-[92vh] !max-w-[680px] overflow-y-auto"
       >
         {editor !== undefined && (
           <form onSubmit={save} className="flex flex-col gap-6">
@@ -465,7 +459,7 @@ export default function QuotationPage() {
             <section className="flex flex-col gap-1">
               <h3 className="text-base font-medium text-rose-600">Class / Course Type</h3>
               <div className="rounded-full border border-rose-600 bg-neutral-50 p-1">
-                <div className="grid grid-cols-4 gap-1">
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
                   {TYPES.map((type) => {
                     const TypeIcon =
                       type === "PRIVATE"
@@ -481,10 +475,10 @@ export default function QuotationPage() {
                         type="button"
                         aria-pressed={form.classType === type}
                         onClick={() => setForm((v) => ({ ...v, classType: type }))}
-                        className={`flex h-8 min-w-0 items-center justify-center gap-1 rounded-full px-1 text-[10px] font-medium ${form.classType === type ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600"}`}
+                        className={`flex h-9 min-w-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-medium ${form.classType === type ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600"}`}
                       >
-                        <TypeIcon size={13} />
-                        <span>{typeLabel(type)}</span>
+                        <TypeIcon size={14} className="shrink-0" />
+                        <span className="whitespace-nowrap">{typeLabel(type)}</span>
                       </button>
                     );
                   })}
@@ -550,14 +544,31 @@ export default function QuotationPage() {
             </label>
             <label className={label}>
               Current Status *
-              <input
-                readOnly
-                aria-readonly="true"
-                className={`${field} cursor-not-allowed text-slate-900/40`}
-                value={
-                  editor ? "Waiting after successful resend" : "Waiting after successful email"
-                }
-              />
+              {editor ? (
+                <span className="relative">
+                  <select
+                    className={`${field} appearance-none pr-9 text-slate-900/40`}
+                    value={form.status}
+                    onChange={(e) => setForm((current) => ({ ...current, status: e.target.value as typeof current.status }))}
+                  >
+                    <option value="WAITING">Waiting</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="CANCELLED">Cancelled</option>
+                    <option value="REVISION">Revision</option>
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
+                  />
+                </span>
+              ) : (
+                <input
+                  readOnly
+                  aria-readonly="true"
+                  className={`${field} cursor-not-allowed text-slate-900/40`}
+                  value="Waiting after successful email"
+                />
+              )}
             </label>
             <div className="h-px w-full bg-zinc-950/20" />
             <div className="flex items-center justify-between">
@@ -693,7 +704,6 @@ export default function QuotationPage() {
           void openEditor(quote);
         }}
         onResend={(quote) => void resend(quote)}
-        onUpdateStatus={(quote, status) => void updateStatus(quote, status)}
         onOpenDocument={(quotationId, version) => void openDocument(quotationId, version)}
       />
       <DeleteConfirmationModal
