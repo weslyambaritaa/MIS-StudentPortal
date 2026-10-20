@@ -11,6 +11,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useAuth } from "@/providers/keycloak-provider";
+import { useToast } from "@/components/ui/toast";
 import { AccountDetailsDialog, type AccountStudent } from "./dialog/account-details-dialog";
 import { AccountDialog, type AccountOption, type AccountValue, type SalesOption } from "./dialog/account-dialog";
 
@@ -20,6 +21,7 @@ const EMPTY: PageResult = { items: [], page: 1, pageSize: 8, total: 0 };
 
 export default function AccountsPage() {
   const api = useApi(); const { keycloak } = useAuth();
+  const { showToast } = useToast();
   const [result, setResult] = useState<PageResult>(EMPTY); const [industries, setIndustries] = useState<AccountOption[]>([]); const [salesUsers, setSalesUsers] = useState<SalesOption[]>([]);
   const [searchDraft, setSearchDraft] = useState(""); const [search, setSearch] = useState(""); const [industryId, setIndustryId] = useState("ALL"); const [status, setStatus] = useState("ALL"); const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [dialogError, setDialogError] = useState<string | null>(null);
@@ -35,8 +37,8 @@ export default function AccountsPage() {
   useEffect(() => { void Promise.all([api<{ items: AccountOption[] }>("/api/v1/internal/accounts/industries").then((r) => setIndustries(r.items)), api<{ items: SalesOption[] }>("/api/v1/internal/accounts/sales-users").then((r) => setSalesUsers(r.items))]).catch((cause) => setError(cause instanceof Error ? cause.message : "Failed to load Account options")); }, [api]);
 
   const openDetails = async (account: AccountRow) => { setSelected(account); setStudents([]); setPics([]); setDetailsLoading(true); try { const [studentResult, detail] = await Promise.all([api<{ items: AccountStudent[] }>(`/api/v1/internal/accounts/${account.id}/students`), api<{ item: AccountRow; pics: typeof pics }>(`/api/v1/internal/accounts/${account.id}`)]); setStudents(studentResult.items); setPics(detail.pics); } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to load Account details"); } finally { setDetailsLoading(false); } };
-  const save = async (value: { name: string; industryId: string; status: "ACTIVE" | "INACTIVE"; salesSubject?: string }) => { setBusy(true); setDialogError(null); try { const existing = editor && editor !== null ? editor.id : null; await api(`/api/v1/internal/accounts${existing ? `/${existing}` : ""}`, { method: existing ? "PUT" : "POST", body: JSON.stringify(value) }); setEditor(undefined); setDialogError(null); setSelected(null); await load(); } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Account"); } finally { setBusy(false); } };
-  const remove = async () => { if (!deleting) return; setBusy(true); setError(null); try { await api(`/api/v1/internal/accounts/${deleting.id}`, { method: "DELETE" }); setDeleting(null); setSelected(null); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Account"); setDeleting(null); } finally { setBusy(false); } };
+  const save = async (value: { name: string; industryId: string; status: "ACTIVE" | "INACTIVE"; salesSubject?: string }) => { setBusy(true); setDialogError(null); try { const existing = editor && editor !== null ? editor.id : null; await api(`/api/v1/internal/accounts${existing ? `/${existing}` : ""}`, { method: existing ? "PUT" : "POST", body: JSON.stringify(value) }); showToast(existing ? "Account updated successfully." : "Account added successfully."); setEditor(undefined); setDialogError(null); setSelected(null); await load(); } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Account"); } finally { setBusy(false); } };
+  const remove = async () => { if (!deleting) return; setBusy(true); setError(null); try { await api(`/api/v1/internal/accounts/${deleting.id}`, { method: "DELETE" }); showToast("Account deleted successfully."); setDeleting(null); setSelected(null); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Account"); setDeleting(null); } finally { setBusy(false); } };
 
   const columns: DataTableColumn<AccountRow>[] = [
     { key: "code", header: "Code", render: (row) => row.account_code },

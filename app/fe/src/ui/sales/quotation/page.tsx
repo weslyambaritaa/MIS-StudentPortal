@@ -10,6 +10,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import {
   QuotationDetailsDialog,
@@ -56,6 +57,7 @@ const money = (value: number) => `Rp ${Math.round(value || 0).toLocaleString("id
 
 export default function QuotationPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [result, setResult] = useState<PageResult>(BLANK);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -186,6 +188,7 @@ export default function QuotationPage() {
     setBusy(true);
     setDialogError(null);
     const created = editor === null;
+    const previousStatus = editor?.item.status;
     try {
       const body = JSON.stringify(form);
       const saved = await api<{ item: { id: string } }>(
@@ -198,6 +201,11 @@ export default function QuotationPage() {
           body: JSON.stringify({ status: form.status }),
         });
       }
+      showToast(created
+        ? "Quotation created successfully."
+        : previousStatus !== form.status
+          ? `Quotation status changed to ${statusLabel(form.status)} successfully.`
+          : "Quotation updated successfully.");
       setEditor(undefined);
       await load();
     } catch (cause) {
@@ -233,6 +241,7 @@ export default function QuotationPage() {
     setError(null);
     try {
       await api(`/api/v1/internal/quotations/${quote.id}/resend`, { method: "POST" });
+      showToast("Quotation resent successfully.");
       setSelected(null);
       await load();
     } catch (cause) {
@@ -246,6 +255,7 @@ export default function QuotationPage() {
     setBusy(true);
     try {
       await api(`/api/v1/internal/quotations/${deleting.id}`, { method: "DELETE" });
+      showToast("Quotation deleted successfully.");
       setDeleting(null);
       setSelected(null);
       await load();

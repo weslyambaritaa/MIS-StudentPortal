@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_ROWS = 1000;
@@ -67,6 +68,7 @@ async function readStudentFile(file: File): Promise<ImportRow[]> {
 }
 
 export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: ApiRequest; onClose: () => void; onComplete: () => void }) {
+  const { showToast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<ImportRow[]>([]);
@@ -109,6 +111,7 @@ export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: Api
     setBusy(true); setError(null);
     try {
       const response = await api<ImportResult>("/api/v1/internal/students/bulk-import", { method: "POST", body: JSON.stringify({ rows }) });
+      showToast(`Import completed: ${response.createdCount} students added; ${response.rejectedCount} rows rejected.`);
       setResult(response); setPreview(null); setPage(1); onComplete();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Student import failed."); }
     finally { setBusy(false); }

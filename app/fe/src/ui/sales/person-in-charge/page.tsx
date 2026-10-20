@@ -10,6 +10,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { PicDetailsDialog, type PicStudent } from "./dialog/pic-details-dialog";
 import { PicDialog, type PicAccountOption, type PicValue } from "./dialog/pic-dialog";
 
@@ -19,6 +20,7 @@ const statusLabel = (status: PicValue["status"]) => status === "PENDING" ? "Pend
 
 export default function PersonInChargePage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [result, setResult] = useState<PicPage>(EMPTY);
   const [accounts, setAccounts] = useState<PicAccountOption[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
@@ -63,6 +65,7 @@ export default function PersonInChargePage() {
     try {
       if (editor?.id) await api(`/api/v1/internal/pics/${editor.id}`, { method: "PUT", body: JSON.stringify({ name: value.name, status: value.status }) });
       else await api("/api/v1/internal/pics", { method: "POST", body: JSON.stringify(value) });
+      showToast(editor?.id ? "PIC updated successfully." : "PIC added successfully.");
       setEditor(undefined); setSelected(null); await load();
     } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save PIC"); }
     finally { setBusy(false); }
@@ -71,7 +74,7 @@ export default function PersonInChargePage() {
   const remove = async () => {
     if (!deleting?.id) return;
     setBusy(true); setError(null);
-    try { await api(`/api/v1/internal/pics/${deleting.id}`, { method: "DELETE" }); setDeleting(null); setSelected(null); await load(); }
+    try { await api(`/api/v1/internal/pics/${deleting.id}`, { method: "DELETE" }); showToast("PIC deleted successfully."); setDeleting(null); setSelected(null); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete PIC"); setDeleting(null); }
     finally { setBusy(false); }
   };
@@ -79,7 +82,7 @@ export default function PersonInChargePage() {
   const resendActivation = async (pic: PicValue) => {
     if (!pic.id) return;
     setBusy(true); setError(null);
-    try { await api(`/api/v1/internal/pics/${pic.id}/resend-activation`, { method: "POST" }); await load(); }
+    try { await api(`/api/v1/internal/pics/${pic.id}/resend-activation`, { method: "POST" }); showToast("PIC activation email resent successfully."); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to resend activation email"); }
     finally { setBusy(false); }
   };

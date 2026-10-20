@@ -9,7 +9,7 @@ export type TrainerCertification = { id?: string; name: string; expires_at?: str
 export type TrainerValue = {
   id: string; trainer_code: string | null; name: string | null; email: string | null; specialization: string;
   rating: number; status: "PENDING" | "ACTIVE" | "INACTIVE"; first_login_at: string | null; activation_expires_at: string | null;
-  yearly_class_count: number; monthly_class_count: number; certifications: TrainerCertification[];
+  yearly_class_count: number; monthly_class_count: number; training_history_count: number; certifications: TrainerCertification[];
 };
 export type TrainerSubmitValue = { trainerCode?: string; name: string; email?: string; specialization: string; status?: "PENDING" | "ACTIVE" | "INACTIVE"; certifications: { name: string; expiresAt: string }[] };
 

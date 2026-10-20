@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, BookOpen, Mail, Pencil, Star, X } from "lucide-react";
+import { BadgeCheck, BookOpen, Mail, Pencil, Star, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -22,8 +22,8 @@ const daysUntil = (certificate: TrainerValue["certifications"][number]) => {
   return Math.round((expiry.getTime() - today.getTime()) / 86_400_000);
 };
 
-export function TrainerDetailsDialog({ trainer, trainings, loading, onClose, onEdit, onDeactivate, onResendActivation }: {
-  trainer: TrainerValue; trainings: Training[]; loading: boolean; onClose: () => void; onEdit: () => void; onDeactivate: () => void; onResendActivation: () => void;
+export function TrainerDetailsDialog({ trainer, trainings, loading, onClose, onEdit, onDelete, onResendActivation }: {
+  trainer: TrainerValue; trainings: Training[]; loading: boolean; onClose: () => void; onEdit: () => void; onDelete: () => void; onResendActivation: () => void;
 }) {
   const status = trainer.status;
   return <div className="fixed inset-0 z-[90] flex justify-end bg-zinc-950/40" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -67,7 +67,8 @@ export function TrainerDetailsDialog({ trainer, trainings, loading, onClose, onE
           </li>)}</ul> : <p className="rounded-xl bg-neutral-50 p-3 text-sm text-zinc-500">No active training assignments.</p>}
         </section>
       </div>
-      <footer className="mt-6 flex gap-3">{status === "PENDING" && trainer.activation_expires_at && new Date(trainer.activation_expires_at).getTime() <= Date.now() && <Button variant="navigation" className="flex-1" leftIcon={<Mail size={17} />} onClick={onResendActivation}>Resend Activation</Button>}<Button variant="danger" className="flex-1" onClick={onDeactivate} disabled={status === "INACTIVE"}>Deactivate Trainer</Button><Button className="flex-1" leftIcon={<Pencil size={17} />} onClick={onEdit}>Edit Trainer</Button></footer>
+      <p className="mt-4 text-xs text-zinc-500">Change Trainer status, including setting it to Inactive, through Edit. Permanent deletion is available only if the Trainer has never been assigned to a Training.</p>
+      <footer className="mt-3 flex flex-wrap gap-2">{status === "PENDING" && trainer.activation_expires_at && new Date(trainer.activation_expires_at).getTime() <= Date.now() && <Button variant="navigation" leftIcon={<Mail size={17} />} onClick={onResendActivation}>Resend Activation</Button>}<Button variant="danger" leftIcon={<Trash2 size={17} />} onClick={onDelete} disabled={trainer.training_history_count > 0}>Delete</Button><Button leftIcon={<Pencil size={17} />} onClick={onEdit}>Edit Trainer</Button></footer>
     </aside>
   </div>;
 }

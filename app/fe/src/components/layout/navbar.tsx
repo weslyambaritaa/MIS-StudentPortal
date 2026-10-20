@@ -2,13 +2,16 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, LogOut, Menu } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, ChevronLeft, ChevronRight, LogOut, Menu } from "lucide-react";
+import { ROLES } from "@mis/shared-types";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { LogoutConfirmationModal } from "@/components/ui/logout-confirmation-modal";
 import { useAuth } from "@/providers/keycloak-provider";
 import { getSelectableActiveRole } from "@/lib/auth/active-role";
+import { useApi } from "@/hooks/use-api";
+import { NotificationsModal, type NotificationItem } from "@/components/ui/notifications-modal";
 
 type NavbarProps = {
   title?: string;
@@ -26,8 +29,46 @@ export function Navbar({
   onSidebarToggle,
 }: NavbarProps) {
   const { keycloak, availableRoles, activeRole, setActiveRole } = useAuth();
+  const api = useApi();
   const router = useRouter();
   const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const loadNotifications = useCallback(async () => {
+    if (activeRole !== ROLES.ADMIN) return;
+    try {
+      const result = await api<{ items: NotificationItem[]; unreadCount: number }>("/api/v1/internal/notifications");
+      setNotifications(result.items);
+      setUnreadNotifications(result.unreadCount);
+    } catch (error) {
+      console.error("Could not load in-app notifications", error);
+    }
+  }, [activeRole, api]);
+
+  useEffect(() => {
+    if (activeRole !== ROLES.ADMIN) {
+      setNotifications([]);
+      setUnreadNotifications(0);
+      return;
+    }
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [activeRole, loadNotifications]);
+
+  async function selectNotification(notification: NotificationItem) {
+    try {
+      await api(`/api/v1/internal/notifications/${notification.id}/read`, { method: "PATCH" });
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: item.read_at ?? new Date().toISOString(), tone: "info" } : item));
+      if (!notification.read_at) setUnreadNotifications((count) => Math.max(0, count - 1));
+    } catch (error) {
+      console.error("Could not mark notification as read", error);
+    }
+    setNotificationsOpen(false);
+    if (notification.target_path) router.push(notification.target_path);
+  }
 
   const handleLogout = () => {
     void keycloak.logout({
@@ -73,6 +114,7 @@ export function Navbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+        {activeRole === ROLES.ADMIN && <button type="button" aria-label={`Notifications, ${unreadNotifications} unread`} onClick={() => { setNotificationsOpen(true); void loadNotifications(); }} className="relative inline-flex size-10 items-center justify-center rounded-full text-gray-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"><Bell size={20} />{unreadNotifications > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-rose-600 px-1 text-[10px] leading-4 text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}</button>}
         {availableRoles.length > 1 && activeRole && (
           <label className="flex items-center gap-2 text-sm text-zinc-700">
             <span className="hidden sm:inline">Role</span>
@@ -112,6 +154,7 @@ export function Navbar({
         onClose={() => setLogoutConfirmationOpen(false)}
         onConfirm={handleLogout}
       />
+      <NotificationsModal open={notificationsOpen} onClose={() => setNotificationsOpen(false)} notifications={notifications} onSelect={(notification) => void selectNotification(notification)} />
     </header>
   );
 }

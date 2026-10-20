@@ -11,6 +11,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { StudentDetailsDialog } from "./dialog/student-details-dialog";
 import { StudentBulkImportDialog } from "./dialog/student-bulk-import-dialog";
 import { StudentDialog, type StudentAccountOption, type StudentValue } from "./dialog/student-dialog";
@@ -23,6 +24,7 @@ const statusVariant = (status: StudentValue["portal_status"]) => status === "ACT
 
 export default function StudentsPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [result, setResult] = useState<StudentPage>(EMPTY);
   const [accounts, setAccounts] = useState<StudentAccountOption[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
@@ -79,6 +81,7 @@ export default function StudentsPage() {
     try {
       if (editor?.id) await api(`/api/v1/internal/students/${editor.id}`, { method: "PUT", body: JSON.stringify({ name: value.name, accountId: value.accountId, companyRole: value.companyRole, portalStatus: value.portalStatus }) });
       else await api("/api/v1/internal/students", { method: "POST", body: JSON.stringify(value) });
+      showToast(editor?.id ? "Student updated successfully." : "Student added successfully.");
       setEditor(undefined); setSelected(null); await load();
     } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Student"); }
     finally { setBusy(false); }
@@ -87,7 +90,7 @@ export default function StudentsPage() {
   const remove = async () => {
     if (!deleting?.id || deleting.class_history_count > 0) return;
     setBusy(true); setError(null);
-    try { await api(`/api/v1/internal/students/${deleting.id}`, { method: "DELETE" }); setDeleting(null); setSelected(null); await load(); }
+    try { await api(`/api/v1/internal/students/${deleting.id}`, { method: "DELETE" }); showToast("Student deleted successfully."); setDeleting(null); setSelected(null); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Student"); setDeleting(null); }
     finally { setBusy(false); }
   };
@@ -96,6 +99,7 @@ export default function StudentsPage() {
     setBusy(true); setError(null);
     try {
       const response = await api<{ expiresAt: string }>(`/api/v1/internal/students/${student.id}/resend-activation`, { method: "POST" });
+      showToast("Student activation email resent successfully.");
       setSelected((current) => current?.id === student.id ? { ...current, activation_expires_at: response.expiresAt } : current);
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to resend activation email"); }

@@ -112,6 +112,10 @@ trainersRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("T
         SELECT tta.[training_id], tta.[trainer_profile_id], tta.[assigned_at], tta.[ended_at] FROM [dbo].[training_trainer_assignment] tta
         UNION ALL SELECT ts.[training_id], sta.[trainer_profile_id], sta.[assigned_at], sta.[ended_at] FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id] = sta.[session_id]
       ) assigned WHERE assigned.[trainer_profile_id] = tp.[id] AND YEAR(assigned.[assigned_at]) = YEAR(SYSUTCDATETIME()) AND MONTH(assigned.[assigned_at]) = MONTH(SYSUTCDATETIME())) AS [monthly_class_count]
+      ,(SELECT COUNT_BIG(1) FROM (
+        SELECT [training_id] FROM [dbo].[training_trainer_assignment] WHERE [trainer_profile_id] = tp.[id]
+        UNION SELECT ts.[training_id] FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id] = sta.[session_id] WHERE sta.[trainer_profile_id] = tp.[id]
+      ) history) AS [training_history_count]
      FROM [dbo].[trainer_profile] tp ${where} ORDER BY tp.[trainer_code], tp.[name] OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
     { replacements, type: QueryTypes.SELECT },
   );
@@ -121,7 +125,7 @@ trainersRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("T
   const identities = new Map(keycloakTrainers.map((user) => [user.userId, user]));
   const items = rows.map((row) => {
     const identity = identities.get(String(row.keycloak_subject));
-    return { ...row, name: row.name ?? ([identity?.firstName, identity?.lastName].filter(Boolean).join(" ") || identity?.username || null), email: row.email ?? identity?.email ?? null, rating: ratingMap.get(String(row.id)) ?? 0, yearly_class_count: Number(row.yearly_class_count ?? 0), monthly_class_count: Number(row.monthly_class_count ?? 0), certifications: certificationMap.get(String(row.id)) ?? [] };
+    return { ...row, name: row.name ?? ([identity?.firstName, identity?.lastName].filter(Boolean).join(" ") || identity?.username || null), email: row.email ?? identity?.email ?? null, rating: ratingMap.get(String(row.id)) ?? 0, yearly_class_count: Number(row.yearly_class_count ?? 0), monthly_class_count: Number(row.monthly_class_count ?? 0), training_history_count: Number(row.training_history_count ?? 0), certifications: certificationMap.get(String(row.id)) ?? [] };
   });
   return res.json({ items, page, pageSize, total: Number(totals[0]?.total ?? 0) });
 }));
@@ -178,8 +182,14 @@ trainersRouter.get("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability
     loadCertifications([profile.id]),
     loadTrainerRatings([profile.id]),
   ]);
-  const identity = await keycloakAccountProvisioner.getIdentity(profile.keycloak_subject);
-  return res.json({ item: { id: profile.id, trainer_code: profile.trainer_code, name: profile.name ?? ([identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.username), email: profile.email ?? identity.email ?? null, specialization: profile.specialization, rating: ratingMap.get(profile.id) ?? 0, status: profile.status, first_login_at: profile.first_login_at, activation_expires_at: profile.activation_expires_at, certifications: certificationMap.get(profile.id) ?? [] }, trainings: trainingRows });
+  const [identity, historyRows] = await Promise.all([
+    keycloakAccountProvisioner.getIdentity(profile.keycloak_subject),
+    sequelize.query<{ count: number | string }>(`SELECT COUNT_BIG(1) AS [count] FROM (
+      SELECT [training_id] FROM [dbo].[training_trainer_assignment] WHERE [trainer_profile_id] = :id
+      UNION SELECT ts.[training_id] FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id] = sta.[session_id] WHERE sta.[trainer_profile_id] = :id
+    ) history`, { replacements: { id: profile.id }, type: QueryTypes.SELECT }),
+  ]);
+  return res.json({ item: { id: profile.id, trainer_code: profile.trainer_code, name: profile.name ?? ([identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.username), email: profile.email ?? identity.email ?? null, specialization: profile.specialization, rating: ratingMap.get(profile.id) ?? 0, status: profile.status, first_login_at: profile.first_login_at, activation_expires_at: profile.activation_expires_at, training_history_count: Number(historyRows[0]?.count ?? 0), certifications: certificationMap.get(profile.id) ?? [] }, trainings: trainingRows });
 }));
 
 trainersRouter.post("/:id/resend-activation", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("TRAINER", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
@@ -250,17 +260,25 @@ trainersRouter.put("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability
 trainersRouter.delete("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("TRAINER", ACCESS_ACTIONS.DELETE), asyncHandler(async (req, res) => {
   const profile = await TrainerProfile.findByPk(req.params.id);
   if (!profile) return res.status(404).json({ message: "Trainer not found." });
-  const before = { trainer_code: profile.trainer_code, name: profile.name, email: profile.email, status: profile.status, keycloak_subject: profile.keycloak_subject };
-  if (profile.status !== "INACTIVE") await keycloakAccountProvisioner.setBusinessRole(profile.keycloak_subject, ROLES.TRAINER, false);
+  const [history] = await sequelize.query<{ count: number | string }>(`SELECT COUNT_BIG(1) AS [count] FROM (
+    SELECT [training_id] FROM [dbo].[training_trainer_assignment] WHERE [trainer_profile_id] = :id
+    UNION SELECT ts.[training_id] FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id] = sta.[session_id] WHERE sta.[trainer_profile_id] = :id
+  ) history`, { replacements: { id: profile.id }, type: QueryTypes.SELECT });
+  const historyCount = Number(history?.count ?? 0);
+  if (historyCount > 0) return res.status(409).json({ message: `Trainer cannot be deleted because this Trainer has ${historyCount} training record${historyCount === 1 ? "" : "s"}. Deactivate the Trainer instead.` });
+  const roles = await keycloakAccountProvisioner.getBusinessRoles(profile.keycloak_subject);
+  if (roles.some((role) => role !== ROLES.TRAINER)) return res.status(409).json({ message: "The account has another business role and cannot be permanently deleted as a Trainer." });
+
+  // Keycloak deletion is idempotent (404 is accepted), so a failed DB transaction can be retried.
+  await keycloakAccountProvisioner.deleteAccount(profile.keycloak_subject);
   const transaction = await sequelize.transaction();
   try {
-    await profile.update({ status: "INACTIVE" }, { transaction });
-    await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "TRAINER_PROFILE", objectId: profile.id, before, after: { status: "INACTIVE", trainer_role_removed: true }, processName: "trainer-deactivate" }, transaction);
+    await appendRequestAuditTrail(req, { action: "DELETE", objectType: "TRAINER_PROFILE", objectId: profile.id, before: { trainer_code: profile.trainer_code, name: profile.name, email: profile.email, specialization: profile.specialization, status: profile.status, keycloak_subject: profile.keycloak_subject, keycloak_account_deleted: true }, processName: "trainer-delete" }, transaction);
+    await profile.destroy({ transaction });
     await transaction.commit();
+    return res.status(204).end();
   } catch (error) {
     await transaction.rollback();
-    if (before.status !== "INACTIVE") await keycloakAccountProvisioner.setBusinessRole(profile.keycloak_subject, ROLES.TRAINER, true).catch(() => undefined);
     throw error;
   }
-  return res.status(204).end();
 }));

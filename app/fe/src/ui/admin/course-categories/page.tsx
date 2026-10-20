@@ -8,6 +8,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { CourseCategoryDialog, type CourseCategoryFormValue } from "./dialog/course-category-dialog";
 
 type CourseCategory = CourseCategoryFormValue & { id: string; category_code: string; amount_courses: number | string };
@@ -15,6 +16,7 @@ type CourseCategoryList = { items: CourseCategory[]; page: number; pageSize: num
 
 export default function CourseCategoryPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -48,6 +50,7 @@ export default function CourseCategoryPage() {
     try {
       const id = editor?.id;
       await api(`/api/v1/internal/course-categories${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(value) });
+      showToast(id ? "Course Category updated successfully." : "Course Category added successfully.");
       setEditor(null);
       await load();
     } catch (cause) {
@@ -60,6 +63,7 @@ export default function CourseCategoryPage() {
     setBusy(true); setError(null);
     try {
       await api(`/api/v1/internal/course-categories/${deleting.id}`, { method: "DELETE" });
+      showToast("Course Category deleted successfully.");
       setDeleting(null);
       if (result.items.length === 1 && page > 1) setPage((value) => value - 1);
       else await load();

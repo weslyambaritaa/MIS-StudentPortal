@@ -10,6 +10,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { TrainerDetailsDialog } from "./dialog/trainer-details-dialog";
 import { TrainerDialog, type TrainerSubmitValue, type TrainerValue } from "./dialog/trainer-dialog";
 
@@ -20,6 +21,7 @@ const badge = (status: TrainerValue["status"]) => status === "ACTIVE" ? <Badge v
 
 export default function TrainersPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [result, setResult] = useState<TrainerPage>(EMPTY);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -62,22 +64,27 @@ export default function TrainersPage() {
     try {
       const id = editor?.id;
       await api(`/api/v1/internal/trainers${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
+      showToast(id ? "Trainer updated successfully." : "Trainer added successfully.");
       setEditor(undefined); setSelected(null); await load();
       void api<{ items: string[] }>("/api/v1/internal/trainers/specializations").then((response) => setSpecializations(response.items));
     } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Trainer"); }
     finally { setBusy(false); }
   };
-  const deactivate = async () => {
+  const deleteTrainer = async () => {
     if (!deleting) return;
     setBusy(true); setError(null);
-    try { await api(`/api/v1/internal/trainers/${deleting.id}`, { method: "DELETE" }); setDeleting(null); setSelected(null); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to deactivate Trainer"); setDeleting(null); }
+    try {
+      await api(`/api/v1/internal/trainers/${deleting.id}`, { method: "DELETE" });
+      showToast("Trainer and portal account deleted successfully.");
+      setDeleting(null); setSelected(null); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Trainer"); setDeleting(null); }
     finally { setBusy(false); }
   };
   const resendActivation = async (trainer: TrainerValue) => {
     setBusy(true); setError(null);
     try {
       const response = await api<{ expiresAt: string }>(`/api/v1/internal/trainers/${trainer.id}/resend-activation`, { method: "POST" });
+      showToast("Trainer activation email resent successfully.");
       setSelected((current) => current?.id === trainer.id ? { ...current, activation_expires_at: response.expiresAt } : current);
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to resend activation email"); }
@@ -90,7 +97,7 @@ export default function TrainersPage() {
     { key: "yearly-class", header: "Yearly Class", render: (row) => row.yearly_class_count },
     { key: "rating", header: "Rating", render: (row) => row.rating == null ? "—" : `${row.rating.toFixed(1)} / 5` },
     { key: "status", header: "Status", render: (row) => badge(row.status) },
-    { key: "action", header: "Action", className: "whitespace-nowrap", render: (row) => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17} />} size="sm" onClick={() => void openDetails(row)} /><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17} />} size="sm" onClick={() => { setDialogError(null); setEditor(row); }} /><IconButton label={`Deactivate ${row.name}`} icon={<Trash2 size={17} />} variant="danger" size="sm" disabled={row.status === "INACTIVE"} onClick={() => setDeleting(row)} /></div> },
+    { key: "action", header: "Action", className: "whitespace-nowrap", render: (row) => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17} />} size="sm" onClick={() => void openDetails(row)} /><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17} />} size="sm" onClick={() => { setDialogError(null); setEditor(row); }} /><IconButton label={row.training_history_count > 0 ? `Cannot delete ${row.name}: has training history` : `Delete ${row.name}`} icon={<Trash2 size={17} />} variant="danger" size="sm" disabled={row.training_history_count > 0} onClick={() => setDeleting(row)} /></div> },
   ];
 
   return <AppShell title="Master Data | Trainer"><div className="flex flex-col gap-6">
@@ -104,7 +111,7 @@ export default function TrainersPage() {
     <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage}/></div>
     </section></div>
     {editor !== undefined && <TrainerDialog value={editor} busy={busy} error={dialogError} onClose={() => setEditor(undefined)} onSubmit={save}/>}
-    {selected && <TrainerDetailsDialog trainer={selected} trainings={trainings} loading={detailsLoading} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDeactivate={() => setDeleting(selected)} onResendActivation={() => void resendActivation(selected)}/>}
-    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Trainer “${deleting?.name ?? ""}” will be deactivated and lose Trainer portal access. The profile, certifications, and class history will be retained.`} onClose={() => setDeleting(null)} onConfirm={() => void deactivate()} loading={busy}/>
+    {selected && <TrainerDetailsDialog trainer={selected} trainings={trainings} loading={detailsLoading} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDelete={() => { setDeleting(selected); setSelected(null); }} onResendActivation={() => void resendActivation(selected)}/>}
+    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Permanently delete Trainer “${deleting?.name ?? ""}”, all profile and certification data, and the associated portal account? This is allowed only when the Trainer has never had a Training assignment.`} onClose={() => !busy && setDeleting(null)} onConfirm={() => void deleteTrainer()} loading={busy}/>
   </AppShell>;
 }

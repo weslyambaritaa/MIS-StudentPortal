@@ -8,6 +8,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { TrainingRoomDialog, type TrainingRoomFormValue } from "./dialog/training-room-dialog";
 
 type TrainingRoom = TrainingRoomFormValue & { id: string; room_code: string; created_at: string; updated_at: string };
@@ -19,6 +20,7 @@ function facilitiesLabel(facilities: TrainingRoom["facilities"]) {
 
 export default function TrainingRoomsPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -53,6 +55,7 @@ export default function TrainingRoomsPage() {
     try {
       const id = editor?.id;
       await api(`/api/v1/internal/rooms${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(value) });
+      showToast(id ? "Training Room updated successfully." : "Training Room added successfully.");
       setEditor(null); await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to save Training Room"); }
     finally { setBusy(false); }
@@ -63,6 +66,7 @@ export default function TrainingRoomsPage() {
     setBusy(true); setError(null);
     try {
       await api(`/api/v1/internal/rooms/${deleting.id}`, { method: "DELETE" });
+      showToast("Training Room deleted successfully.");
       setDeleting(null);
       if (result.items.length === 1 && page > 1) setPage((value) => value - 1); else await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Training Room"); setDeleting(null); }

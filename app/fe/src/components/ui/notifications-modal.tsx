@@ -9,6 +9,8 @@ export type NotificationItem = {
   id: string;
   title: string;
   message: string;
+  target_path?: string;
+  read_at?: string | null;
   tone?: "danger" | "info";
 };
 

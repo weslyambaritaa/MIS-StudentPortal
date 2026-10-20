@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { KeycloakAuthProvider } from "@/providers/keycloak-provider";
 import { ActiveRoleRouteGuard } from "@/components/auth/active-role-route-guard";
+import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "MIS Student Portal",
@@ -25,7 +26,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={dmSans.variable}>
         <KeycloakAuthProvider>
-          <ActiveRoleRouteGuard>{children}</ActiveRoleRouteGuard>
+          <ToastProvider>
+            <ActiveRoleRouteGuard>{children}</ActiveRoleRouteGuard>
+          </ToastProvider>
         </KeycloakAuthProvider>
       </body>
     </html>

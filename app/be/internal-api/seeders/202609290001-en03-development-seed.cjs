@@ -64,10 +64,10 @@ module.exports = {
       ["account", { id: ids.personal, name: "Sample Personal Account", account_type: "PERSONAL", industry_id: personalIndustries[0].id, status: "ACTIVE", created_at: now, updated_at: now }],
       ["quotation", { id: ids.quotation, account_id: ids.corp, created_by_subject: null, status: "APPROVED", sent_at: now, ...ts }],
       ["quotation_order", { id: ids.quotationOrder, quotation_id: ids.quotation, course_id: ids.course, class_type: "PUBLIC", amount_student: 10, price: 1000000, location: "Jakarta", ...ts }],
-      ["request_form", { id: ids.rfPublic, quotation_id: ids.quotation, created_by_subject: null, reviewed_by_subject: null, attachment_file: null, training_title: "Sample Public Training", request_date: now, language: "id", training_type: "PUBLIC", number_student: 10, room_rental: false, special_instruction: null, approved_at: now, ...ts }],
-      ["request_form", { id: ids.rfPrivate, quotation_id: null, created_by_subject: null, reviewed_by_subject: null, attachment_file: null, training_title: "Sample Private Training", request_date: now, language: "id", training_type: "PRIVATE", number_student: 1, room_rental: true, special_instruction: null, approved_at: now, ...ts }],
-      ["training", { id: ids.trainingPublic, account_id: ids.corp, course_id: ids.course, request_form_id: ids.rfPublic, name: "Sample Public Training", training_type: "PUBLIC", status: "SCHEDULED", ...ts }],
-      ["training", { id: ids.trainingPrivate, account_id: ids.personal, course_id: ids.course, request_form_id: ids.rfPrivate, name: "Sample Private Training", training_type: "PRIVATE", status: "SCHEDULED", ...ts }],
+      ["request_form", { id: ids.rfPublic, request_form_number: `RF-${new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Jakarta" }).format(now)}-0001`, quotation_id: ids.quotation, created_by_subject: null, reviewed_by_subject: null, attachment_file: null, training_title: "Sample Public Training", request_date: now, language: "id", training_type: "PUBLIC", number_student: 10, room_rental: false, special_instruction: null, approved_at: now, ...ts }],
+      ["request_form", { id: ids.rfPrivate, request_form_number: `RF-${new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Jakarta" }).format(now)}-0002`, quotation_id: null, created_by_subject: null, reviewed_by_subject: null, attachment_file: null, training_title: "Sample Private Training", request_date: now, language: "id", training_type: "PRIVATE", number_student: 1, room_rental: true, special_instruction: null, approved_at: now, ...ts }],
+      ["training", { id: ids.trainingPublic, account_id: ids.corp, course_id: ids.course, request_form_id: ids.rfPublic, expected_students: 10, name: "Sample Public Training", training_type: "PUBLIC", status: "SCHEDULED", ...ts }],
+      ["training", { id: ids.trainingPrivate, account_id: ids.personal, course_id: ids.course, request_form_id: ids.rfPrivate, expected_students: 1, name: "Sample Private Training", training_type: "PRIVATE", status: "SCHEDULED", ...ts }],
       ["training_session", { id: ids.sessionPublic, training_id: ids.trainingPublic, session_number: 1, starts_at: now, ends_at: new Date(now.getTime() + 3600000), class_location: "ONLINE", zoom_url: null, agenda: "Introduction", ...ts }],
       ["training_session", { id: ids.sessionPrivate, training_id: ids.trainingPrivate, session_number: 1, starts_at: now, ends_at: new Date(now.getTime() + 3600000), class_location: "OFFLINE", zoom_url: null, agenda: "Introduction", ...ts }],
       ["participant", { id: ids.participantPublic, training_id: ids.trainingPublic, student_id: null, full_name: "Demo Participant Public", registered_at: now, ...ts }],
@@ -86,6 +86,12 @@ module.exports = {
       ["notification_template", { id: ids.notificationTemplate, name: "Sample Training Notice", subject_email: "Training information", content: "Development sample only", is_active: false, ...ts }],
     ];
     for (const [table, row] of rows) await insertIfMissing(qi, table, row);
+    const seedYear = Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Jakarta" }).format(now));
+    const [sequenceRows] = await qi.sequelize.query("SELECT MAX(TRY_CONVERT(int, RIGHT([request_form_number], 4))) AS [last_number] FROM [dbo].[request_form] WHERE [request_form_number] LIKE :pattern", { replacements: { pattern: `RF-${seedYear}-%` } });
+    const lastNumber = Number(sequenceRows[0]?.last_number ?? 0);
+    const [counterRows] = await qi.sequelize.query("SELECT [number_year] FROM [dbo].[request_form_number_sequence] WHERE [number_year]=:year", { replacements: { year: seedYear } });
+    if (!counterRows.length) await qi.bulkInsert("request_form_number_sequence", [{ number_year: seedYear, last_number: lastNumber }]);
+    else await qi.sequelize.query("UPDATE [dbo].[request_form_number_sequence] SET [last_number]=CASE WHEN [last_number]<:lastNumber THEN :lastNumber ELSE [last_number] END WHERE [number_year]=:year", { replacements: { year: seedYear, lastNumber } });
   },
   async down(qi) {
     if (!["development", "test"].includes(process.env.NODE_ENV || "development")) throw new Error("EN-03 sample data is restricted to development/test.");

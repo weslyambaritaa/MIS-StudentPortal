@@ -10,6 +10,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { CourseDialog, type CoursePayload, type CourseValue } from "./dialog/course-dialog";
 import { CourseDetailsDialog } from "./dialog/course-details-dialog";
 
@@ -20,6 +21,7 @@ const categoryLabel = (level: CourseValue["level"]) => level === "BEGINNER" ? "F
 
 export default function CoursesPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [result, setResult] = useState<CourseList>(EMPTY);
   const [categories, setCategories] = useState<Category[]>([]);
   const [draftSearch, setDraftSearch] = useState("");
@@ -56,6 +58,7 @@ export default function CoursesPage() {
     try {
       const id = editor && editor.id;
       await api(`/api/v1/internal/courses${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
+      showToast(id ? "Course updated successfully." : "Course added successfully.");
       setEditor(undefined); await load();
     } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Course"); }
     finally { setBusy(false); }
@@ -73,6 +76,7 @@ export default function CoursesPage() {
     setBusy(true); setError(null);
     try {
       await api(`/api/v1/internal/courses/${deleting.id}`, { method: "DELETE" });
+      showToast("Course deleted successfully.");
       setDeleting(null);
       if (result.items.length === 1 && page > 1) setPage(value => value - 1); else await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to delete Course"); setDeleting(null); }

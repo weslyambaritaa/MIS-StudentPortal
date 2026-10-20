@@ -5,6 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucid
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import { WithdrawConfirmation } from "./dialog/withdraw-confirmation";
 
@@ -37,11 +38,16 @@ type DetailCourse = {
   roomRental: boolean | null;
   roomPc: string | null;
   roomServices: string[];
+  locationType: "INTERNAL" | "CLIENT" | "ONLINE";
+  locationName: string;
+  locationAddress: string;
   specialInstruction: string;
   sessions: Session[];
 };
 type Row = {
   id: string;
+  request_form_number: string;
+  training_id?: string | null;
   form_type?: "REQUEST" | "REGISTRATION";
   status: "DRAFT" | "WAITING" | "REVISION" | "APPROVED";
   account_name: string;
@@ -129,6 +135,9 @@ const emptyCourse = (): DetailCourse => ({
   roomRental: null,
   roomPc: null,
   roomServices: [],
+  locationType: "INTERNAL",
+  locationName: "",
+  locationAddress: "",
   specialInstruction: "",
   sessions: [],
 });
@@ -139,6 +148,7 @@ export default function RequestFormPage({
   mode?: "REQUEST" | "REGISTRATION";
 }) {
   const api = useApi();
+  const { showToast } = useToast();
   const [items, setItems] = useState<Row[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -245,7 +255,7 @@ export default function RequestFormPage({
           .filter(Boolean)
       );
       setLines(
-        value.courses.map((c) => ({
+        value.courses.slice(0, 1).map((c) => ({
           courseId: String(c.course_id),
           amountStudent: Number(c.amount_student),
           deliveryType: String(c.delivery_type),
@@ -254,6 +264,9 @@ export default function RequestFormPage({
           roomRental: c.room_rental === null ? null : Boolean(c.room_rental),
           roomPc: c.room_pc ? String(c.room_pc) : null,
           roomServices: Array.isArray(c.room_services) ? (c.room_services as string[]) : [],
+          locationType: c.location_type ? String(c.location_type) as DetailCourse["locationType"] : "INTERNAL",
+          locationName: String(c.location_name ?? ""),
+          locationAddress: String(c.location_address ?? ""),
           specialInstruction: String(c.special_instruction ?? ""),
           sessions: (c.sessions as Array<Record<string, string>>).map((s) => ({ date: String(s.date).slice(0, 10) })),
         }))
@@ -268,6 +281,24 @@ export default function RequestFormPage({
   function updateLine(index: number, change: Partial<DetailCourse>) {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...change } : line)));
   }
+  function updateCourseDeliveryType(index: number, value: string) {
+    const shouldClearRequestLocation = mode === "REQUEST" && value !== "INHOUSE";
+    updateLine(index, {
+      deliveryType: value,
+      locationType: value.startsWith("ONLINE") ? "ONLINE" : value === "INHOUSE" ? "CLIENT" : shouldClearRequestLocation || lines[index].locationType === "ONLINE" ? "INTERNAL" : lines[index].locationType,
+      locationName: value.startsWith("ONLINE") || shouldClearRequestLocation ? "" : lines[index].locationName,
+      locationAddress: value.startsWith("ONLINE") || shouldClearRequestLocation ? "" : lines[index].locationAddress,
+    });
+  }
+  function updateCourseFormat(index: number, format: "ONLINE" | "OFFLINE") {
+    const currentType = lines[index]?.deliveryType ?? "";
+    const isOnline = currentType.startsWith("ONLINE");
+    if ((format === "ONLINE") === isOnline) return;
+    const nextType = format === "ONLINE"
+      ? mode === "REGISTRATION" ? "ONLINE_PUBLIC" : "ONLINE_PRIVATE"
+      : mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE";
+    updateCourseDeliveryType(index, nextType);
+  }
   function toggleQuotationCourse(courseId: string) {
     const isSelected = lines.some((line) => line.courseId === courseId);
     if (isSelected) {
@@ -281,11 +312,14 @@ export default function RequestFormPage({
     }
     const quotationLine = quotePreview?.lines.find((line) => line.course_id === courseId);
     if (!quotationLine || !quotePreview) return;
-    setLines((current) => [...current, {
+    setLines([{
       ...emptyCourse(),
       courseId,
       amountStudent: Number(quotationLine.amount_student),
       deliveryType: quotePreview.quote.class_type,
+      locationType: quotePreview.quote.class_type.startsWith("ONLINE") ? "ONLINE" : quotePreview.quote.class_type === "INHOUSE" ? "CLIENT" : "INTERNAL",
+      locationName: "",
+      locationAddress: "",
     }]);
     setError("");
   }
@@ -306,6 +340,8 @@ export default function RequestFormPage({
   async function save(submit: boolean) {
     setBusy(true);
     setError("");
+    const wasEditing = Boolean(editingId);
+    const uploadedCount = files.length;
     try {
       const body = {
         formType: mode,
@@ -334,6 +370,13 @@ export default function RequestFormPage({
           method: "POST",
           body: "{}",
         });
+      if (uploadedCount > 0)
+        showToast(`${uploadedCount} ${formName} attachment(s) uploaded successfully.`);
+      showToast(submit
+        ? `${formName} submitted to Admin successfully.`
+        : wasEditing
+          ? `${formName} draft updated successfully.`
+          : `${formName} draft saved successfully.`);
       setEditor(false);
       await load();
     } catch (e) {
@@ -351,6 +394,7 @@ export default function RequestFormPage({
         method: "POST",
         body: "{}",
       });
+      showToast(`${formName} withdrawn to Draft successfully.`);
       setWithdrawConfirmationOpen(false);
       setSelected(null);
       await load();
@@ -483,6 +527,7 @@ export default function RequestFormPage({
                 <thead className="rounded-xl bg-neutral-100 text-gray-600">
                   <tr>
                     {[
+                      "REQUEST FORM #",
                       "QUOTATION",
                       "ACCOUNT",
                       "REQUESTED COURSE",
@@ -510,6 +555,7 @@ export default function RequestFormPage({
                             : "border-gray-300 bg-gray-100 text-gray-600";
                     return (
                       <tr className="border-b border-rose-50 text-zinc-950/60" key={item.id}>
+                        <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
                         <td className="px-3 py-3 font-medium">
                           {item.quotation_code ?? "-"}
                         </td>
@@ -536,9 +582,6 @@ export default function RequestFormPage({
                             <span className="size-1.5 rounded-full bg-current" />
                             {statusLabel(item.status)}
                           </span>
-                          {item.status === "REVISION" && item.review_note && (
-                            <p className="mt-1 max-w-56 text-xs text-red-600">{item.review_note}</p>
-                          )}
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
@@ -550,7 +593,7 @@ export default function RequestFormPage({
                               <Eye size={17} />
                             </button>
                             {(item.status === "DRAFT" || item.status === "REVISION") && (
-                              <Button size="sm" className="bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]" onClick={() => void openEdit(item.id)}>
+                              <Button size="sm" className="min-w-max shrink-0 whitespace-nowrap bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]" onClick={() => void openEdit(item.id)}>
                                 Edit Form
                               </Button>
                             )}
@@ -561,7 +604,7 @@ export default function RequestFormPage({
                   })}
                   {!items.length && (
                     <tr>
-                      <td className="p-8 text-center text-gray-500" colSpan={8}>
+                      <td className="p-8 text-center text-gray-500" colSpan={9}>
                         No Request Forms found.
                       </td>
                     </tr>
@@ -616,11 +659,12 @@ export default function RequestFormPage({
                           setAccountId(preview.quote.account_id);
                           setPicId(preview.quote.pic_profile_id);
                           setLines(
-                            preview.lines.map((line) => ({
+                            preview.lines.slice(0, 1).map((line) => ({
                               ...emptyCourse(),
                               courseId: line.course_id,
                               amountStudent: Number(line.amount_student),
                               deliveryType: preview.quote.class_type as DetailCourse["deliveryType"],
+                              locationType: preview.quote.class_type.startsWith("ONLINE") ? "ONLINE" : preview.quote.class_type === "INHOUSE" ? "CLIENT" : "INTERNAL",
                             }))
                           );
                         } catch (err) {
@@ -667,9 +711,9 @@ export default function RequestFormPage({
                       </p>
                     </div>
                     {quotePreview && <fieldset className="space-y-2 rounded-xl border border-rose-50 p-3">
-                      <legend className="px-1 text-sm font-medium text-gray-600">Courses to include in this {formName} *</legend>
+                      <legend className="px-1 text-sm font-medium text-gray-600">Choose one Course for this {formName} *</legend>
                       {quotePreview.lines.map((line) => <label className="flex items-start gap-2 text-sm text-gray-600" key={line.course_id}>
-                        <input className="mt-1 accent-rose-600" type="checkbox" checked={lines.some((selectedLine) => selectedLine.courseId === line.course_id)} onChange={() => toggleQuotationCourse(line.course_id)} />
+                        <input className="mt-1 accent-rose-600" type="radio" name="quotation-course" checked={lines.some((selectedLine) => selectedLine.courseId === line.course_id)} onChange={() => toggleQuotationCourse(line.course_id)} />
                         <span>{line.course_name}<span className="block text-xs text-zinc-950/60">{line.amount_student} students</span></span>
                       </label>)}
                     </fieldset>}
@@ -712,7 +756,7 @@ export default function RequestFormPage({
                     </label>
                   </>
                 )}
-                {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><div className="flex items-center justify-between"><span className="text-sm font-medium text-gray-600">Course {index + 1}</span>{lines.length > 1 && <button type="button" className="text-sm text-red-500" onClick={() => setLines(lines.filter((_, i) => i !== index))}>Remove</button>}</div><label className="block text-sm text-gray-600">Requested Course *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id} disabled={lines.some((other, i) => i !== index && other.courseId === c.id)}>{c.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Type *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateLine(index, { deliveryType: e.target.value })}>{deliveryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div></div>)}<Button size="sm" variant="primary" leftIcon={<Plus size={15} />} onClick={() => setLines([...lines, { ...emptyCourse(), deliveryType: mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE" }])}>Add Course</Button></section>}
+                {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><span className="text-sm font-medium text-gray-600">Course</span><label className="block text-sm text-gray-600">Requested Course *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Format *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"} onChange={(e) => updateCourseFormat(index, e.target.value as "ONLINE" | "OFFLINE")}><option value="OFFLINE">Offline</option><option value="ONLINE">Online</option></select></label></div><label className="block text-sm text-gray-600">Class Type *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateCourseDeliveryType(index, e.target.value)}>{deliveryOptions.filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>)}</section>}
               </div>
               <div className="space-y-4 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">▣</span>{formName}</div>
@@ -729,6 +773,10 @@ export default function RequestFormPage({
                 <label className="block text-sm text-gray-600">Training Title *<input readOnly className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none" placeholder="Generated from selected Course" value={trainingTitle} /></label>
                 {lines.map((line, index) => (
                   <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">
+                    {mode === "REGISTRATION" && !line.deliveryType.startsWith("ONLINE") && line.deliveryType !== "INHOUSE" && <fieldset className="space-y-2 text-sm"><legend className="text-gray-600">Training Location *</legend><div className="flex gap-5"><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "INTERNAL"} onChange={() => updateLine(index, { locationType: "INTERNAL", locationName: "", locationAddress: "" })} />Internal Training Room</label><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "CLIENT"} onChange={() => updateLine(index, { locationType: "CLIENT" })} />Client Location</label></div></fieldset>}
+                    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <label className="block text-sm text-gray-600">Location Training *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" maxLength={500} value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")} onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })} placeholder="Training location name and address" /></label>}
+                    {mode === "REGISTRATION" && line.locationType === "CLIENT" && <div className="grid gap-2 sm:grid-cols-2"><label className="block text-sm text-gray-600">Location Name *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationName} onChange={(e) => updateLine(index, { locationName: e.target.value })} placeholder="Client site / venue" /></label><label className="block text-sm text-gray-600">Location Address *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationAddress} onChange={(e) => updateLine(index, { locationAddress: e.target.value })} placeholder="Full address" /></label></div>}
+                    {line.locationType === "ONLINE" && <p className="text-sm text-zinc-950/60">Online training does not require a physical location.</p>}
                     <label className="block text-sm text-gray-600">Requested Date *</label>
                     <MultiDateCalendar dates={line.sessions.map((session) => session.date)} onChange={(dates) => updateLine(index, { sessions: dates.map((date) => ({ date })) })} />
                     <label className="block text-sm text-gray-600">Language *
@@ -823,6 +871,7 @@ export default function RequestFormPage({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelected(null)}>
           <div className="max-h-[92vh] w-full max-w-[902px] overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 flex items-start justify-between"><h2 className="text-2xl font-medium text-gray-600">{formName} Details</h2><button className="flex size-8 items-center justify-center rounded-full text-xl text-gray-600 hover:bg-neutral-100" aria-label="Close" onClick={() => setSelected(null)}>✕</button></div>
+            <div className="mb-4 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-gray-600">Request Form #: <span className="font-medium">{selected.item.request_form_number}</span>{selected.item.training_id && <> <span className="mx-2 text-zinc-400">·</span> Training ID: <span className="font-medium">{selected.item.training_id}</span></>}</div>
             {selected.item.review_note && <p className="mb-4 rounded-xl border border-red-500 bg-red-50 p-3 text-sm text-red-600">Revision note: {selected.item.review_note}</p>}
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="space-y-4 rounded-3xl border border-gray-200 p-4">
@@ -836,11 +885,11 @@ export default function RequestFormPage({
                 <div className="flex items-center justify-between"><h3 className="text-base font-medium text-slate-900">{formName}</h3><span className={`rounded-full border px-3 py-1 text-xs font-medium ${selected.item.status === "WAITING" ? "border-orange-400 bg-orange-400/20 text-orange-500" : selected.item.status === "REVISION" ? "border-red-500 bg-red-500/10 text-red-500" : selected.item.status === "APPROVED" ? "border-green-500 bg-green-500/20 text-green-600" : "border-gray-300 bg-gray-100 text-gray-600"}`}>{statusLabel(selected.item.status)}</span></div>
                 <div className="text-sm text-gray-600">Training Title <span className="font-medium">{selected.item.training_title || "-"}</span></div>
                 <div className="space-y-2"><h4 className="text-sm text-gray-600">{mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"}</h4>{selected.attachments.length ? selected.attachments.map((a) => <a className="flex items-center justify-between gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3" href={a.download_url} target="_blank" rel="noreferrer" key={a.id}><span className="truncate font-medium text-gray-600">{a.file_name}<small className="block font-medium text-rose-600">{(a.file_size / 1024 / 1024).toFixed(1)} MB</small></span><span className="rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 px-3 py-2 text-white">↗</span></a>) : <p className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">No attachment uploaded</p>}</div>
-                <div className="space-y-3"><h4 className="text-base font-medium text-rose-600">Detail Course</h4>{selected.courses.map((course) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={String(course.id)}><div className="flex justify-between gap-3"><div><p className="font-medium text-gray-600">{String(course.course_name)}</p><p className="text-sm font-medium text-rose-600">{String(course.language)} · {String(course.amount_student)} students</p></div><span className="text-right text-xs font-medium text-zinc-950/60">{formatSessionDates((course.sessions as Array<Record<string, string>>).map((session) => String(session.date).slice(0, 10)))}</span></div><p className="text-xs text-zinc-950/60">{String(course.delivery_type).replace("INHOUSE", "In-house")} · {String(course.service_type)}</p>{Boolean(course.room_rental) && <p className="text-xs text-zinc-950/60">Room Rental: {String(course.room_pc ?? "")} {(course.room_services as string[]).join(", ")}</p>}{Boolean(course.special_instruction) && <p className="text-sm text-zinc-950/60">{String(course.special_instruction)}</p>}</div>)}</div>
+                <div className="space-y-3"><h4 className="text-base font-medium text-rose-600">Detail Course</h4>{selected.courses.map((course) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={String(course.id)}><div className="flex justify-between gap-3"><div><p className="font-medium text-gray-600">{String(course.course_name)}</p><p className="text-sm font-medium text-rose-600">{String(course.language)} · {String(course.amount_student)} students</p></div><span className="text-right text-xs font-medium text-zinc-950/60">{formatSessionDates((course.sessions as Array<Record<string, string>>).map((session) => String(session.date).slice(0, 10)))}</span></div><p className="text-xs text-zinc-950/60">{String(course.delivery_type).replace("INHOUSE", "In-house")} · {String(course.service_type)}</p><p className="text-xs text-zinc-950/60">Location: {course.location_type === "CLIENT" ? [course.location_name, course.location_address].filter(Boolean).join(" · ") || "-" : course.location_type === "ONLINE" ? "Online" : "Internal Training Room"}</p>{Boolean(course.room_rental) && <p className="text-xs text-zinc-950/60">Room Rental: {String(course.room_pc ?? "")} {(course.room_services as string[]).join(", ")}</p>}{Boolean(course.special_instruction) && <p className="text-sm text-zinc-950/60">{String(course.special_instruction)}</p>}</div>)}</div>
                 <div className="space-y-2"><h4 className="text-base font-medium text-rose-600">Special Instructions</h4><div className="whitespace-pre-line rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">{[...new Set(selected.courses.flatMap((c) => String(c.special_instruction ?? "").split("\n")).filter(Boolean))].join("\n") || "-"}</div></div>
               </section>
             </div>
-            <div className="mt-6 flex justify-between border-t border-zinc-950/20 pt-5">{selected.item.status === "DRAFT" ? <Button variant="danger" disabled={busy} onClick={async () => { if (!window.confirm("Delete this draft? This cannot be undone.")) return; setBusy(true); try { await api(`/api/v1/internal/request-forms/${selected.item.id}`, { method: "DELETE" }); setSelected(null); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not delete draft"); } finally { setBusy(false); } }}>Delete Draft</Button> : selected.item.status === "WAITING" ? <Button variant="ghost" className="border border-rose-600 text-rose-600 hover:bg-rose-50" disabled={busy} onClick={() => setWithdrawConfirmationOpen(true)}>Withdraw to Draft</Button> : <span /> }<Button onClick={() => setSelected(null)}>Close</Button></div>
+            <div className="mt-6 flex justify-between border-t border-zinc-950/20 pt-5">{selected.item.status === "DRAFT" ? <Button variant="danger" disabled={busy} onClick={async () => { if (!window.confirm("Delete this draft? This cannot be undone.")) return; setBusy(true); try { await api(`/api/v1/internal/request-forms/${selected.item.id}`, { method: "DELETE" }); showToast(`${formName} draft deleted successfully.`); setSelected(null); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not delete draft"); } finally { setBusy(false); } }}>Delete Draft</Button> : selected.item.status === "WAITING" ? <Button variant="ghost" className="border border-rose-600 text-rose-600 hover:bg-rose-50" disabled={busy} onClick={() => setWithdrawConfirmationOpen(true)}>Withdraw to Draft</Button> : <span /> }<Button onClick={() => setSelected(null)}>Close</Button></div>
           </div>
         </div>
       )}

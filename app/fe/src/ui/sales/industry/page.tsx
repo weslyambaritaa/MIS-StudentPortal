@@ -9,6 +9,7 @@ import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-mod
 import { IconButton } from "@/components/ui/icon-button";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
+import { useToast } from "@/components/ui/toast";
 import { IndustryDialog, type IndustryFormValue } from "./dialog/industry-dialog";
 
 type Industry = IndustryFormValue & { id: string; industry_code: string; amount_account: number | string; ever_used: boolean };
@@ -16,6 +17,7 @@ type IndustryList = { items: Industry[]; page: number; pageSize: number; total: 
 
 export default function IndustryPage() {
   const api = useApi();
+  const { showToast } = useToast();
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -56,6 +58,7 @@ export default function IndustryPage() {
       await api(`/api/v1/internal/industries${id ? `/${id}` : ""}`, {
         method: id ? "PUT" : "POST", body: JSON.stringify(value),
       });
+      showToast(id ? "Industry updated successfully." : "Industry added successfully.");
       setEditor(null);
       await load();
     } catch (cause) {
@@ -68,6 +71,7 @@ export default function IndustryPage() {
     setBusy(true); setError(null);
     try {
       await api(`/api/v1/internal/industries/${deleting.id}`, { method: "DELETE" });
+      showToast("Industry deleted successfully.");
       setDeleting(null);
       if (result.items.length === 1 && page > 1) setPage((value) => value - 1);
       else await load();
