@@ -45,8 +45,11 @@ type ApprovalOptions = {
 type TrainingItem = {
   id: string; name: string; request_form_number: string; account_name: string; course_name: string;
   pic_name: string | null; trainer_name: string | null; room_name: string | null; training_type: string;
-  expected_students: number | null; training_dates: string | null; status: string;
+  expected_students: number | null; training_dates: string | null; session_count?: number; status: string;
 };
+type TrainingDetail = { training: TrainingItem & { request_form_id: string; course_id: string; base_fee: number | string | null; room_capacity: number | null; industry_name: string | null; pic_email: string | null }; form: Detail; sessions: Array<{ id: string; session_number: number; starts_at: string; ends_at: string; class_location: string | null }> };
+type Participant = { id: string; student_id: string | null; student_subject: string | null; name: string; email: string | null; company_role: string | null; account_name: string | null };
+type StudentOption = { id: string; name: string; email: string; company_role: string | null; account_name: string };
 
 const formName = (item: Item) => item.form_type === "REGISTRATION" ? "Registration Form" : "Request Form";
 const deliveryLabel = (value: unknown) => ({ PUBLIC: "Public", PRIVATE: "Private", INHOUSE: "In-house", ONLINE_PUBLIC: "Online Public", ONLINE_PRIVATE: "Online Private" } as Record<string, string>)[String(value)] ?? String(value ?? "-");
@@ -83,7 +86,20 @@ export default function RequestFormReviewPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Item[]>([]);
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
+  const [trainingDetail, setTrainingDetail] = useState<TrainingDetail | null>(null);
+  const [trainingDetailTab, setTrainingDetailTab] = useState<"FORM" | "PARTICIPANT">("FORM");
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantModalOpen, setParticipantModalOpen] = useState(false);
+  const [participantOptions, setParticipantOptions] = useState<StudentOption[]>([]);
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [participantDropdownOpen, setParticipantDropdownOpen] = useState(false);
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
+  const [participantError, setParticipantError] = useState("");
+  const [participantBusy, setParticipantBusy] = useState(false);
   const [trainingTotal, setTrainingTotal] = useState(0);
+  const [trainingSearch, setTrainingSearch] = useState("");
+  const [trainingStatus, setTrainingStatus] = useState("ALL");
+  const [trainingSessionDate, setTrainingSessionDate] = useState("");
   const [activeTab, setActiveTab] = useState<"TRAININGS" | "REQUESTED">("REQUESTED");
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [page, setPage] = useState(1);
@@ -132,14 +148,60 @@ export default function RequestFormReviewPage() {
 
   const loadTrainings = useCallback(async () => {
     try {
-      const query = new URLSearchParams({ page: String(page), pageSize: "8" });
+      const query = new URLSearchParams({ page: String(page), pageSize: "8", search: trainingSearch, status: trainingStatus, sessionDate: trainingSessionDate });
       const result = await api<{ items: TrainingItem[]; total: number }>(`/api/v1/internal/request-form-review/trainings?${query}`);
       setTrainings(result.items);
       setTrainingTotal(result.total);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load Training list");
     }
-  }, [api, page]);
+  }, [api, page, trainingSearch, trainingStatus, trainingSessionDate]);
+
+  async function openTraining(id: string) {
+    setError("");
+    setTrainingDetailTab("FORM");
+    try {
+      const [nextDetail, participantResult] = await Promise.all([
+        api<TrainingDetail>(`/api/v1/internal/request-form-review/trainings/${id}/detail`),
+        api<{ items: Participant[] }>(`/api/v1/internal/request-form-review/trainings/${id}/participants`),
+      ]);
+      setTrainingDetail(nextDetail);
+      setParticipants(participantResult.items);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load Training details"); }
+  }
+
+  async function beginManageParticipants() {
+    if (!trainingDetail) return;
+    setParticipantBusy(true); setParticipantError("");
+    try {
+      setParticipantIds(participants.map((participant) => participant.student_id).filter((id): id is string => Boolean(id)));
+      setParticipantOptions(participants.filter((person) => person.student_id).map((person) => ({ id: person.student_id!, name: person.name, email: person.email ?? "", company_role: person.company_role, account_name: person.account_name ?? "" })));
+      setParticipantSearch(""); setParticipantDropdownOpen(false); setParticipantModalOpen(true);
+    } catch (cause) { setParticipantError(cause instanceof Error ? cause.message : "Could not load Students"); }
+    finally { setParticipantBusy(false); }
+  }
+
+  useEffect(() => {
+    if (!participantModalOpen || !trainingDetail) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams({ search: participantSearch.trim() });
+      void api<{ items: StudentOption[] }>(`/api/v1/internal/request-form-review/trainings/${trainingDetail.training.id}/student-options?${query}`).then((result) => {
+        if (!cancelled) setParticipantOptions((current) => [...new Map([...current, ...result.items].map((student) => [student.id, student])).values()]);
+      }).catch((cause) => { if (!cancelled) setParticipantError(cause instanceof Error ? cause.message : "Could not search Students"); });
+    }, 180);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [api, participantModalOpen, participantSearch, trainingDetail]);
+
+  async function saveParticipants() {
+    if (!trainingDetail) return;
+    setParticipantBusy(true); setParticipantError("");
+    try {
+      const result = await api<{ items: Participant[] }>(`/api/v1/internal/request-form-review/trainings/${trainingDetail.training.id}/participants`, { method: "PUT", body: JSON.stringify({ studentIds: participantIds }) });
+      setParticipants(result.items); setParticipantModalOpen(false); showToast("Training participants saved successfully.");
+    } catch (cause) { setParticipantError(cause instanceof Error ? cause.message : "Could not save participants"); }
+    finally { setParticipantBusy(false); }
+  }
 
   useEffect(() => { if (activeTab === "TRAININGS") void loadTrainings(); }, [activeTab, loadTrainings]);
 
@@ -226,10 +288,10 @@ export default function RequestFormReviewPage() {
           <button type="button" role="tab" aria-selected={activeTab === "REQUESTED"} onClick={() => { setPage(1); setError(""); setActiveTab("REQUESTED"); }} className={`rounded-full px-3 py-2 text-xs font-medium ${activeTab === "REQUESTED" ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600 hover:bg-rose-50"}`}>Requested Training</button>
         </div>
         {activeTab === "TRAININGS" ? <>
-          <div className="mb-5"><h1 className="text-3xl font-medium text-gray-600">All Training List</h1><p className="mt-1 text-sm text-zinc-950/60">Scheduled and active training created from approved Request Forms.</p></div>
+          <div className="mb-5 flex flex-col justify-between gap-4 xl:flex-row xl:items-end"><div><h1 className="text-3xl font-medium text-gray-600">Training List</h1><p className="mt-1 text-sm text-zinc-950/60">All approved training will be shown here.</p></div><div className="grid gap-3 sm:grid-cols-3"><label className="block text-sm text-gray-600">Search Training / RF Code<span className="mt-1 flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={16} className="text-slate-900/40"/><input value={trainingSearch} onChange={(event) => { setPage(1); setTrainingSearch(event.target.value); }} placeholder="Example: RF-2026-0001" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-900/40"/></span></label><label className="block text-sm text-gray-600">Training Sessions<span className="relative mt-1 block"><input aria-label="Filter by training session date" type="date" value={trainingSessionDate} onChange={(event) => { setPage(1); setTrainingSessionDate(event.target.value); }} className={searchField}/></span></label><label className="block text-sm text-gray-600">Status<span className="relative mt-1 block"><select className={`${searchField} appearance-none pr-9`} value={trainingStatus} onChange={(event) => { setPage(1); setTrainingStatus(event.target.value); }}><option value="ALL">All Status</option><option value="SCHEDULED">Scheduled</option><option value="ONGOING">Running</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"/></span></label></div></div>
           {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
-          <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm"><thead className="rounded-xl bg-neutral-100 text-xs text-gray-600"><tr>{["TRAINING", "REQUEST FORM #", "ACCOUNT", "COURSE", "TYPE", "STUDENTS", "TRAINER", "ROOM", "DATES", "STATUS"].map((label) => <th className="px-3 py-3 font-medium" key={label}>{label}</th>)}</tr></thead>
-            <tbody>{trainings.map((training) => <tr key={training.id} className="border-b border-rose-50 text-gray-600"><td className="px-3 py-3 font-medium">{training.name}</td><td className="whitespace-nowrap px-3 py-3">{training.request_form_number}</td><td className="px-3 py-3">{training.account_name}</td><td className="px-3 py-3">{training.course_name}</td><td className="px-3 py-3">{deliveryLabel(training.training_type)}</td><td className="px-3 py-3">{training.expected_students ?? "-"}</td><td className="px-3 py-3">{training.trainer_name ?? "-"}</td><td className="px-3 py-3">{training.room_name ?? "-"}</td><td className="px-3 py-3">{formatDates(datesFromItem({ requested_dates: training.training_dates } as Item))}</td><td className="px-3 py-3"><Badge variant={training.status === "SCHEDULED" ? "success" : "neutral"} showDot>{training.status}</Badge></td></tr>)}{!trainings.length && <tr><td className="p-8 text-center text-gray-500" colSpan={10}>No training found.</td></tr>}</tbody>
+          <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="rounded-xl bg-neutral-100 text-xs text-gray-600"><tr>{["CODE", "COURSE & TRAINER", "TYPE", "DATE SESSION", "ROOM", "STATUS", "ACTION"].map((label) => <th className="px-3 py-3 font-medium" key={label}>{label}</th>)}</tr></thead>
+            <tbody>{trainings.map((training) => <tr key={training.id} className="border-b border-rose-50 text-gray-600"><td className="whitespace-nowrap px-3 py-3 font-medium">{training.request_form_number}</td><td className="px-3 py-3"><span className="block font-medium text-rose-600">{training.trainer_name ?? "Trainer not assigned"}</span><span className="block text-xs text-zinc-600">{training.course_name}</span><span className="mt-1 block text-xs text-zinc-500">{training.expected_students ?? "-"} Participant{training.expected_students === 1 ? "" : "s"}</span></td><td className="px-3 py-3">{deliveryLabel(training.training_type)}</td><td className="px-3 py-3"><span className="block">{formatDates(datesFromItem({ requested_dates: training.training_dates } as Item))}</span><span className="text-xs text-zinc-500">{Number(training.session_count ?? 0)} Sessions</span></td><td className="px-3 py-3">{training.room_name ?? "-"}</td><td className="px-3 py-3"><Badge variant={training.status === "SCHEDULED" ? "success" : training.status === "ONGOING" ? "warning" : "neutral"} showDot>{training.status === "ONGOING" ? "Running" : training.status}</Badge></td><td className="px-3 py-3"><button aria-label={`View ${training.name}`} className="rounded-full p-2 text-zinc-600" onClick={() => void openTraining(training.id)}><Eye size={17}/></button></td></tr>)}{!trainings.length && <tr><td className="p-8 text-center text-gray-500" colSpan={7}>No training found.</td></tr>}</tbody>
           </table></div>
           <Pagination page={page} totalPages={Math.max(1, Math.ceil(trainingTotal / 8))} pageSize={trainings.length} totalItems={trainingTotal} onPageChange={setPage} />
         </> : <>
@@ -264,6 +326,49 @@ export default function RequestFormReviewPage() {
         </>}
       </section>
     </div>
+
+    {trainingDetail && <>
+      <button aria-label="Close Training details" className="fixed inset-0 z-40 cursor-default bg-black/25" onClick={() => setTrainingDetail(null)} />
+      <aside aria-label="Training details" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-96 flex-col justify-between overflow-hidden border-l border-gray-200 bg-white p-6 shadow-2xl">
+        <div className="flex min-h-0 flex-col gap-6">
+          <div className="flex items-start gap-3"><button aria-label="Back to Training List" className="rounded-full p-2 text-gray-600 hover:bg-neutral-100" onClick={() => setTrainingDetail(null)}><X size={19}/></button><div><h2 className="text-2xl font-medium text-gray-600">Manage Training</h2><p className="mt-1 text-xs text-zinc-500">{trainingDetail.training.name}</p></div></div>
+          <div className="flex rounded-full border border-rose-600 bg-neutral-50 p-1" role="tablist" aria-label="Training detail sections">
+            <button role="tab" aria-selected={trainingDetailTab === "FORM"} onClick={() => setTrainingDetailTab("FORM")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium ${trainingDetailTab === "FORM" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><FileText size={14} className="mr-1 inline"/>Form Details</button>
+            <button role="tab" aria-selected={trainingDetailTab === "PARTICIPANT"} onClick={() => setTrainingDetailTab("PARTICIPANT")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium ${trainingDetailTab === "PARTICIPANT" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><Users size={14} className="mr-1 inline"/>Participant</button>
+          </div>
+          <div className="min-h-0 space-y-6 overflow-y-auto pr-1">
+            <section className="space-y-3">
+              <h3 className="font-medium text-rose-600">Course Detail</h3>
+              <div className="space-y-3 rounded-xl border border-rose-50 bg-neutral-50 p-3">
+                <div className="flex items-center gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-400 to-orange-600 text-white"><BookOpen size={19}/></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-gray-600">{trainingDetail.training.course_name}</p><p className="flex items-center gap-1 text-xs font-medium text-rose-600"><Users size={14}/>{trainingDetail.training.expected_students ?? 0} Students</p></div><Badge variant="neutral">Type: {deliveryLabel(trainingDetail.training.training_type)}</Badge></div>
+                <div className="border-t border-zinc-950/20"/><p className="font-medium text-gray-600">Base Fee: <span className="text-rose-600">{trainingDetail.training.base_fee == null ? "-" : `Rp ${Number(trainingDetail.training.base_fee).toLocaleString("id-ID")}`}</span></p>
+              </div>
+            </section>
+            {trainingDetailTab === "FORM" ? <>
+              <section className="space-y-3"><h3 className="font-medium text-rose-600">Training Account</h3><div className="rounded-xl border border-rose-50 bg-neutral-50 p-3"><div className="flex items-center gap-3"><Building2 size={19} className="text-rose-600"/><div><p className="font-medium text-gray-600">{trainingDetail.training.account_name}</p><p className="text-sm text-zinc-950/60">{trainingDetail.training.industry_name ?? "-"}</p></div></div><div className="mt-3 space-y-1 border-t border-rose-100 pt-3 text-sm text-zinc-600"><p>PIC: <span className="font-medium text-gray-700">{trainingDetail.training.pic_name ?? "-"}</span></p><p className="break-all">PIC Email: <span className="font-medium text-gray-700">{trainingDetail.training.pic_email ?? "-"}</span></p><p>Trainer: <span className="font-medium text-gray-700">{trainingDetail.training.trainer_name ?? "-"}</span></p></div></div></section>
+              <section className="space-y-3"><h3 className="font-medium text-rose-600">Room</h3><div className="rounded-xl border border-rose-50 bg-neutral-50 p-3"><div className="flex items-center gap-3"><Building2 size={19} className="text-rose-600"/><div><p className="font-medium text-gray-600">{trainingDetail.training.room_name ?? "External / Online"}</p><p className="text-sm text-zinc-950/60">{trainingDetail.training.room_capacity ? `${trainingDetail.training.room_capacity} Capacity` : trainingDetail.training.training_type.includes("ONLINE") ? "Online training" : "Client location"}</p></div></div><p className="mt-3 border-t border-rose-100 pt-3 text-xs text-blue-600">{formatDates(datesFromItem({ requested_dates: trainingDetail.training.training_dates } as Item))}</p></div></section>
+              <section className="space-y-3"><div className="flex items-center gap-2"><FileText size={18} className="text-zinc-600"/><h3 className="font-medium text-gray-600">Request Form</h3></div><div className="space-y-2">{trainingDetail.form.attachments.length ? trainingDetail.form.attachments.map((asset) => <a key={asset.id} href={asset.download_url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 rounded-xl border border-rose-50 bg-neutral-50 p-3"><span className="min-w-0"><span className="block truncate text-sm font-medium text-gray-600">{asset.file_name}</span><span className="text-xs font-medium text-rose-600">{(asset.file_size / 1024 / 1024).toFixed(1)} MB</span></span><ExternalLink size={17} className="shrink-0 text-rose-600"/></a>) : <p className="text-sm text-zinc-500">No Request Form attachment</p>}
+                <div className="rounded-xl border border-rose-50 bg-neutral-50 p-3"><p className="font-medium text-gray-600">{String(trainingDetail.form.courses[0]?.course_name ?? trainingDetail.training.course_name)}</p><p className="text-sm text-rose-600">{String(trainingDetail.form.courses[0]?.language ?? "-")}</p><p className="mt-2 text-xs text-zinc-600">Request Form: {trainingDetail.form.item.request_form_number}</p></div>
+              </div></section>
+              <section className="space-y-2"><h3 className="font-medium text-rose-600">Class Type</h3><div className="flex flex-wrap gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3">{["STANDARD", "CUSTOMIZED", "CEO"].map((value) => choice(value === "CUSTOMIZED" ? "Customized" : value[0] + value.slice(1).toLowerCase(), String(trainingDetail.form.courses[0]?.service_type).toUpperCase() === value))}</div></section>
+              <section className="space-y-2"><h3 className="font-medium text-rose-600">Room Rental</h3><div className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-600">{trainingDetail.form.courses[0]?.room_rental ? [trainingDetail.form.courses[0]?.room_pc === "WITH" ? "With PC" : "Without PC", ...(((trainingDetail.form.courses[0]?.room_services as string[] | undefined) ?? []))].join(" · ") : "Not specified"}</div></section>
+              <section className="space-y-2"><h3 className="font-medium text-rose-600">Special Instructions</h3><div className="whitespace-pre-line rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-600">{String(trainingDetail.form.courses[0]?.special_instruction ?? "-")}</div></section>
+            </> : <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium text-rose-600">All Participant ({participants.length})</h3><button className="text-xs font-medium text-rose-600 hover:underline" onClick={() => setTrainingDetailTab("FORM")}>Form Details</button></div><div className="space-y-3">{participants.length ? participants.map((person, index) => <div key={person.id}><div className="flex items-center gap-3"><span className={`flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${["from-red-400 to-orange-600", "from-purple-400 to-fuchsia-600", "from-green-400 to-green-600", "from-indigo-400 to-indigo-700", "from-cyan-300 to-sky-500"][index % 5]} text-sm font-medium text-white`}>{person.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span><div className="min-w-0"><p className="truncate text-sm font-medium text-gray-600">{person.name}</p><p className="truncate text-sm text-zinc-950/60">{person.email ?? "Email unavailable"}</p></div></div>{index < participants.length - 1 && <div className="mt-3 border-t border-rose-50"/>}</div>) : <p className="rounded-xl bg-neutral-50 p-4 text-center text-sm text-zinc-500">No participants added yet.</p>}</div></section>}
+          </div>
+        </div>
+        <div className="pt-4"><Button className="w-full" leftIcon={<Users size={18}/>} disabled={participantBusy} onClick={() => void beginManageParticipants()}>{participantBusy ? "Loading Students…" : "Manage Participant"}</Button></div>
+      </aside>
+    </>}
+
+    {participantModalOpen && trainingDetail && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => !participantBusy && setParticipantModalOpen(false)}>
+      <div className="flex max-h-[92vh] w-full max-w-[902px] flex-col gap-6 overflow-hidden rounded-3xl border border-rose-50 bg-white p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between"><h2 className="text-2xl font-medium text-gray-600">Manage Participant</h2><button aria-label="Close" className="rounded-full p-2 text-gray-600 hover:bg-neutral-100" onClick={() => !participantBusy && setParticipantModalOpen(false)}><X size={19}/></button></div>
+        <div className="flex items-end gap-3"><label className="relative flex-1 text-sm text-gray-600">Participant From <span className="text-rose-600">Student Master Data</span><span className="relative mt-1 block"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/><input autoComplete="off" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Search & Pick a Student" className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 pl-9 pr-3 outline-none focus:ring-2 focus:ring-rose-100"/>{participantDropdownOpen && <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-52 overflow-y-auto rounded-xl border border-rose-100 bg-white p-1 shadow-lg">{participantOptions.filter((student) => !participantIds.includes(student.id) && (!participantSearch.trim() || `${student.name} ${student.email} ${student.account_name}`.toLowerCase().includes(participantSearch.toLowerCase()))).slice(0, 20).map((student) => <button key={student.id} type="button" className="w-full rounded-lg px-3 py-2 text-left hover:bg-rose-50" onClick={() => { setParticipantIds((ids) => [...ids, student.id]); setParticipantSearch(""); }}><span className="block text-sm font-medium">{student.name}</span><span className="block text-xs text-zinc-500">{student.email} · {student.account_name}</span></button>)}{participantOptions.filter((student) => !participantIds.includes(student.id)).length === 0 && <p className="px-3 py-2 text-sm text-zinc-500">No Students found.</p>}</div>}</span></label><button type="button" aria-label={participantDropdownOpen ? "Close Student options" : "Open Student options"} aria-expanded={participantDropdownOpen} onClick={() => setParticipantDropdownOpen((open) => !open)} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><Users size={18}/></button></div>
+        <div className="min-h-0 flex-1 overflow-y-auto"><p className="mb-2 text-sm text-gray-600">Student Preview</p><div className="grid grid-cols-[1fr_1fr_1.3fr_1fr_3rem] gap-2 rounded-xl bg-neutral-100 p-3 text-xs font-medium text-gray-600"><span>NAME</span><span>ACCOUNT NAME</span><span>EMAIL</span><span>ROLE</span><span>ACTION</span></div><div>{participantIds.map((id) => { const student = participantOptions.find((option) => option.id === id); if (!student) return null; return <div key={id} className="grid grid-cols-[1fr_1fr_1.3fr_1fr_3rem] items-center gap-2 border-b border-rose-50 p-3 text-xs text-zinc-700"><span className="break-words">{student.name}</span><span className="break-words">{student.account_name}</span><span className="break-all">{student.email}</span><span className="break-words">{student.company_role || "-"}</span><button aria-label={`Remove ${student.name}`} className="rounded-full bg-red-500/10 p-2 text-red-500 hover:bg-red-100" onClick={() => setParticipantIds((ids) => ids.filter((value) => value !== id))}><X size={15}/></button></div>})}</div></div>
+        {participantError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{participantError}</p>}
+        <div className="flex justify-end gap-3 border-t border-zinc-200 pt-4"><Button variant="ghost" disabled={participantBusy} onClick={() => setParticipantModalOpen(false)}>Cancel</Button><Button disabled={participantBusy} onClick={() => void saveParticipants()}>{participantBusy ? "Saving…" : "Save Participant"}</Button></div>
+      </div>
+    </div>}
 
     {detail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !busy && setDetail(null)}>
       <div className="max-h-[92vh] w-full max-w-[902px] overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5" onClick={(event) => event.stopPropagation()}>
