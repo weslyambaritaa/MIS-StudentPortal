@@ -1,0 +1,271 @@
+
+services:
+  # ---------------------------------------------------------
+  # STUDENT DATABASE
+  # ---------------------------------------------------------
+  student-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${STUDENT_DB_NAME}
+      POSTGRES_USER: ${STUDENT_DB_USER}
+      POSTGRES_PASSWORD: ${STUDENT_DB_PASSWORD}
+    volumes:
+      - student-db-data:/var/lib/postgresql
+    networks:
+      - external-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # INTERNAL DATABASE
+  # ---------------------------------------------------------
+  internal-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${INTERNAL_DB_NAME}
+      POSTGRES_USER: ${INTERNAL_DB_USER:-mis_internal}
+      POSTGRES_PASSWORD: ${INTERNAL_DB_PASSWORD}
+    volumes:
+      - internal-postgres-data:/var/lib/postgresql
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # KEYCLOAK DATABASE
+  # ---------------------------------------------------------
+  keycloak-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:-mis_keycloak}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak-postgres-data:/var/lib/postgresql
+    networks:
+      - auth-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # KEYCLOAK (diakses publik lewat api-gateway di https://${AUTH_DOMAIN})
+  # ---------------------------------------------------------
+  keycloak:
+    image: mis-keycloak-st01:26.7.3
+    build:
+      context: .
+      dockerfile: keycloak/Dockerfile
+    env_file:
+      - ../files/keycloak.env
+    environment:
+      KC_HOSTNAME: https://${AUTH_DOMAIN}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+    command:
+      - start
+      - --import-realm
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - ./keycloak/themes:/opt/keycloak/themes:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - auth-net
+      - keycloak-admin-net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # STUDENT API
+  # ---------------------------------------------------------
+  student-api:
+    build:
+      context: .
+      dockerfile: app/be/student-api/Dockerfile
+    env_file:
+      - ../files/student-api.env
+    environment:
+      PORT: 4001
+      NODE_ENV: development
+      DB_HOST: student-db
+      DB_PORT: 5432
+    expose:
+      - "4001"
+    depends_on:
+      student-db:
+        condition: service_healthy
+    networks:
+      - external-net
+    volumes:
+      - ./app/be/student-api:/workspace/app/be/student-api
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - student-api-node-modules:/workspace/node_modules
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # INTERNAL API
+  # ---------------------------------------------------------
+  internal-api:
+    build:
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+    env_file:
+      - ../files/internal-api.env
+    environment:
+      PORT: 4002
+      NODE_ENV: development
+      DB_HOST: internal-db
+      DB_PORT: 5432
+      DB_USER: ${INTERNAL_DB_USER:-mis_internal}
+      DB_PASSWORD: ${INTERNAL_DB_PASSWORD}
+      DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+    expose:
+      - "4002"
+    depends_on:
+      internal-db:
+        condition: service_healthy
+    networks:
+      - internal-net
+      - keycloak-admin-net
+    volumes:
+      - ./app/be/internal-api:/workspace/app/be/internal-api
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - internal-api-node-modules:/workspace/node_modules
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # SYSTEM HEALTH MONITOR
+  # ---------------------------------------------------------
+  system-monitor:
+    build:
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+    env_file:
+      - ../files/internal-api.env
+    environment:
+      NODE_ENV: development
+      DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+      MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
+      MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
+      MONITOR_STUDENT_HEALTH_URL: http://student-api:4001/health
+      MONITOR_KEYCLOAK_HEALTH_URL: http://keycloak:8080/realms/mis-student-portal
+      MONITOR_INTERVAL_MS: 30000
+      MONITOR_FAILURE_THRESHOLD: 2
+      MONITOR_STARTUP_GRACE_MS: 90000
+    command: ["npm", "run", "monitor"]
+    restart: unless-stopped
+    networks:
+      - internal-net
+      - external-net
+      - keycloak-admin-net
+
+  # ---------------------------------------------------------
+  # API GATEWAY
+  # Domain (Dokploy > Domains): API_DOMAIN dan AUTH_DOMAIN -> port 4000
+  # ---------------------------------------------------------
+  api-gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      PORT: 4000
+      CORS_ORIGIN: https://${APP_DOMAIN}
+      STUDENT_API_URL: http://student-api:4001
+      INTERNAL_API_URL: http://internal-api:4002
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_HOST: ${AUTH_DOMAIN}
+      KEYCLOAK_ISSUER: https://${AUTH_DOMAIN}/realms/mis-student-portal
+      KEYCLOAK_JWKS_INTERNAL_URL: http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX: 100
+    expose:
+      - "4000"
+    depends_on:
+      - keycloak
+      - student-api
+      - internal-api
+    labels:
+      - traefik.docker.network=dokploy-network
+    networks:
+      - dokploy-network
+      - edge-net
+      - auth-net
+      - external-net
+      - internal-net
+    volumes:
+      - ./gateway:/workspace/gateway
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - gateway-node-modules:/workspace/node_modules
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # FRONTEND - Next.js
+  # Domain (Dokploy > Domains): APP_DOMAIN -> port 3000
+  # NEXT_PUBLIC_* juga dikirim sebagai build arg (ditanam saat build).
+  # Dockerfile frontend perlu: ARG NEXT_PUBLIC_... + ENV NEXT_PUBLIC_...
+  # ---------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: app/fe/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: https://${API_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_URL: https://${AUTH_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: https://${API_DOMAIN}
+      NEXT_PUBLIC_KEYCLOAK_URL: https://${AUTH_DOMAIN}
+      NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+    expose:
+      - "3000"
+    depends_on:
+      - api-gateway
+    labels:
+      - traefik.docker.network=dokploy-network
+    networks:
+      - dokploy-network
+      - edge-net
+    volumes:
+      - ./app/fe:/workspace/app/fe
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - frontend-node-modules:/workspace/node_modules
+      - frontend-next:/workspace/app/fe/.next
+    restart: unless-stopped
+
+
+volumes:
+  student-db-data:
+  internal-postgres-data:
+  keycloak-postgres-data:
+  frontend-node-modules:
+  frontend-next:
+  gateway-node-modules:
+  student-api-node-modules:
+  internal-api-node-modules:
+
+networks:
+  dokploy-network:
+    external: true
+  edge-net:
+  auth-net:
+  external-net:
+  internal-net:
+  keycloak-admin-net:
