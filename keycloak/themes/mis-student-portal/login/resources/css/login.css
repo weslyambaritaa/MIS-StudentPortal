@@ -521,6 +521,83 @@ body.mis-login-page {
   cursor: pointer;
 }
 
+.profile-form-wrap,
+.profile-form,
+.profile-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.profile-form-wrap {
+  gap: 24px;
+  max-width: 384px;
+}
+
+.profile-form-wrap .brand-logo,
+.profile-form-wrap .login-message {
+  margin-bottom: 0;
+}
+
+.profile-heading h2 {
+  margin: 0 0 4px;
+  color: #4b5563;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.profile-heading p,
+.profile-required-note {
+  margin: 0;
+  color: rgba(24, 24, 27, 0.6);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.profile-required-note span,
+.profile-field .required {
+  color: #e11d48;
+}
+
+.profile-field [id^="input-error-"] {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.profile-field select,
+.profile-field textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #e11d48;
+  border-radius: 18px;
+  background: #fafafa;
+  color: #27272a;
+  font: 400 14px/20px "DM Sans", Arial, sans-serif;
+}
+
+.profile-field input:disabled,
+.profile-field select:disabled,
+.profile-field textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.profile-field input[type="checkbox"],
+.profile-field input[type="radio"] {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  vertical-align: middle;
+  accent-color: #e11d48;
+}
+
 @media (max-width: 900px) {
   .login-shell {
     grid-template-columns: minmax(0, 1fr) minmax(400px, 44%);

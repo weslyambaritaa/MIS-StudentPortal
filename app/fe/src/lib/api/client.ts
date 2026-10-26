@@ -12,6 +12,9 @@ export async function apiRequest<T>(
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      // API responses are user- and role-specific. Avoid conditional browser
+      // requests (304) across the separate api.localhost origin.
+      cache: init.cache ?? "no-store",
       headers: {
         ...init.headers,
         Authorization: `Bearer ${accessToken}`,

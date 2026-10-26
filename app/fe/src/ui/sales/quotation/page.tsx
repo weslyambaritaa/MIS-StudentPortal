@@ -190,12 +190,19 @@ export default function QuotationPage() {
     const created = editor === null;
     const previousStatus = editor?.item.status;
     try {
-      const body = JSON.stringify(form);
+      const body = JSON.stringify({
+        quotationCode: form.quotationCode,
+        accountId: form.accountId,
+        picId: form.picId,
+        classType: form.classType,
+        lines: form.lines,
+      });
       const saved = await api<{ item: { id: string } }>(
         created ? "/api/v1/internal/quotations" : `/api/v1/internal/quotations/${editor!.item.id}`,
         { method: created ? "POST" : "PUT", body }
       );
-      if (!created) {
+      // Sending the quotation already sets WAITING on the server.
+      if (!created && form.status !== "WAITING") {
         await api(`/api/v1/internal/quotations/${saved.item.id}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status: form.status }),

@@ -5,6 +5,7 @@ import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
+import { RequestForm } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -62,10 +63,10 @@ function parseInput(body: unknown): FormInput {
       roomPc: Joi.string().valid("WITH", "WITHOUT").allow(null).required(),
       roomServices: Joi.array().items(Joi.string().valid(...ROOM_SERVICES)).required(),
       locationType: Joi.string().valid("INTERNAL", "CLIENT", "ONLINE").required(),
-      locationName: Joi.string().max(150).required(),
-      locationAddress: Joi.string().max(500).required(),
+      locationName: Joi.string().allow("").max(150).required(),
+      locationAddress: Joi.string().allow("").max(500).required(),
       specialInstruction: Joi.string().max(4000).optional(),
-      sessions: Joi.array().max(100).items(Joi.object({ date: Joi.string().pattern(/^(?:\\d{4}-\\d{2}-\\d{2})?$/).required() }).unknown(false)).required(),
+      sessions: Joi.array().max(100).items(Joi.object({ date: Joi.string().pattern(/^(?:\d{4}-\d{2}-\d{2})?$/).required() }).unknown(false)).required(),
     }).unknown(false)).required(),
   }).unknown(false), body);
   const formType = raw.formType === "REGISTRATION" ? "REGISTRATION" : raw.formType === "REQUEST" || raw.formType === undefined ? "REQUEST" : null;
@@ -254,7 +255,7 @@ requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.
   const id = randomUUID(); const now = new Date();
   await sequelize.transaction(async (transaction) => {
     const requestFormNumber = await nextRequestFormNumber(transaction);
-    await sequelize.query("INSERT INTO request_form (id,request_form_number,form_type,quotation_id,created_by_subject,reviewed_by_subject,attachment_file,training_title,request_date,language,training_type,number_student,room_rental,special_instruction,approved_at,account_id,pic_profile_id,status,po_reference,review_note,created_at,updated_at) VALUES (:id,:requestFormNumber,:formType,:quotationId,:subject,NULL,NULL,:trainingTitle,NULL,NULL,NULL,NULL,0,NULL,NULL,:accountId,:picId,'DRAFT',:poReference,NULL,:now,:now)", { replacements: { id, requestFormNumber, formType: input.formType, quotationId: input.quotationId, subject: req.auth!.userId, accountId, picId, trainingTitle, poReference: input.poReference || null, now }, transaction });
+    await sequelize.query("INSERT INTO request_form (id,request_form_number,form_type,quotation_id,created_by_subject,reviewed_by_subject,attachment_file,training_title,request_date,language,training_type,number_student,room_rental,special_instruction,approved_at,account_id,pic_profile_id,status,po_reference,review_note,created_at,updated_at) VALUES (:id,:requestFormNumber,:formType,:quotationId,:subject,NULL,NULL,:trainingTitle,NULL,NULL,NULL,NULL,FALSE,NULL,NULL,:accountId,:picId,'DRAFT',:poReference,NULL,:now,:now)", { replacements: { id, requestFormNumber, formType: input.formType, quotationId: input.quotationId, subject: req.auth!.userId, accountId, picId, trainingTitle, poReference: input.poReference || null, now }, transaction });
     await saveCourses(id, courseInputs, transaction);
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "REQUEST_FORM", objectId: id, after: { status: "DRAFT", quotation_id: input.quotationId, account_id: accountId, pic_profile_id: picId, course_count: courseInputs.length }, processName: "request-form-create" }, transaction);
   });
@@ -559,7 +560,7 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
     for (let index = 0; index < dates.length; index += 1) {
       const sessionId = randomUUID();
       await sequelize.query(
-        "INSERT INTO training_session (id,training_id,session_number,starts_at,ends_at,class_location,created_at,updated_at) VALUES (:id,:trainingId,:number,CAST(:date AS date)+(:startMinutes*INTERVAL '1 minute'),CAST(:date AS date)+(:endMinutes*INTERVAL '1 minute'),:classLocation,:now,:now)",
+        "INSERT INTO training_session (id,training_id,session_number,starts_at,ends_at,class_location,created_at,updated_at) VALUES (:id,:trainingId,:number,CAST(:date AS date) + CAST(:startMinutes AS integer) * INTERVAL '1 minute',CAST(:date AS date) + CAST(:endMinutes AS integer) * INTERVAL '1 minute',:classLocation,:now,:now)",
         { replacements: { id: sessionId, trainingId, number: index + 1, date: dates[index], startMinutes: Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)), endMinutes: Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5)), classLocation: course.delivery_type.startsWith("ONLINE") ? "ONLINE" : "OFFLINE", now }, transaction },
       );
       if (roomId) await sequelize.query(
@@ -572,8 +573,11 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
       { replacements: { id: randomUUID(), trainingId, trainerId, subject: req.auth!.userId, now }, transaction },
     );
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "TRAINING", objectId: trainingId, after: { request_form_id: form.item.id, request_form_number: form.item.request_form_number, account_id: form.item.account_id, pic_profile_id: form.item.pic_profile_id, course_id: course.course_id, expected_students: Number(course.amount_student), status: "SCHEDULED", training_type: course.delivery_type, trainer_id: trainerId, room_id: roomId, base_fee: baseFee, session_dates: dates }, processName: "request-form-approve-create-training" }, transaction);
-    const updated = await sequelize.query<{ id: string }>("UPDATE request_form SET status='APPROVED',review_note=NULL,reviewed_by_subject=:subject,approved_at=:now,sla_due_at=NULL,sla_notified_at=NULL,updated_at=:now RETURNING id WHERE id=:id AND status='WAITING'", { replacements: { id: form.item.id, subject: req.auth!.userId, now }, type: QueryTypes.SELECT, transaction });
-    if (!updated.length) throw new AppError(409, "The Request Form has already been processed");
+    const [updatedCount] = await RequestForm.update(
+      { status: "APPROVED", review_note: null, reviewed_by_subject: req.auth!.userId, approved_at: now, sla_due_at: null, sla_notified_at: null },
+      { where: { id: form.item.id, status: "WAITING" }, transaction },
+    );
+    if (!updatedCount) throw new AppError(409, "The Request Form has already been processed");
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: form.item.id, before: { status: "WAITING", training_id: null, trainer_id: null, room_id: null, base_fee: null }, after: { status: "APPROVED", training_id: trainingId, trainer_id: trainerId, room_id: roomId, base_fee: baseFee }, processName: "request-form-approve" }, transaction);
   });
   return res.json({ item: { id: form.item.id, requestFormNumber: form.item.request_form_number, status: "APPROVED", trainingId } });
