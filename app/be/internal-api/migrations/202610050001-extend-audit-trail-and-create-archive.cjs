@@ -26,7 +26,7 @@ module.exports = {
         data_before: { type: Sequelize.TEXT("long"), allowNull: true },
         data_after: { type: Sequelize.TEXT("long"), allowNull: true },
         created_at: { type: Sequelize.DATE, allowNull: false },
-        archived_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("GETUTCDATE()") },
+        archived_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
       }, { transaction });
       await queryInterface.addIndex("audit_trail_archive", ["created_at", "id"], { name: "ix_audit_trail_archive_created", transaction });
       await queryInterface.addIndex("audit_trail_archive", ["active_role", "created_at"], { name: "ix_audit_trail_archive_role_created", transaction });

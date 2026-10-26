@@ -31,7 +31,7 @@ function codeFor(value: string | number | bigint): string {
 
 async function nextIndustryCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
   const rows = await sequelize.query<{ value: number | string | bigint }>(
-    "SELECT NEXT VALUE FOR [dbo].[industry_code_seq] AS [value]",
+    "SELECT nextval('industry_code_seq') AS value",
     { type: QueryTypes.SELECT, transaction },
   );
   return codeFor(rows[0].value);
@@ -51,27 +51,27 @@ industriesRouter.get("/", authorizeCapability("INDUSTRY", ACCESS_ACTIONS.VIEW), 
   const where: string[] = [];
   const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
   if (search) {
-    where.push("(i.[industry_code] LIKE :search OR i.[name] LIKE :search)");
+    where.push("(i.industry_code ILIKE :search OR i.name ILIKE :search)");
     replacements.search = `%${search.replace(/[\[%_]/g, (character) => `[${character}]`)}%`;
   }
-  if (status && status !== "ALL") { where.push("i.[status] = :status"); replacements.status = status; }
+  if (status && status !== "ALL") { where.push("i.status = :status"); replacements.status = status; }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const countRows = await sequelize.query<{ total: number | string }>(
-    `SELECT COUNT_BIG(1) AS [total] FROM [dbo].[industry] AS i ${clause}`,
+    `SELECT COUNT(1) AS total FROM industry AS i ${clause}`,
     { replacements, type: QueryTypes.SELECT },
   );
   const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT i.[id], i.[industry_code], i.[name], i.[status], i.[created_at], i.[updated_at],
-            COUNT(a.[id]) AS [amount_account],
-            CASE WHEN EXISTS (SELECT 1 FROM [dbo].[account_industry_history] h WHERE h.[industry_id] = i.[id])
-                 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS [ever_used]
-       FROM [dbo].[industry] AS i
-       LEFT JOIN [dbo].[account] AS a ON a.[industry_id] = i.[id]
+    `SELECT i.id, i.industry_code, i.name, i.status, i.created_at, i.updated_at,
+            COUNT(a.id) AS amount_account,
+            CASE WHEN EXISTS (SELECT 1 FROM account_industry_history h WHERE h.industry_id = i.id)
+                 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS ever_used
+       FROM industry AS i
+       LEFT JOIN account AS a ON a.industry_id = i.id
        ${clause}
-       GROUP BY i.[id], i.[industry_code], i.[name], i.[status], i.[created_at], i.[updated_at]
-       ORDER BY i.[industry_code] ASC
-       OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+       GROUP BY i.id, i.industry_code, i.name, i.status, i.created_at, i.updated_at
+       ORDER BY i.industry_code ASC
+       LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
   return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });

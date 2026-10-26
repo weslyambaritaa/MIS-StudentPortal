@@ -26,8 +26,8 @@ module.exports = {
       await qi.addIndex("student_master_profile", ["email"], { name: "uq_student_master_email", unique: true, transaction });
       await qi.addIndex("student_master_profile", ["account_id", "name"], { name: "ix_student_master_account", transaction });
 
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] DROP CONSTRAINT [ck_role_access_matrix_resource_group]", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_resource_group] CHECK ([resource_group] IN ('ACCOUNT','PIC','STUDENT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix DROP CONSTRAINT ck_role_access_matrix_resource_group", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_resource_group CHECK (resource_group IN ('ACCOUNT','PIC','STUDENT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
       await qi.bulkInsert("role_access_matrix", roles.map((role, index) => ({
         id: `61090000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
         role,
@@ -45,8 +45,8 @@ module.exports = {
   async down(qi) {
     await qi.sequelize.transaction(async (transaction) => {
       await qi.bulkDelete("role_access_matrix", { resource_group: "STUDENT" }, { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] DROP CONSTRAINT [ck_role_access_matrix_resource_group]", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_resource_group] CHECK ([resource_group] IN ('ACCOUNT','PIC','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix DROP CONSTRAINT ck_role_access_matrix_resource_group", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_resource_group CHECK (resource_group IN ('ACCOUNT','PIC','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
       await qi.dropTable("student_master_profile", { transaction });
     });
   },

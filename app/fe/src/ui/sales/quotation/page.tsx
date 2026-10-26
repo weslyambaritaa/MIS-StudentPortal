@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Building2, ChevronDown, Eye, GraduationCap, Pencil, Plus, Search, Trash2, Users, Video, X } from "lucide-react";
+import { ChevronDown, Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -468,31 +468,24 @@ export default function QuotationPage() {
             </div>
             <section className="flex flex-col gap-1">
               <h3 className="text-base font-medium text-rose-600">Class / Course Type</h3>
-              <div className="rounded-full border border-rose-600 bg-neutral-50 p-1">
-                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
-                  {TYPES.map((type) => {
-                    const TypeIcon =
-                      type === "PRIVATE"
-                        ? GraduationCap
-                        : type === "PUBLIC"
-                          ? Users
-                          : type === "INHOUSE"
-                            ? Building2
-                            : Video;
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        aria-pressed={form.classType === type}
-                        onClick={() => setForm((v) => ({ ...v, classType: type }))}
-                        className={`flex h-9 min-w-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-medium ${form.classType === type ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600"}`}
-                      >
-                        <TypeIcon size={14} className="shrink-0" />
-                        <span className="whitespace-nowrap">{typeLabel(type)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="relative">
+                <select
+                  className={`${field} appearance-none pr-10`}
+                  value={form.classType}
+                  onChange={(e) =>
+                    setForm((v) => ({ ...v, classType: e.target.value as (typeof TYPES)[number] }))
+                  }
+                >
+                  {TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {typeLabel(type)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
+                />
               </div>
             </section>
             <div className="h-px w-full bg-zinc-950/20" />

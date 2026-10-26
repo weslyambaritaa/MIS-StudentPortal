@@ -1,5 +1,6 @@
 import { Op, type Transaction } from "sequelize";
 import { sequelize } from "../../database/sequelize";
+import { backgroundFailure } from "../monitoring/background-failure";
 import { AuditTrail, AuditTrailArchive } from "../../database/models";
 
 const BATCH_SIZE = 500;
@@ -75,9 +76,10 @@ export async function archiveExpiredAuditTrail(now = new Date()) {
 export function startAuditTrailArchiveWorker() {
   const run = () => {
     void archiveExpiredAuditTrail().then((count) => {
+      backgroundFailure.clear("audit-trail-archive");
       if (count) console.info(`Archived ${count} expired Audit Trail records`);
     }).catch((error: unknown) => {
-      console.error("Audit Trail archive failed; active records were retained for retry", error);
+      backgroundFailure.record("audit-trail-archive", error);
     });
   };
   run();

@@ -18,13 +18,18 @@ export function useAdminApi() {
     }
     if (!keycloak.token) throw new Error("Token akses tidak tersedia");
 
-    return fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      cache: "no-store",
-      headers: {
-        ...init.headers,
-        Authorization: `Bearer ${keycloak.token}`,
-      },
-    });
+    try {
+      return await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        cache: "no-store",
+        headers: {
+          ...init.headers,
+          Authorization: `Bearer ${keycloak.token}`,
+        },
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      throw new Error("We couldn't connect to the service. Check your connection and try again. If the problem continues, contact Developer Support.");
+    }
   }, [hasAccessLogAdminRole, keycloak]);
 }

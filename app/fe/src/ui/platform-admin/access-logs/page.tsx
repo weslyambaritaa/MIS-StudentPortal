@@ -49,10 +49,14 @@ export default function AccessLogsPage() {
     setError(null);
     try {
       const response = await adminRequest(`/api/v1/admin/access-logs?${toQuery(currentFilters, currentPage)}`);
-      if (!response.ok) throw new Error(`Gagal memuat access log (${response.status})`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: { message?: string; requestId?: string }; message?: string };
+        const reference = body.error?.requestId ? ` (Reference: ${body.error.requestId})` : "";
+        throw new Error(`${body.error?.message ?? body.message ?? `Could not load access logs (${response.status})`}${reference}`);
+      }
       setResult(await response.json() as AccessLogResponse);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Gagal memuat access log");
+      setError(cause instanceof Error ? cause.message : "Could not load access logs.");
     } finally {
       setLoading(false);
     }
@@ -71,8 +75,9 @@ export default function AccessLogsPage() {
     try {
       const response = await adminRequest(`/api/v1/admin/access-logs?${toQuery(appliedFilters, 1, "csv")}`);
       if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message ?? `Ekspor gagal (${response.status})`);
+        const body = await response.json().catch(() => ({})) as { error?: { message?: string; requestId?: string }; message?: string };
+        const reference = body.error?.requestId ? ` (Reference: ${body.error.requestId})` : "";
+        throw new Error(`${body.error?.message ?? body.message ?? `Export failed (${response.status})`}${reference}`);
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -82,7 +87,7 @@ export default function AccessLogsPage() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ekspor gagal");
+      setError(cause instanceof Error ? cause.message : "Export failed");
     }
   };
 

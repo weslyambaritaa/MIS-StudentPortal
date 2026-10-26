@@ -1,5 +1,6 @@
 import { Op, type Transaction } from "sequelize";
 import { sequelize } from "../../database/sequelize";
+import { backgroundFailure } from "../monitoring/background-failure";
 import { SecurityAccessLog, SecurityAccessLogArchive } from "../../database/models";
 
 const ARCHIVE_BATCH_SIZE = 500;
@@ -79,9 +80,10 @@ export async function archiveExpiredSecurityAccessLogs(now = new Date()): Promis
 export function startSecurityAccessLogArchiveWorker(): () => void {
   const run = () => {
     void archiveExpiredSecurityAccessLogs().then((count) => {
+      backgroundFailure.clear("security-access-log-archive");
       if (count > 0) console.info(`Archived ${count} expired security access log rows`);
     }).catch((error: unknown) => {
-      console.error("Security access log archival failed; active rows were retained for retry", error);
+      backgroundFailure.record("security-access-log-archive", error);
     });
   };
   run();

@@ -7,10 +7,9 @@ Starter monorepo untuk Student Portal & MIS.
 - `app/fe` — Next.js + NextAuth
 - `gateway` — Express API Gateway
 - `app/be/student-api` — external/student-facing API + PostgreSQL
-- `app/be/internal-api` — internal MIS API + SQL Server
+- `app/be/internal-api` — internal MIS API + PostgreSQL
 - `keycloak` — IAM/SSO
-- `keycloak-db` — SQL Server khusus Keycloak
-- `infrastructure/database-bootstrap` — membuat `internal_db` dan `keycloak_db` tanpa init SQL
+- `keycloak-db` — PostgreSQL khusus Keycloak
 - `packages/*` — shared types/config/logger
 
 ## Flow
@@ -27,7 +26,7 @@ Frontend → Gateway (`api.localhost:4000`) → Student API / Internal API → D
 - Gateway tidak memiliki ORM/database bisnis.
 - `student-api` hanya terhubung ke `student-db`.
 - `internal-api` hanya terhubung ke `internal-db`.
-- Keycloak memakai database SQL Server sendiri.
+- Keycloak memakai database PostgreSQL sendiri.
 - Queue/domain events nantinya dipublish backend, bukan Gateway.
 
 ## Local hostname
@@ -111,10 +110,12 @@ npm run seed:student
 
 Seeder menolak berjalan ketika `NODE_ENV=production`.
 
-## Optional Redis/RabbitMQ
+The student API, internal API, and Keycloak each use a separate PostgreSQL database service. The internal MIS and Keycloak PostgreSQL data use new Docker volumes so the old SQL Server volumes remain untouched.
 
-Core startup does not run Redis or RabbitMQ. Enable them when needed:
+## System error monitoring
 
-```bash
-docker compose --profile platform up -d
-```
+The `system-monitor` container checks the API gateway, internal API and its database, student API and its database, and Keycloak every 30 seconds. Two consecutive failed checks open an incident and trigger an email. Repeated API 5xx responses are grouped by service and endpoint; five within five minutes trigger an alert, with a ten-minute cooldown.
+
+Set `DEVELOPER_SUPPORT_EMAIL` in the root `.env` to the Developer Support mailbox. SMTP settings are read from `app/be/internal-api/.env` (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, and `MAIL_FROM_ADDRESS`). Without a recipient or SMTP settings, incidents remain in container logs and email delivery is skipped.
+
+Backend errors use the response shape `{ "error": { "code": "...", "message": "...", "requestId": "..." } }`. The request ID is also returned in the `x-request-id` response header and is included in structured logs.

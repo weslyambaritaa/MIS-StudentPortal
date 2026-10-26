@@ -4,15 +4,15 @@ module.exports = {
   async up(queryInterface) {
     await queryInterface.sequelize.transaction(async (transaction) => {
       await queryInterface.sequelize.query(
-        "UPDATE [dbo].[trainer_profile] SET [rating] = 0 WHERE [rating] IS NULL",
+        "UPDATE trainer_profile SET rating = 0 WHERE rating IS NULL",
         { transaction },
       );
       await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[trainer_profile] ALTER COLUMN [rating] DECIMAL(3,2) NOT NULL",
+        "ALTER TABLE trainer_profile ALTER COLUMN rating SET NOT NULL",
         { transaction },
       );
       await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[trainer_profile] ADD CONSTRAINT [df_trainer_profile_rating] DEFAULT (0) FOR [rating]",
+        "ALTER TABLE trainer_profile ALTER COLUMN rating SET DEFAULT 0",
         { transaction },
       );
     });
@@ -21,11 +21,11 @@ module.exports = {
   async down(queryInterface) {
     await queryInterface.sequelize.transaction(async (transaction) => {
       await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[trainer_profile] DROP CONSTRAINT [df_trainer_profile_rating]",
+        "ALTER TABLE trainer_profile ALTER COLUMN rating DROP DEFAULT",
         { transaction },
       );
       await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[trainer_profile] ALTER COLUMN [rating] DECIMAL(3,2) NULL",
+        "ALTER TABLE trainer_profile ALTER COLUMN rating DROP NOT NULL",
         { transaction },
       );
     });

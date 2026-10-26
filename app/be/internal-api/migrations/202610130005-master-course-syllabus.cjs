@@ -6,7 +6,7 @@ module.exports = {
     try {
       await qi.addColumn("course", "course_code", { type: S.STRING(50), allowNull: true }, { transaction });
       await qi.sequelize.query(
-        "UPDATE [dbo].[course] SET [course_code] = CONCAT('CRS-', UPPER(RIGHT(REPLACE(CONVERT(VARCHAR(36), [id]), '-', ''), 8))) WHERE [course_code] IS NULL",
+        "UPDATE course SET course_code = 'CRS-' || UPPER(RIGHT(REPLACE(id::text, '-', ''), 8)) WHERE course_code IS NULL",
         { transaction },
       );
       await qi.changeColumn("course", "course_code", { type: S.STRING(50), allowNull: false }, { transaction });

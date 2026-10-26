@@ -9,7 +9,7 @@ module.exports = {
   async up(queryInterface) {
     for (const relation of relations) {
       const [rows] = await queryInterface.sequelize.query(
-        "SELECT fk.name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fk.object_id=fkc.constraint_object_id JOIN sys.tables pt ON pt.object_id=fkc.parent_object_id JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id WHERE pt.name=:tableName AND pc.name=:columnName",
+        "SELECT con.conname AS name FROM pg_constraint con JOIN pg_class tbl ON tbl.oid=con.conrelid JOIN pg_attribute col ON col.attrelid=tbl.oid AND col.attnum=ANY(con.conkey) WHERE con.contype='f' AND tbl.relname=:tableName AND col.attname=:columnName",
         { replacements: { tableName: "training", columnName: relation.column } },
       );
       if (!rows.length) {
@@ -23,7 +23,7 @@ module.exports = {
   async down(queryInterface) {
     for (const relation of relations) {
       const [rows] = await queryInterface.sequelize.query(
-        "SELECT fk.name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fk.object_id=fkc.constraint_object_id JOIN sys.tables pt ON pt.object_id=fkc.parent_object_id JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id WHERE pt.name=:tableName AND pc.name=:columnName",
+        "SELECT con.conname AS name FROM pg_constraint con JOIN pg_class tbl ON tbl.oid=con.conrelid JOIN pg_attribute col ON col.attrelid=tbl.oid AND col.attnum=ANY(con.conkey) WHERE con.contype='f' AND tbl.relname=:tableName AND col.attname=:columnName",
         { replacements: { tableName: "training", columnName: relation.column } },
       );
       for (const row of rows) await queryInterface.removeConstraint("training", row.name);

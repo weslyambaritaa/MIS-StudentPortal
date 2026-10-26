@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "predev": "npm run build --workspace @mis/shared-types",
+    "predev": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "dev": "tsx watch src/server.ts",
-    "prebuild": "npm run build --workspace @mis/shared-types",
+    "prebuild": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "build": "tsc",
-    "prestart": "npm run build --workspace @mis/shared-types",
+    "prestart": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "start": "node dist/server.js",
     "test": "npm run build && node --test test/*.test.cjs",
     "migrate": "sequelize-cli db:migrate --config config/database.cjs",
@@ -15,11 +15,13 @@
     "seed": "sequelize-cli db:seed:all --config config/database.cjs"
   },
   "dependencies": {
+    "@mis/logger": "*",
     "@mis/shared-types": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
+    "joi": "^17.13.8",
     "pg": "^8.16.0",
     "pg-hstore": "^2.3.4",
     "pino-http": "^10.4.0",

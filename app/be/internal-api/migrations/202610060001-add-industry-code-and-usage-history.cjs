@@ -4,24 +4,23 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     const transaction = await queryInterface.sequelize.transaction();
     try {
-      await queryInterface.addColumn("industry", "industry_code", {
-        type: Sequelize.STRING(20),
-        allowNull: true,
-        transaction,
-      });
+      const industryColumns = await queryInterface.describeTable("industry", { transaction });
+      if (!industryColumns.industry_code) {
+        await queryInterface.addColumn("industry", "industry_code", {
+          type: Sequelize.STRING(20),
+          allowNull: true,
+        }, { transaction });
+      }
 
       const [rows] = await queryInterface.sequelize.query(
-        "SELECT COUNT_BIG(1) AS [count] FROM [dbo].[industry]",
+        "SELECT COUNT(*) AS count FROM industry",
         { transaction },
       );
       const startAt = Number(rows[0]?.count ?? 0) + 1;
       await queryInterface.sequelize.query(
-        `WITH numbered AS (
-           SELECT [id], ROW_NUMBER() OVER (ORDER BY [created_at], [id]) AS [n]
-           FROM [dbo].[industry]
-         )
-         UPDATE i SET [industry_code] = 'IND-' + RIGHT('00' + CAST(numbered.[n] AS VARCHAR(18)), 2)
-         FROM [dbo].[industry] AS i JOIN numbered ON numbered.[id] = i.[id]`,
+        `WITH numbered AS (SELECT id, ROW_NUMBER() OVER (ORDER BY created_at, id) AS n FROM industry)
+         UPDATE industry AS i SET industry_code = 'IND-' || LPAD(numbered.n::text, 2, '0')
+         FROM numbered WHERE numbered.id = i.id`,
         { transaction },
       );
       await queryInterface.changeColumn("industry", "industry_code", {
@@ -34,7 +33,7 @@ module.exports = {
         transaction,
       });
       await queryInterface.sequelize.query(
-        `CREATE SEQUENCE [dbo].[industry_code_seq] AS BIGINT START WITH ${startAt} INCREMENT BY 1;`,
+        `CREATE SEQUENCE industry_code_seq START WITH ${startAt} INCREMENT BY 1`,
         { transaction },
       );
 
@@ -48,33 +47,30 @@ module.exports = {
           onUpdate: "CASCADE",
           onDelete: "NO ACTION",
         },
-        assigned_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("SYSUTCDATETIME()") },
+        assigned_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
       }, { transaction });
       await queryInterface.addIndex("account_industry_history", ["industry_id"], { name: "ix_account_industry_history_industry", transaction });
       await queryInterface.addIndex("account_industry_history", ["account_id", "assigned_at"], { name: "ix_account_industry_history_account", transaction });
       await queryInterface.sequelize.query(
-        `INSERT INTO [dbo].[account_industry_history] ([id], [account_id], [industry_id], [assigned_at])
-         SELECT NEWID(), [id], [industry_id], [updated_at]
-         FROM [dbo].[account]
-         WHERE [industry_id] IS NOT NULL`,
+        `INSERT INTO account_industry_history (id, account_id, industry_id, assigned_at)
+         SELECT gen_random_uuid(), id, industry_id, updated_at FROM account WHERE industry_id IS NOT NULL`,
         { transaction },
       );
       await queryInterface.sequelize.query(
-        `CREATE TRIGGER [dbo].[tr_account_industry_history]
-         ON [dbo].[account]
-         AFTER INSERT, UPDATE
-         AS
+        `CREATE OR REPLACE FUNCTION record_account_industry_history() RETURNS trigger AS $$
          BEGIN
-           SET NOCOUNT ON;
-           INSERT INTO [dbo].[account_industry_history] ([id], [account_id], [industry_id], [assigned_at])
-           SELECT NEWID(), i.[id], i.[industry_id], SYSUTCDATETIME()
-           FROM inserted AS i
-           LEFT JOIN deleted AS d ON d.[id] = i.[id]
-           WHERE i.[industry_id] IS NOT NULL
-             AND (d.[id] IS NULL OR d.[industry_id] IS NULL OR d.[industry_id] <> i.[industry_id]);
-         END;`,
+           IF TG_OP = 'INSERT' OR NEW.industry_id IS DISTINCT FROM OLD.industry_id THEN
+             IF NEW.industry_id IS NOT NULL THEN
+               INSERT INTO account_industry_history (id, account_id, industry_id, assigned_at)
+               VALUES (gen_random_uuid(), NEW.id, NEW.industry_id, CURRENT_TIMESTAMP);
+             END IF;
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
         { transaction },
       );
+      await queryInterface.sequelize.query("CREATE TRIGGER tr_account_industry_history AFTER INSERT OR UPDATE OF industry_id ON account FOR EACH ROW EXECUTE FUNCTION record_account_industry_history()", { transaction });
 
       await transaction.commit();
     } catch (error) {
@@ -85,15 +81,16 @@ module.exports = {
 
   async down(queryInterface) {
     const [rows] = await queryInterface.sequelize.query(
-      "SELECT TOP (1) [id] FROM [dbo].[account_industry_history]",
+      "SELECT id FROM account_industry_history LIMIT 1",
     );
     if (rows.length) throw new Error("Refusing to remove Industry usage history or generated codes after use");
     const transaction = await queryInterface.sequelize.transaction();
     try {
-      await queryInterface.sequelize.query("DROP TRIGGER [dbo].[tr_account_industry_history]", { transaction });
+      await queryInterface.sequelize.query("DROP TRIGGER tr_account_industry_history ON account", { transaction });
+      await queryInterface.sequelize.query("DROP FUNCTION record_account_industry_history()", { transaction });
       await queryInterface.dropTable("account_industry_history", { transaction });
       await queryInterface.removeIndex("industry", "uq_industry_code", { transaction });
-      await queryInterface.sequelize.query("DROP SEQUENCE [dbo].[industry_code_seq]", { transaction });
+      await queryInterface.sequelize.query("DROP SEQUENCE industry_code_seq", { transaction });
       await queryInterface.removeColumn("industry", "industry_code", { transaction });
       await transaction.commit();
     } catch (error) {

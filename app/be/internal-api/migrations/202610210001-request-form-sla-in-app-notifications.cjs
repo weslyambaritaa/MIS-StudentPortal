@@ -33,7 +33,7 @@ module.exports = {
         title: { type: S.STRING(150), allowNull: false },
         message: { type: S.STRING(500), allowNull: false },
         target_path: { type: S.STRING(255), allowNull: false },
-        created_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("GETUTCDATE()") },
+        created_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("CURRENT_TIMESTAMP") },
         read_at: { type: S.DATE, allowNull: true },
       }, { transaction });
       await qi.addIndex("in_app_notification", ["recipient_subject", "event_key"], { name: "uq_in_app_notification_recipient_event", unique: true, transaction });

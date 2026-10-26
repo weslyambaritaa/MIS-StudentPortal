@@ -6,8 +6,8 @@ const matrixIds = roles.map((_, index) => `62130300-0000-4000-8000-${String(inde
 module.exports = {
   async up(qi, S) {
     await qi.sequelize.transaction(async (transaction) => {
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] DROP CONSTRAINT [ck_role_access_matrix_resource_group]", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_resource_group] CHECK ([resource_group] IN ('ACCOUNT','PIC','STUDENT','TRAINER','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix DROP CONSTRAINT ck_role_access_matrix_resource_group", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_resource_group CHECK (resource_group IN ('ACCOUNT','PIC','STUDENT','TRAINER','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
       await qi.bulkInsert("role_access_matrix", roles.map((role, index) => ({ id: matrixIds[index], role, resource_group: "TRAINER", can_view: role === "admin", can_create: role === "admin", can_edit: role === "admin", can_delete: role === "admin", created_at: new Date(), updated_at: new Date() })), { transaction });
       await qi.addColumn("trainer_profile", "trainer_code", { type: S.STRING(50), allowNull: true }, { transaction });
       await qi.addColumn("trainer_profile", "name", { type: S.STRING(200), allowNull: true }, { transaction });
@@ -16,9 +16,9 @@ module.exports = {
       await qi.addColumn("trainer_profile", "status", { type: S.STRING(20), allowNull: false, defaultValue: "ACTIVE" }, { transaction });
       await qi.addColumn("trainer_profile", "first_login_at", { type: S.DATE, allowNull: true }, { transaction });
       await qi.addColumn("trainer_profile", "activation_expires_at", { type: S.DATE, allowNull: true }, { transaction });
-      await qi.sequelize.query("CREATE UNIQUE INDEX [uq_trainer_profile_code] ON [dbo].[trainer_profile] ([trainer_code]) WHERE [trainer_code] IS NOT NULL", { transaction });
-      await qi.sequelize.query("CREATE UNIQUE INDEX [uq_trainer_profile_email] ON [dbo].[trainer_profile] ([email]) WHERE [email] IS NOT NULL", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[trainer_profile] ADD CONSTRAINT [ck_trainer_profile_status] CHECK ([status] IN ('PENDING','ACTIVE','INACTIVE'))", { transaction });
+      await qi.sequelize.query("CREATE UNIQUE INDEX uq_trainer_profile_code ON trainer_profile (trainer_code) WHERE trainer_code IS NOT NULL", { transaction });
+      await qi.sequelize.query("CREATE UNIQUE INDEX uq_trainer_profile_email ON trainer_profile (email) WHERE email IS NOT NULL", { transaction });
+      await qi.sequelize.query("ALTER TABLE trainer_profile ADD CONSTRAINT ck_trainer_profile_status CHECK (status IN ('PENDING','ACTIVE','INACTIVE'))", { transaction });
 
       await qi.createTable("trainer_certification", {
         id: { type: S.UUID, primaryKey: true, allowNull: false },
@@ -36,12 +36,12 @@ module.exports = {
   async down(qi) {
     await qi.sequelize.transaction(async (transaction) => {
       await qi.bulkDelete("role_access_matrix", { id: matrixIds }, { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] DROP CONSTRAINT [ck_role_access_matrix_resource_group]", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_resource_group] CHECK ([resource_group] IN ('ACCOUNT','PIC','STUDENT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix DROP CONSTRAINT ck_role_access_matrix_resource_group", { transaction });
+      await qi.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_resource_group CHECK (resource_group IN ('ACCOUNT','PIC','STUDENT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
       await qi.dropTable("trainer_certification", { transaction });
-      await qi.sequelize.query("ALTER TABLE [dbo].[trainer_profile] DROP CONSTRAINT [ck_trainer_profile_status]", { transaction });
-      await qi.sequelize.query("DROP INDEX [uq_trainer_profile_code] ON [dbo].[trainer_profile]", { transaction });
-      await qi.sequelize.query("DROP INDEX [uq_trainer_profile_email] ON [dbo].[trainer_profile]", { transaction });
+      await qi.sequelize.query("ALTER TABLE trainer_profile DROP CONSTRAINT ck_trainer_profile_status", { transaction });
+      await qi.sequelize.query("DROP INDEX uq_trainer_profile_code", { transaction });
+      await qi.sequelize.query("DROP INDEX uq_trainer_profile_email", { transaction });
       for (const column of ["activation_expires_at", "first_login_at", "status", "rating", "email", "name", "trainer_code"]) {
         await qi.removeColumn("trainer_profile", column, { transaction });
       }

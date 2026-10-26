@@ -2,6 +2,9 @@
   "realm": "mis-student-portal",
   "enabled": true,
   "displayName": "MIS Student Portal",
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en"],
+  "defaultLocale": "en",
   "loginTheme": "mis-student-portal",
   "loginWithEmailAllowed": true,
   "registrationEmailAsUsername": false,
@@ -12,7 +15,7 @@
   "failureFactor": 10,
   "bruteForceStrategy": "MULTIPLE",
   "waitIncrementSeconds": 60,
-  "maxFailureWaitSeconds": 300,
+  "maxFailureWaitSeconds": 60,
   "eventsEnabled": true,
   "eventsExpiration": 34560000,
   "enabledEventTypes": [
@@ -40,11 +43,10 @@
       "name": "MIS Student Portal Frontend",
       "enabled": true,
       "protocol": "openid-connect",
-      "publicClient": false,
-      "clientAuthenticatorType": "client-secret",
-      "secret": "local-dev-client-secret-change-me",
+      "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
+      "attributes": {"pkce.code.challenge.method": "S256"},
       "redirectUris": [
         "http://localhost:3000/api/auth/callback/keycloak",
         "http://localhost:3000/dashboard"

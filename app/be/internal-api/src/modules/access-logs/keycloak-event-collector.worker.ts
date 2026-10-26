@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { sequelize } from "../../database/sequelize";
 import { KeycloakEventSyncCheckpoint, SecurityAccessLog } from "../../database/models";
 import { env } from "../../config/env";
+import { backgroundFailure } from "../monitoring/background-failure";
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 5 * 60 * 1000;
@@ -114,7 +115,7 @@ async function importSource(source: "KEYCLOAK_USER" | "KEYCLOAK_ADMIN", token: s
       await SecurityAccessLog.findOrCreate({ where: { event_key: event.event_key }, defaults: event, transaction });
       if (source === "KEYCLOAK_USER" && event.event_type === "LOGIN" && event.outcome === "SUCCESS" && event.actor_subject) {
         await sequelize.query(
-          "UPDATE [dbo].[student_master_profile] SET [first_login_at] = COALESCE([first_login_at], :occurredAt), [last_login_at] = CASE WHEN [last_login_at] IS NULL OR [last_login_at] < :occurredAt THEN :occurredAt ELSE [last_login_at] END, [updated_at] = SYSUTCDATETIME() WHERE [keycloak_subject] = :subject",
+          "UPDATE student_master_profile SET first_login_at = COALESCE(first_login_at, :occurredAt), last_login_at = CASE WHEN last_login_at IS NULL OR last_login_at < :occurredAt THEN :occurredAt ELSE last_login_at END, updated_at = CURRENT_TIMESTAMP WHERE keycloak_subject = :subject",
           { replacements: { subject: event.actor_subject, occurredAt: event.occurred_at }, transaction },
         );
       }
@@ -146,9 +147,10 @@ export function startKeycloakEventCollector(): () => void {
     if (running) return;
     running = true;
     void collectKeycloakAccessEvents().then((count) => {
+      backgroundFailure.clear("keycloak-event-collector");
       if (count > 0) console.info(`Collected ${count} Keycloak audit events`);
     }).catch((error: unknown) => {
-      console.error("Keycloak event collection failed; checkpoint was not advanced for the failing source", error);
+      backgroundFailure.record("keycloak-event-collector", error);
     }).finally(() => { running = false; });
   };
   run();

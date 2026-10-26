@@ -19,7 +19,7 @@ module.exports = {
         request_id: { type: Sequelize.STRING(100), allowNull: true },
         details: { type: Sequelize.TEXT("long"), allowNull: true },
         received_at: { type: Sequelize.DATE, allowNull: false },
-        archived_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("GETUTCDATE()") },
+        archived_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
       }, { transaction });
 
       await queryInterface.addIndex("security_access_log_archive", ["event_key"], {

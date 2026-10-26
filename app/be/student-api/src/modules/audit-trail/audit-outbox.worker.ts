@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import type { AuditTrailEventEnvelope } from "@mis/shared-types";
 import { AuditOutbox } from "../../database/models/audit-outbox.model";
 import { requestInternalApi } from "../../integrations/internal-api/internal-api.client";
+import { backgroundFailure } from "../../monitoring";
 
 const DELIVERY_INTERVAL_MS = 10_000;
 const BATCH_SIZE = 25;
@@ -27,7 +28,7 @@ export async function deliverPendingAuditEvents(now = new Date()) {
       const attempts = row.attempts + 1;
       const backoff = Math.min(MAX_BACKOFF_MS, 1000 * (2 ** Math.min(attempts, 8)));
       await row.update({ attempts, next_attempt_at: new Date(now.getTime() + backoff) });
-      console.error(`Audit outbox delivery failed for ${row.event_id}; retry scheduled`, error);
+      backgroundFailure.record("audit-outbox-delivery", error);
     }
   }
   return delivered;
@@ -39,7 +40,7 @@ export function startAuditOutboxWorker() {
     if (running) return;
     running = true;
     void deliverPendingAuditEvents().catch((error: unknown) => {
-      console.error("Audit outbox polling failed", error);
+      backgroundFailure.record("audit-outbox-poll", error);
     }).finally(() => { running = false; });
   };
   run();

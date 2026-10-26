@@ -10,6 +10,8 @@ import { authorizeCapability } from "../../middlewares/authorize-capability.midd
 import { AppError } from "../../errors/app-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
+import Joi from "joi";
+import { validateBody } from "../../utils/joi-validation";
 
 export const requestFormsRouter = Router();
 export const requestFormReviewRouter = Router();
@@ -29,26 +31,43 @@ type RequestFormRow = { id: string; request_form_number: string; quotation_id: s
 type RequestFormCourseRow = Record<string, unknown> & { id: string; course_id: string; delivery_type: DeliveryType; amount_student: number; location_type: "INTERNAL" | "CLIENT" | "ONLINE"; room_services: string; };
 
 const pageNumber = (value: unknown, fallback: number, max: number) => value === undefined ? fallback : typeof value === "string" && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max ? Number(value) : null;
-const escapeLike = (value: string) => `%${value.replace(/[\[%_]/g, (character) => `[${character}]`)}%`;
+const escapeLike = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 
 async function nextRequestFormNumber(transaction: Transaction) {
   const year = Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date()));
-  let rows = await sequelize.query<{ last_number: number | string }>(
-    "UPDATE [dbo].[request_form_number_sequence] WITH (UPDLOCK, SERIALIZABLE) SET [last_number]=[last_number]+1 OUTPUT INSERTED.[last_number] WHERE [number_year]=:year",
+  const rows = await sequelize.query<{ last_number: number | string }>(
+    "INSERT INTO request_form_number_sequence (number_year,last_number) VALUES (:year,1) ON CONFLICT (number_year) DO UPDATE SET last_number=request_form_number_sequence.last_number+1 RETURNING last_number",
     { replacements: { year }, type: QueryTypes.SELECT, transaction },
   );
-  if (!rows.length) {
-    await sequelize.query("INSERT INTO [dbo].[request_form_number_sequence] ([number_year],[last_number]) VALUES (:year,1)", { replacements: { year }, transaction });
-    rows = [{ last_number: 1 }];
-  }
   return `RF-${year}-${String(Number(rows[0].last_number)).padStart(4, "0")}`;
 }
 
 function parseInput(body: unknown): FormInput {
-  if (!body || typeof body !== "object") throw new AppError(400, "Request Form details are required");
-  const raw = body as Record<string, unknown>;
+  const raw = validateBody<Record<string, unknown>>(Joi.object({
+    formType: Joi.string().valid("REQUEST", "REGISTRATION").optional(),
+    quotationId: Joi.alternatives().try(Joi.string().guid({ version: ["uuidv4", "uuidv5"] }), Joi.valid(null, "")).optional(),
+    accountId: Joi.alternatives().try(Joi.string().guid({ version: ["uuidv4", "uuidv5"] }), Joi.valid("")).optional(),
+    picId: Joi.alternatives().try(Joi.string().guid({ version: ["uuidv4", "uuidv5"] }), Joi.valid("")).optional(),
+    poReference: Joi.string().max(150).optional(),
+    trainingTitle: Joi.string().max(255).optional(),
+    courses: Joi.array().length(1).items(Joi.object({
+      courseId: Joi.string().guid({ version: ["uuidv4", "uuidv5"] }).required(),
+      amountStudent: Joi.number().integer().min(1).max(100000).required(),
+      deliveryType: Joi.string().valid(...DELIVERY_TYPES).required(),
+      serviceType: Joi.string().valid(...SERVICE_TYPES).required(),
+      language: Joi.string().trim().min(1).max(50).required(),
+      roomRental: Joi.boolean().allow(null).required(),
+      roomPc: Joi.string().valid("WITH", "WITHOUT").allow(null).required(),
+      roomServices: Joi.array().items(Joi.string().valid(...ROOM_SERVICES)).required(),
+      locationType: Joi.string().valid("INTERNAL", "CLIENT", "ONLINE").required(),
+      locationName: Joi.string().max(150).required(),
+      locationAddress: Joi.string().max(500).required(),
+      specialInstruction: Joi.string().max(4000).optional(),
+      sessions: Joi.array().max(100).items(Joi.object({ date: Joi.string().pattern(/^(?:\\d{4}-\\d{2}-\\d{2})?$/).required() }).unknown(false)).required(),
+    }).unknown(false)).required(),
+  }).unknown(false), body);
   const formType = raw.formType === "REGISTRATION" ? "REGISTRATION" : raw.formType === "REQUEST" || raw.formType === undefined ? "REQUEST" : null;
   if (!formType) throw new AppError(400, "Invalid form type");
   const quotationId = raw.quotationId === null || raw.quotationId === undefined || raw.quotationId === "" ? null : raw.quotationId;
@@ -76,7 +95,7 @@ function parseInput(body: unknown): FormInput {
 }
 
 async function deriveTrainingTitle(courses: CourseInput[]) {
-  const rows = await sequelize.query<{ id: string; name: string }>("SELECT [id],[name] FROM [dbo].[course] WHERE [id] IN (:ids)", { replacements: { ids: courses.map((course) => course.courseId) }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<{ id: string; name: string }>("SELECT id,name FROM course WHERE id IN (:ids)", { replacements: { ids: courses.map((course) => course.courseId) }, type: QueryTypes.SELECT });
   const names = new Map(rows.map((row) => [row.id, row.name]));
   const title = courses.map((course) => names.get(course.courseId)).filter(Boolean).join(" + ");
   if (!title || title.length > 255) throw new AppError(400, "Could not create a Training Title from the selected Courses");
@@ -84,36 +103,36 @@ async function deriveTrainingTitle(courses: CourseInput[]) {
 }
 
 async function validateAccountAndPic(accountId: string, picId: string, salesSubject: string) {
-  const rows = await sequelize.query("SELECT TOP (1) a.[id] AS [account_id],pp.[id] AS [pic_id] FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id]=a.[id] JOIN [dbo].[pic_account_assignment] pa ON pa.[account_id]=a.[id] AND pa.[ended_at] IS NULL JOIN [dbo].[pic_profile] pp ON pp.[id]=pa.[pic_profile_id] WHERE a.[id]=:accountId AND a.[status]='ACTIVE' AND a.[account_type]='CORPORATE' AND sa.[sales_subject]=:subject AND sa.[ended_at] IS NULL AND pp.[id]=:picId AND pp.[status]='ACTIVE'", { replacements: { accountId, picId, subject: salesSubject }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query("SELECT a.id AS account_id,pp.id AS pic_id FROM account a JOIN sales_account_assignment sa ON sa.account_id=a.id JOIN pic_account_assignment pa ON pa.account_id=a.id AND pa.ended_at IS NULL JOIN pic_profile pp ON pp.id=pa.pic_profile_id WHERE a.id=:accountId AND a.status='ACTIVE' AND a.account_type='CORPORATE' AND sa.sales_subject=:subject AND sa.ended_at IS NULL AND pp.id=:picId AND pp.status='ACTIVE' LIMIT 1", { replacements: { accountId, picId, subject: salesSubject }, type: QueryTypes.SELECT });
   if (!rows.length) throw new AppError(400, "Choose an active Account assigned to you and an active PIC belonging to that Account");
 }
 
 async function approvedQuotation(quotationId: string, salesSubject: string) {
-  const rows = await sequelize.query<RequestFormRow & { class_type: string; account_name: string; pic_name: string; pic_email: string }>("SELECT TOP (1) q.[id],q.[account_id],q.[pic_profile_id],q.[created_by_subject],q.[status],q.[quotation_code],q.[class_type],a.[name] AS [account_name],pp.[name] AS [pic_name],pp.[email] AS [pic_email] FROM [dbo].[quotation] q JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id]=q.[account_id] AND sa.[sales_subject]=:subject AND sa.[ended_at] IS NULL JOIN [dbo].[account] a ON a.[id]=q.[account_id] AND a.[status]='ACTIVE' AND a.[account_type]='CORPORATE' JOIN [dbo].[pic_profile] pp ON pp.[id]=q.[pic_profile_id] AND pp.[status]='ACTIVE' JOIN [dbo].[pic_account_assignment] pa ON pa.[pic_profile_id]=pp.[id] AND pa.[account_id]=a.[id] AND pa.[ended_at] IS NULL WHERE q.[id]=:id AND q.[created_by_subject]=:subject AND q.[status]='APPROVED' AND q.[deleted_at] IS NULL", { replacements: { id: quotationId, subject: salesSubject }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<RequestFormRow & { class_type: string; account_name: string; pic_name: string; pic_email: string }>("SELECT q.id,q.account_id,q.pic_profile_id,q.created_by_subject,q.status,q.quotation_code,q.class_type,a.name AS account_name,pp.name AS pic_name,pp.email AS pic_email FROM quotation q JOIN sales_account_assignment sa ON sa.account_id=q.account_id AND sa.sales_subject=:subject AND sa.ended_at IS NULL JOIN account a ON a.id=q.account_id AND a.status='ACTIVE' AND a.account_type='CORPORATE' JOIN pic_profile pp ON pp.id=q.pic_profile_id AND pp.status='ACTIVE' JOIN pic_account_assignment pa ON pa.pic_profile_id=pp.id AND pa.account_id=a.id AND pa.ended_at IS NULL WHERE q.id=:id AND q.created_by_subject=:subject AND q.status='APPROVED' AND q.deleted_at IS NULL LIMIT 1", { replacements: { id: quotationId, subject: salesSubject }, type: QueryTypes.SELECT });
   if (!rows[0]) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
-  const lines = await sequelize.query<QuoteLine>("SELECT qo.[course_id],qo.[amount_student],qo.[class_type],c.[name] AS [course_name],c.[duration_minutes] FROM [dbo].[quotation_order] qo JOIN [dbo].[course] c ON c.[id]=qo.[course_id] WHERE qo.[quotation_id]=:id", { replacements: { id: quotationId }, type: QueryTypes.SELECT });
+  const lines = await sequelize.query<QuoteLine>("SELECT qo.course_id,qo.amount_student,qo.class_type,c.name AS course_name,c.duration_minutes FROM quotation_order qo JOIN course c ON c.id=qo.course_id WHERE qo.quotation_id=:id", { replacements: { id: quotationId }, type: QueryTypes.SELECT });
   if (!lines.length) throw new AppError(409, "The approved Quotation has no Course details");
   return { quote: rows[0], lines };
 }
 
 async function validateCourses(courses: CourseInput[], allowInactive = false) {
-  const rows = await sequelize.query<{ id: string }>(`SELECT [id] FROM [dbo].[course] WHERE ${allowInactive ? "1=1 AND" : "[status]='ACTIVE' AND"} [id] IN (:ids)`, { replacements: { ids: courses.map((course) => course.courseId) }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<{ id: string }>(`SELECT id FROM course WHERE ${allowInactive ? "1=1 AND" : "status='ACTIVE' AND"} id IN (:ids)`, { replacements: { ids: courses.map((course) => course.courseId) }, type: QueryTypes.SELECT });
   if (rows.length !== courses.length) throw new AppError(400, "One or more Courses are inactive or unavailable");
 }
 
 async function readForm(id: string, subject?: string) {
-  const whereOwner = subject ? "AND rf.[created_by_subject]=:subject" : "";
+  const whereOwner = subject ? "AND rf.created_by_subject=:subject" : "";
   const rows = await sequelize.query<RequestFormRow & { account_name: string; industry_name: string | null; pic_name: string; pic_email: string; quotation_code: string | null }>(
-    `SELECT rf.*,a.[name] AS [account_name],i.[name] AS [industry_name],pp.[name] AS [pic_name],pp.[email] AS [pic_email],q.[quotation_code],q.[class_type] AS [quotation_class_type],(SELECT TOP (1) t.[id] FROM [dbo].[training] t WHERE t.[request_form_id]=rf.[id] ORDER BY t.[created_at] DESC) AS [training_id]
-       FROM [dbo].[request_form] rf LEFT JOIN [dbo].[account] a ON a.[id]=rf.[account_id] LEFT JOIN [dbo].[industry] i ON i.[id]=a.[industry_id] LEFT JOIN [dbo].[pic_profile] pp ON pp.[id]=rf.[pic_profile_id]
-       LEFT JOIN [dbo].[quotation] q ON q.[id]=rf.[quotation_id] WHERE rf.[id]=:id ${whereOwner}`,
+    `SELECT rf.*,a.name AS account_name,i.name AS industry_name,pp.name AS pic_name,pp.email AS pic_email,q.quotation_code,q.class_type AS quotation_class_type,(SELECT t.id FROM training t WHERE t.request_form_id=rf.id ORDER BY t.created_at DESC LIMIT 1) AS training_id
+       FROM request_form rf LEFT JOIN account a ON a.id=rf.account_id LEFT JOIN industry i ON i.id=a.industry_id LEFT JOIN pic_profile pp ON pp.id=rf.pic_profile_id
+       LEFT JOIN quotation q ON q.id=rf.quotation_id WHERE rf.id=:id ${whereOwner}`,
     { replacements: { id, ...(subject ? { subject } : {}) }, type: QueryTypes.SELECT },
   );
   if (!rows[0]) throw new AppError(404, "Request Form not found");
-  const courses = await sequelize.query<RequestFormCourseRow>("SELECT rfc.*,c.[name] AS [course_name],c.[duration_minutes] FROM [dbo].[request_form_course] rfc JOIN [dbo].[course] c ON c.[id]=rfc.[course_id] WHERE rfc.[request_form_id]=:id ORDER BY c.[name]", { replacements: { id }, type: QueryTypes.SELECT });
-  const attachments = await sequelize.query<Record<string, unknown>>("SELECT [id],[file_name],[file_size],[file_format],[cloudinary_public_id],[created_at] FROM [dbo].[request_form_attachment] WHERE [request_form_id]=:id ORDER BY [created_at]", { replacements: { id }, type: QueryTypes.SELECT });
+  const courses = await sequelize.query<RequestFormCourseRow>("SELECT rfc.*,c.name AS course_name,c.duration_minutes FROM request_form_course rfc JOIN course c ON c.id=rfc.course_id WHERE rfc.request_form_id=:id ORDER BY c.name", { replacements: { id }, type: QueryTypes.SELECT });
+  const attachments = await sequelize.query<Record<string, unknown>>("SELECT id,file_name,file_size,file_format,cloudinary_public_id,created_at FROM request_form_attachment WHERE request_form_id=:id ORDER BY created_at", { replacements: { id }, type: QueryTypes.SELECT });
   const courseIds = courses.map((course) => String(course.id));
-  const sessions = courseIds.length ? await sequelize.query<Record<string, unknown>>("SELECT * FROM [dbo].[request_form_session] WHERE [request_form_course_id] IN (:ids) ORDER BY [requested_date]", { replacements: { ids: courseIds }, type: QueryTypes.SELECT }) : [];
+  const sessions = courseIds.length ? await sequelize.query<Record<string, unknown>>("SELECT * FROM request_form_session WHERE request_form_course_id IN (:ids) ORDER BY requested_date", { replacements: { ids: courseIds }, type: QueryTypes.SELECT }) : [];
   const withSessions = courses.map((course) => ({ ...course, room_services: JSON.parse(String(course.room_services || "[]")) as string[], sessions: sessions.filter((session) => session.request_form_course_id === course.id).map((session) => ({ id: session.id, date: session.requested_date })) }));
   return { item: rows[0], courses: withSessions, attachments: attachments.map(({ cloudinary_public_id: publicId, ...attachment }) => ({ ...attachment, download_url: requestFormDownloadUrl(String(publicId), String(attachment.file_format)) })) };
 }
@@ -121,8 +140,8 @@ async function readForm(id: string, subject?: string) {
 async function saveCourses(requestFormId: string, courses: CourseInput[], transaction: Transaction) {
   for (const course of courses) {
     const courseRowId = randomUUID(); const now = new Date();
-    await sequelize.query("INSERT INTO [dbo].[request_form_course] ([id],[request_form_id],[course_id],[delivery_type],[service_type],[amount_student],[language],[room_rental],[room_pc],[room_services],[location_type],[location_name],[location_address],[special_instruction],[created_at],[updated_at]) VALUES (:id,:formId,:courseId,:deliveryType,:serviceType,:amountStudent,:language,:roomRental,:roomPc,:roomServices,:locationType,:locationName,:locationAddress,:instruction,:now,:now)", { replacements: { id: courseRowId, formId: requestFormId, courseId: course.courseId, deliveryType: course.deliveryType, serviceType: course.serviceType, amountStudent: course.amountStudent, language: course.language, roomRental: course.roomRental, roomPc: course.roomPc, roomServices: JSON.stringify(course.roomServices), locationType: course.locationType, locationName: course.locationType === "CLIENT" ? course.locationName : null, locationAddress: course.locationType === "CLIENT" ? course.locationAddress : null, instruction: course.specialInstruction || null, now }, transaction });
-    for (const session of course.sessions) await sequelize.query("INSERT INTO [dbo].[request_form_session] ([id],[request_form_course_id],[requested_date],[start_time],[end_time],[created_at],[updated_at]) VALUES (:id,:courseId,:date,NULL,NULL,:now,:now)", { replacements: { id: randomUUID(), courseId: courseRowId, date: session.date, now }, transaction });
+    await sequelize.query("INSERT INTO request_form_course (id,request_form_id,course_id,delivery_type,service_type,amount_student,language,room_rental,room_pc,room_services,location_type,location_name,location_address,special_instruction,created_at,updated_at) VALUES (:id,:formId,:courseId,:deliveryType,:serviceType,:amountStudent,:language,:roomRental,:roomPc,:roomServices,:locationType,:locationName,:locationAddress,:instruction,:now,:now)", { replacements: { id: courseRowId, formId: requestFormId, courseId: course.courseId, deliveryType: course.deliveryType, serviceType: course.serviceType, amountStudent: course.amountStudent, language: course.language, roomRental: course.roomRental, roomPc: course.roomPc, roomServices: JSON.stringify(course.roomServices), locationType: course.locationType, locationName: course.locationType === "CLIENT" ? course.locationName : null, locationAddress: course.locationType === "CLIENT" ? course.locationAddress : null, instruction: course.specialInstruction || null, now }, transaction });
+    for (const session of course.sessions) await sequelize.query("INSERT INTO request_form_session (id,request_form_course_id,requested_date,start_time,end_time,created_at,updated_at) VALUES (:id,:courseId,:date,NULL,NULL,:now,:now)", { replacements: { id: randomUUID(), courseId: courseRowId, date: session.date, now }, transaction });
   }
 }
 
@@ -151,7 +170,7 @@ async function uploadAttachment(formId: string, input: AttachmentInput) {
     stream.end(buffer);
   }).catch((error) => { throw new AppError(502, error instanceof Error ? `Attachment upload failed: ${error.message}` : "Attachment upload failed"); });
   const id = randomUUID(); const now = new Date();
-  await sequelize.query("INSERT INTO [dbo].[request_form_attachment] ([id],[request_form_id],[file_name],[file_size],[file_format],[cloudinary_public_id],[cloudinary_asset_id],[created_at],[updated_at]) VALUES (:id,:formId,:fileName,:size,:format,:publicId,:assetId,:now,:now)", { replacements: { id, formId, fileName: input.fileName, size: buffer.byteLength, format: extension, publicId: asset.publicId, assetId: asset.assetId, now } });
+  await sequelize.query("INSERT INTO request_form_attachment (id,request_form_id,file_name,file_size,file_format,cloudinary_public_id,cloudinary_asset_id,created_at,updated_at) VALUES (:id,:formId,:fileName,:size,:format,:publicId,:assetId,:now,:now)", { replacements: { id, formId, fileName: input.fileName, size: buffer.byteLength, format: extension, publicId: asset.publicId, assetId: asset.assetId, now } });
   return { id, file_name: input.fileName, file_size: buffer.byteLength, file_format: extension, download_url: requestFormDownloadUrl(asset.publicId, extension) };
 }
 
@@ -161,18 +180,18 @@ requestFormsRouter.get("/options", authorizeCapability("REQUEST_FORM", ACCESS_AC
   const formType = req.query.formType ?? "REQUEST";
   if (formType !== "REQUEST" && formType !== "REGISTRATION") throw new AppError(400, "Invalid form type");
   const [accounts, courses, allQuotations] = await Promise.all([
-    sequelize.query("SELECT a.[id],a.[account_code],a.[name] FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id]=a.[id] WHERE a.[status]='ACTIVE' AND a.[account_type]='CORPORATE' AND sa.[sales_subject]=:subject AND sa.[ended_at] IS NULL ORDER BY a.[name]", { replacements: { subject: req.auth!.userId }, type: QueryTypes.SELECT }),
-    sequelize.query("SELECT [id],[name],[duration_minutes] FROM [dbo].[course] WHERE [status]='ACTIVE' ORDER BY [name]", { type: QueryTypes.SELECT }),
-    sequelize.query<{ id: string; quotation_code: string; class_type: string; account_name: string; pic_name: string }>("SELECT q.[id],q.[quotation_code],q.[class_type],a.[name] AS [account_name],pp.[name] AS [pic_name] FROM [dbo].[quotation] q JOIN [dbo].[account] a ON a.[id]=q.[account_id] AND a.[status]='ACTIVE' AND a.[account_type]='CORPORATE' JOIN [dbo].[pic_profile] pp ON pp.[id]=q.[pic_profile_id] AND pp.[status]='ACTIVE' JOIN [dbo].[pic_account_assignment] pa ON pa.[account_id]=a.[id] AND pa.[pic_profile_id]=pp.[id] AND pa.[ended_at] IS NULL JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id]=q.[account_id] AND sa.[sales_subject]=:subject AND sa.[ended_at] IS NULL WHERE q.[created_by_subject]=:subject AND q.[status]='APPROVED' AND q.[deleted_at] IS NULL ORDER BY q.[updated_at] DESC", { replacements: { subject: req.auth!.userId }, type: QueryTypes.SELECT }),
+    sequelize.query("SELECT a.id,a.account_code,a.name FROM account a JOIN sales_account_assignment sa ON sa.account_id=a.id WHERE a.status='ACTIVE' AND a.account_type='CORPORATE' AND sa.sales_subject=:subject AND sa.ended_at IS NULL ORDER BY a.name", { replacements: { subject: req.auth!.userId }, type: QueryTypes.SELECT }),
+    sequelize.query("SELECT id,name,duration_minutes FROM course WHERE status='ACTIVE' ORDER BY name", { type: QueryTypes.SELECT }),
+    sequelize.query<{ id: string; quotation_code: string; class_type: string; account_name: string; pic_name: string }>("SELECT q.id,q.quotation_code,q.class_type,a.name AS account_name,pp.name AS pic_name FROM quotation q JOIN account a ON a.id=q.account_id AND a.status='ACTIVE' AND a.account_type='CORPORATE' JOIN pic_profile pp ON pp.id=q.pic_profile_id AND pp.status='ACTIVE' JOIN pic_account_assignment pa ON pa.account_id=a.id AND pa.pic_profile_id=pp.id AND pa.ended_at IS NULL JOIN sales_account_assignment sa ON sa.account_id=q.account_id AND sa.sales_subject=:subject AND sa.ended_at IS NULL WHERE q.created_by_subject=:subject AND q.status='APPROVED' AND q.deleted_at IS NULL ORDER BY q.updated_at DESC", { replacements: { subject: req.auth!.userId }, type: QueryTypes.SELECT }),
   ]);
   const allowedTypes = formType === "REGISTRATION" ? ["PUBLIC", "ONLINE_PUBLIC"] : ["PRIVATE", "INHOUSE", "ONLINE_PRIVATE"];
   return res.json({ accounts, courses, quotations: allQuotations.filter((quotation) => allowedTypes.includes(quotation.class_type)) });
 }));
 
 requestFormsRouter.get("/accounts/:accountId/pics", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
-  const account = await sequelize.query("SELECT TOP (1) a.[id] FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id]=a.[id] WHERE a.[id]=:id AND a.[status]='ACTIVE' AND sa.[sales_subject]=:subject AND sa.[ended_at] IS NULL", { replacements: { id: req.params.accountId, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const account = await sequelize.query("SELECT a.id FROM account a JOIN sales_account_assignment sa ON sa.account_id=a.id WHERE a.id=:id AND a.status='ACTIVE' AND sa.sales_subject=:subject AND sa.ended_at IS NULL", { replacements: { id: req.params.accountId, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   if (!account.length) throw new AppError(404, "Account not found");
-  const items = await sequelize.query("SELECT pp.[id],pp.[name],pp.[email] FROM [dbo].[pic_profile] pp JOIN [dbo].[pic_account_assignment] pa ON pa.[pic_profile_id]=pp.[id] WHERE pa.[account_id]=:id AND pa.[ended_at] IS NULL AND pp.[status]='ACTIVE' ORDER BY pp.[name]", { replacements: { id: req.params.accountId }, type: QueryTypes.SELECT });
+  const items = await sequelize.query("SELECT pp.id,pp.name,pp.email FROM pic_profile pp JOIN pic_account_assignment pa ON pa.pic_profile_id=pp.id WHERE pa.account_id=:id AND pa.ended_at IS NULL AND pp.status='ACTIVE' ORDER BY pp.name", { replacements: { id: req.params.accountId }, type: QueryTypes.SELECT });
   return res.json({ items });
 }));
 
@@ -197,14 +216,14 @@ requestFormsRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.V
   if (deliveryType !== "ALL" && !DELIVERY_TYPES.includes(String(deliveryType) as DeliveryType)) throw new AppError(400, "Invalid Request Form class type");
   if (accountId !== "ALL" && !isUuid(accountId)) throw new AppError(400, "Invalid Request Form account");
   if (search !== undefined && (typeof search !== "string" || search.length > 150)) throw new AppError(400, "Invalid search");
-  const filters = ["rf.[created_by_subject]=:subject", "rf.[form_type]=:formType"]; const replacements: Record<string, unknown> = { subject: req.auth!.userId, formType, offset: (page - 1) * pageSize, pageSize };
-  if (status !== "ALL") { filters.push("rf.[status]=:status"); replacements.status = status; }
-  if (deliveryType !== "ALL") { filters.push("EXISTS (SELECT 1 FROM [dbo].[request_form_course] rfc WHERE rfc.[request_form_id]=rf.[id] AND rfc.[delivery_type]=:deliveryType)"); replacements.deliveryType = deliveryType; }
-  if (accountId !== "ALL") { filters.push("rf.[account_id]=:accountId"); replacements.accountId = accountId; }
-  if (search) { filters.push("(rf.[po_reference] LIKE :search OR q.[quotation_code] LIKE :search OR a.[name] LIKE :search OR EXISTS (SELECT 1 FROM [dbo].[request_form_course] rfc JOIN [dbo].[course] c ON c.[id]=rfc.[course_id] WHERE rfc.[request_form_id]=rf.[id] AND c.[name] LIKE :search))"); replacements.search = escapeLike(search); }
+  const filters = ["rf.created_by_subject=:subject", "rf.form_type=:formType"]; const replacements: Record<string, unknown> = { subject: req.auth!.userId, formType, offset: (page - 1) * pageSize, pageSize };
+  if (status !== "ALL") { filters.push("rf.status=:status"); replacements.status = status; }
+  if (deliveryType !== "ALL") { filters.push("EXISTS (SELECT 1 FROM request_form_course rfc WHERE rfc.request_form_id=rf.id AND rfc.delivery_type=:deliveryType)"); replacements.deliveryType = deliveryType; }
+  if (accountId !== "ALL") { filters.push("rf.account_id=:accountId"); replacements.accountId = accountId; }
+  if (search) { filters.push("(rf.po_reference ILIKE :search ESCAPE E'\\\\' OR q.quotation_code ILIKE :search ESCAPE E'\\\\' OR a.name ILIKE :search ESCAPE E'\\\\' OR EXISTS (SELECT 1 FROM request_form_course rfc JOIN course c ON c.id=rfc.course_id WHERE rfc.request_form_id=rf.id AND c.name ILIKE :search ESCAPE E'\\\\'))"); replacements.search = escapeLike(search); }
   const where = `WHERE ${filters.join(" AND ")}`;
-  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT_BIG(1) AS [total] FROM [dbo].[request_form] rf JOIN [dbo].[account] a ON a.[id]=rf.[account_id] LEFT JOIN [dbo].[quotation] q ON q.[id]=rf.[quotation_id] ${where}`, { replacements, type: QueryTypes.SELECT });
-  const items = await sequelize.query<Record<string, unknown>>(`SELECT rf.[id],rf.[request_form_number],rf.[form_type],rf.[quotation_id],rf.[status],rf.[po_reference],rf.[review_note],rf.[created_at],rf.[updated_at],a.[name] AS [account_name],pp.[name] AS [pic_name],q.[quotation_code],(SELECT TOP (1) t.[id] FROM [dbo].[training] t WHERE t.[request_form_id]=rf.[id] ORDER BY t.[created_at] DESC) AS [training_id],(SELECT COUNT(1) FROM [dbo].[request_form_course] rfc WHERE rfc.[request_form_id]=rf.[id]) AS [course_count],(SELECT COUNT(1) FROM [dbo].[request_form_attachment] rfa WHERE rfa.[request_form_id]=rf.[id]) AS [attachment_count],(SELECT STRING_AGG(c.[name], ', ') FROM [dbo].[request_form_course] rfc JOIN [dbo].[course] c ON c.[id]=rfc.[course_id] WHERE rfc.[request_form_id]=rf.[id]) AS [requested_course],(SELECT TOP (1) rfc.[delivery_type] FROM [dbo].[request_form_course] rfc WHERE rfc.[request_form_id]=rf.[id] ORDER BY rfc.[delivery_type]) AS [delivery_type],(SELECT SUM(rfc.[amount_student]) FROM [dbo].[request_form_course] rfc WHERE rfc.[request_form_id]=rf.[id]) AS [students],(SELECT STRING_AGG(CONVERT(char(10), rfs.[requested_date], 23), ',') FROM [dbo].[request_form_course] rfc JOIN [dbo].[request_form_session] rfs ON rfs.[request_form_course_id]=rfc.[id] WHERE rfc.[request_form_id]=rf.[id]) AS [requested_dates] FROM [dbo].[request_form] rf JOIN [dbo].[account] a ON a.[id]=rf.[account_id] JOIN [dbo].[pic_profile] pp ON pp.[id]=rf.[pic_profile_id] LEFT JOIN [dbo].[quotation] q ON q.[id]=rf.[quotation_id] ${where} ORDER BY rf.[updated_at] DESC OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`, { replacements, type: QueryTypes.SELECT });
+  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT(1) AS total FROM request_form rf JOIN account a ON a.id=rf.account_id LEFT JOIN quotation q ON q.id=rf.quotation_id ${where}`, { replacements, type: QueryTypes.SELECT });
+  const items = await sequelize.query<Record<string, unknown>>(`SELECT rf.id,rf.request_form_number,rf.form_type,rf.quotation_id,rf.status,rf.po_reference,rf.review_note,rf.created_at,rf.updated_at,a.name AS account_name,pp.name AS pic_name,q.quotation_code,(SELECT t.id FROM training t WHERE t.request_form_id=rf.id ORDER BY t.created_at DESC LIMIT 1) AS training_id,(SELECT COUNT(1) FROM request_form_course rfc WHERE rfc.request_form_id=rf.id) AS course_count,(SELECT COUNT(1) FROM request_form_attachment rfa WHERE rfa.request_form_id=rf.id) AS attachment_count,(SELECT STRING_AGG(c.name, ', ') FROM request_form_course rfc JOIN course c ON c.id=rfc.course_id WHERE rfc.request_form_id=rf.id) AS requested_course,(SELECT rfc.delivery_type FROM request_form_course rfc WHERE rfc.request_form_id=rf.id ORDER BY rfc.delivery_type LIMIT 1) AS delivery_type,(SELECT SUM(rfc.amount_student) FROM request_form_course rfc WHERE rfc.request_form_id=rf.id) AS students,(SELECT STRING_AGG(TO_CHAR(rfs.requested_date,'YYYY-MM-DD'), ',') FROM request_form_course rfc JOIN request_form_session rfs ON rfs.request_form_course_id=rfc.id WHERE rfc.request_form_id=rf.id) AS requested_dates FROM request_form rf JOIN account a ON a.id=rf.account_id JOIN pic_profile pp ON pp.id=rf.pic_profile_id LEFT JOIN quotation q ON q.id=rf.quotation_id ${where} ORDER BY rf.updated_at DESC LIMIT :pageSize OFFSET :offset`, { replacements, type: QueryTypes.SELECT });
   return res.json({ items, page, pageSize, total: Number(count[0]?.total ?? 0) });
 }));
 
@@ -235,7 +254,7 @@ requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.
   const id = randomUUID(); const now = new Date();
   await sequelize.transaction(async (transaction) => {
     const requestFormNumber = await nextRequestFormNumber(transaction);
-    await sequelize.query("INSERT INTO [dbo].[request_form] ([id],[request_form_number],[form_type],[quotation_id],[created_by_subject],[reviewed_by_subject],[attachment_file],[training_title],[request_date],[language],[training_type],[number_student],[room_rental],[special_instruction],[approved_at],[account_id],[pic_profile_id],[status],[po_reference],[review_note],[created_at],[updated_at]) VALUES (:id,:requestFormNumber,:formType,:quotationId,:subject,NULL,NULL,:trainingTitle,NULL,NULL,NULL,NULL,0,NULL,NULL,:accountId,:picId,'DRAFT',:poReference,NULL,:now,:now)", { replacements: { id, requestFormNumber, formType: input.formType, quotationId: input.quotationId, subject: req.auth!.userId, accountId, picId, trainingTitle, poReference: input.poReference || null, now }, transaction });
+    await sequelize.query("INSERT INTO request_form (id,request_form_number,form_type,quotation_id,created_by_subject,reviewed_by_subject,attachment_file,training_title,request_date,language,training_type,number_student,room_rental,special_instruction,approved_at,account_id,pic_profile_id,status,po_reference,review_note,created_at,updated_at) VALUES (:id,:requestFormNumber,:formType,:quotationId,:subject,NULL,NULL,:trainingTitle,NULL,NULL,NULL,NULL,0,NULL,NULL,:accountId,:picId,'DRAFT',:poReference,NULL,:now,:now)", { replacements: { id, requestFormNumber, formType: input.formType, quotationId: input.quotationId, subject: req.auth!.userId, accountId, picId, trainingTitle, poReference: input.poReference || null, now }, transaction });
     await saveCourses(id, courseInputs, transaction);
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "REQUEST_FORM", objectId: id, after: { status: "DRAFT", quotation_id: input.quotationId, account_id: accountId, pic_profile_id: picId, course_count: courseInputs.length }, processName: "request-form-create" }, transaction);
   });
@@ -243,7 +262,7 @@ requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.
 }));
 
 requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const input = parseInput(req.body); const oldRows = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [created_by_subject]=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const input = parseInput(req.body); const oldRows = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND created_by_subject=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   const old = oldRows[0]; if (!old) throw new AppError(404, "Request Form not found");
   if (old.status !== "DRAFT" && old.status !== "REVISION") throw new AppError(409, "Only a Draft or returned Revision Request Form can be edited");
   if (input.formType !== (old as RequestFormRow & { form_type: string }).form_type) throw new AppError(400, "Form type cannot be changed");
@@ -263,9 +282,9 @@ requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTION
   const trainingTitle = await deriveTrainingTitle(courseInputs);
   const transaction = await sequelize.transaction();
   try {
-    await sequelize.query("DELETE FROM [dbo].[request_form_course] WHERE [request_form_id]=:id", { replacements: { id: old.id }, transaction });
+    await sequelize.query("DELETE FROM request_form_course WHERE request_form_id=:id", { replacements: { id: old.id }, transaction });
     await saveCourses(old.id, courseInputs, transaction);
-    await sequelize.query("UPDATE [dbo].[request_form] SET [quotation_id]=:quotationId,[account_id]=:accountId,[pic_profile_id]=:picId,[po_reference]=:poReference,[training_title]=:trainingTitle,[updated_at]=:now WHERE [id]=:id", { replacements: { id: old.id, quotationId: old.quotation_id, accountId, picId, poReference: input.poReference || null, trainingTitle, now: new Date() }, transaction });
+    await sequelize.query("UPDATE request_form SET quotation_id=:quotationId,account_id=:accountId,pic_profile_id=:picId,po_reference=:poReference,training_title=:trainingTitle,updated_at=:now WHERE id=:id", { replacements: { id: old.id, quotationId: old.quotation_id, accountId, picId, poReference: input.poReference || null, trainingTitle, now: new Date() }, transaction });
     const before: Record<string, unknown> = {}; const after: Record<string, unknown> = {};
     if ((old.po_reference ?? null) !== (input.poReference || null)) { before.po_reference = old.po_reference; after.po_reference = input.poReference || null; }
     if (Object.keys(before).length) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: old.id, before, after, processName: "request-form-edit" }, transaction);
@@ -275,7 +294,7 @@ requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTION
 }));
 
 requestFormsRouter.post("/:id/attachments", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const rows = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [created_by_subject]=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND created_by_subject=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   if (!rows[0]) throw new AppError(404, "Request Form not found");
   if (rows[0].status !== "DRAFT" && rows[0].status !== "REVISION") throw new AppError(409, "Attachments can only be changed on Draft or Revision Request Forms");
   const file = req.body as AttachmentInput;
@@ -284,17 +303,17 @@ requestFormsRouter.post("/:id/attachments", authorizeCapability("REQUEST_FORM", 
 }));
 
 requestFormsRouter.delete("/:id/attachments/:attachmentId", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const form = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [created_by_subject]=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const form = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND created_by_subject=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   if (!form[0]) throw new AppError(404, "Request Form not found");
   if (form[0].status !== "DRAFT" && form[0].status !== "REVISION") throw new AppError(409, "Attachments can only be changed on Draft or Revision Request Forms");
-  const rows = await sequelize.query<{ cloudinary_public_id: string; file_format: string }>("DELETE FROM [dbo].[request_form_attachment] OUTPUT DELETED.[cloudinary_public_id],DELETED.[file_format] WHERE [id]=:attachmentId AND [request_form_id]=:id", { replacements: { attachmentId: req.params.attachmentId, id: req.params.id }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<{ cloudinary_public_id: string; file_format: string }>("DELETE FROM request_form_attachment WHERE id=:attachmentId AND request_form_id=:id RETURNING cloudinary_public_id,file_format", { replacements: { attachmentId: req.params.attachmentId, id: req.params.id }, type: QueryTypes.SELECT });
   if (!rows[0]) throw new AppError(404, "Attachment not found");
   configureCloudinary(); await cloudinary.uploader.destroy(rows[0].cloudinary_public_id, { resource_type: "raw", type: "authenticated" }).catch(() => undefined);
   return res.status(204).end();
 }));
 
 requestFormsRouter.get("/:id/attachments/:attachmentId", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
-  const rows = await sequelize.query<{ cloudinary_public_id: string; file_format: string }>("SELECT a.[cloudinary_public_id],a.[file_format] FROM [dbo].[request_form_attachment] a JOIN [dbo].[request_form] rf ON rf.[id]=a.[request_form_id] WHERE rf.[id]=:id AND rf.[created_by_subject]=:subject AND a.[id]=:attachmentId", { replacements: { id: req.params.id, attachmentId: req.params.attachmentId, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<{ cloudinary_public_id: string; file_format: string }>("SELECT a.cloudinary_public_id,a.file_format FROM request_form_attachment a JOIN request_form rf ON rf.id=a.request_form_id WHERE rf.id=:id AND rf.created_by_subject=:subject AND a.id=:attachmentId", { replacements: { id: req.params.id, attachmentId: req.params.attachmentId, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   if (!rows[0]) throw new AppError(404, "Attachment not found");
   return res.json({ url: requestFormDownloadUrl(rows[0].cloudinary_public_id, rows[0].file_format), expiresInSeconds: 300 });
 }));
@@ -306,7 +325,7 @@ requestFormsRouter.post("/:id/submit", authorizeCapability("REQUEST_FORM", ACCES
   if (!detail.courses.length || detail.courses.some((course) => !(course.sessions as unknown[]).length)) throw new AppError(400, "Add at least one scheduled session for every Course before submitting");
   const before = item.status; const now = new Date();
   await sequelize.transaction(async (transaction) => {
-    await sequelize.query("UPDATE [dbo].[request_form] SET [status]='WAITING',[review_note]=NULL,[reviewed_by_subject]=NULL,[sla_due_at]=NULL,[sla_notified_at]=NULL,[updated_at]=:now WHERE [id]=:id", { replacements: { id: item.id, now }, transaction });
+    await sequelize.query("UPDATE request_form SET status='WAITING',review_note=NULL,reviewed_by_subject=NULL,sla_due_at=NULL,sla_notified_at=NULL,updated_at=:now WHERE id=:id", { replacements: { id: item.id, now }, transaction });
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: item.id, before: { status: before }, after: { status: "WAITING" }, processName: "request-form-submit" }, transaction);
   });
   return res.json({ item: { id: item.id, status: "WAITING" } });
@@ -315,11 +334,11 @@ requestFormsRouter.post("/:id/submit", authorizeCapability("REQUEST_FORM", ACCES
 requestFormsRouter.post("/:id/withdraw", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
-    const rows = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [created_by_subject]=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT, transaction });
+    const rows = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND created_by_subject=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT, transaction });
     const form = rows[0];
     if (!form) throw new AppError(404, "Request Form not found");
     if (form.status !== "WAITING") throw new AppError(409, "Only a Waiting Request Form can be withdrawn");
-    const updated = await sequelize.query<{ id: string }>("UPDATE [dbo].[request_form] SET [status]='DRAFT',[review_note]=NULL,[reviewed_by_subject]=NULL,[sla_due_at]=NULL,[sla_notified_at]=NULL,[updated_at]=:now OUTPUT INSERTED.[id] WHERE [id]=:id AND [created_by_subject]=:subject AND [status]='WAITING'", { replacements: { id: form.id, subject: req.auth!.userId, now: new Date() }, type: QueryTypes.SELECT, transaction });
+    const updated = await sequelize.query<{ id: string }>("UPDATE request_form SET status='DRAFT',review_note=NULL,reviewed_by_subject=NULL,sla_due_at=NULL,sla_notified_at=NULL,updated_at=:now RETURNING id WHERE id=:id AND created_by_subject=:subject AND status='WAITING'", { replacements: { id: form.id, subject: req.auth!.userId, now: new Date() }, type: QueryTypes.SELECT, transaction });
     if (!updated.length) throw new AppError(409, "The Request Form has already been processed by Admin");
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: form.id, before: { status: "WAITING" }, after: { status: "DRAFT" }, processName: "request-form-withdraw" }, transaction);
     await transaction.commit();
@@ -331,13 +350,13 @@ requestFormsRouter.post("/:id/withdraw", authorizeCapability("REQUEST_FORM", ACC
 }));
 
 requestFormsRouter.delete("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.DELETE), asyncHandler(async (req, res) => {
-  const rows = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [created_by_subject]=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND created_by_subject=:subject", { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT });
   const form = rows[0]; if (!form) throw new AppError(404, "Request Form not found");
   if (form.status !== "DRAFT") throw new AppError(409, "Only a Draft Request Form can be deleted");
-  const attachments = await sequelize.query<{ cloudinary_public_id: string }>("SELECT [cloudinary_public_id] FROM [dbo].[request_form_attachment] WHERE [request_form_id]=:id", { replacements: { id: form.id }, type: QueryTypes.SELECT });
+  const attachments = await sequelize.query<{ cloudinary_public_id: string }>("SELECT cloudinary_public_id FROM request_form_attachment WHERE request_form_id=:id", { replacements: { id: form.id }, type: QueryTypes.SELECT });
   await sequelize.transaction(async (transaction) => {
     await appendRequestAuditTrail(req, { action: "DELETE", objectType: "REQUEST_FORM", objectId: form.id, before: { status: form.status, account_id: form.account_id, quotation_id: form.quotation_id }, processName: "request-form-delete-draft" }, transaction);
-    await sequelize.query("DELETE FROM [dbo].[request_form] WHERE [id]=:id", { replacements: { id: form.id }, transaction });
+    await sequelize.query("DELETE FROM request_form WHERE id=:id", { replacements: { id: form.id }, transaction });
   });
   if (attachments.length && env.cloudinaryConfigured) { configureCloudinary(); await Promise.all(attachments.map((asset) => cloudinary.uploader.destroy(asset.cloudinary_public_id, { resource_type: "raw", type: "authenticated" }).catch(() => undefined))); }
   return res.status(204).end();
@@ -346,29 +365,29 @@ requestFormsRouter.delete("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACT
 requestFormReviewRouter.use(authorizeActiveRole(ROLES.ADMIN));
 requestFormReviewRouter.get("/trainings/:id/detail", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT TOP (1) t.[id],t.[request_form_id],t.[name],t.[training_type],t.[status],t.[expected_students],t.[base_fee],t.[course_id],c.[name] AS [course_name],a.[name] AS [account_name],a.[industry_id],i.[name] AS [industry_name],pp.[name] AS [pic_name],pp.[email] AS [pic_email],
-      (SELECT TOP (1) tp.[name] FROM [dbo].[training_trainer_assignment] tta JOIN [dbo].[trainer_profile] tp ON tp.[id]=tta.[trainer_profile_id] WHERE tta.[training_id]=t.[id] AND tta.[ended_at] IS NULL ORDER BY tta.[assigned_at] DESC) AS [trainer_name],
-      (SELECT TOP (1) r.[id] FROM [dbo].[training_session] ts JOIN [dbo].[booking_room] br ON br.[session_id]=ts.[id] JOIN [dbo].[room] r ON r.[id]=br.[room_id] WHERE ts.[training_id]=t.[id]) AS [room_id],
-      (SELECT TOP (1) r.[name] FROM [dbo].[training_session] ts JOIN [dbo].[booking_room] br ON br.[session_id]=ts.[id] JOIN [dbo].[room] r ON r.[id]=br.[room_id] WHERE ts.[training_id]=t.[id]) AS [room_name],
-      (SELECT TOP (1) r.[capacity] FROM [dbo].[training_session] ts JOIN [dbo].[booking_room] br ON br.[session_id]=ts.[id] JOIN [dbo].[room] r ON r.[id]=br.[room_id] WHERE ts.[training_id]=t.[id]) AS [room_capacity]
-      FROM [dbo].[training] t JOIN [dbo].[request_form] rf ON rf.[id]=t.[request_form_id] JOIN [dbo].[account] a ON a.[id]=t.[account_id] LEFT JOIN [dbo].[industry] i ON i.[id]=a.[industry_id] JOIN [dbo].[course] c ON c.[id]=t.[course_id] LEFT JOIN [dbo].[pic_profile] pp ON pp.[id]=t.[pic_profile_id] WHERE t.[id]=:id`,
+    `SELECT t.id,t.request_form_id,t.name,t.training_type,t.status,t.expected_students,t.base_fee,t.course_id,c.name AS course_name,a.name AS account_name,a.industry_id,i.name AS industry_name,pp.name AS pic_name,pp.email AS pic_email,
+      (SELECT tp.name FROM training_trainer_assignment tta JOIN trainer_profile tp ON tp.id=tta.trainer_profile_id WHERE tta.training_id=t.id AND tta.ended_at IS NULL ORDER BY tta.assigned_at DESC LIMIT 1) AS trainer_name,
+      (SELECT r.id FROM training_session ts JOIN booking_room br ON br.session_id=ts.id JOIN room r ON r.id=br.room_id WHERE ts.training_id=t.id LIMIT 1) AS room_id,
+      (SELECT r.name FROM training_session ts JOIN booking_room br ON br.session_id=ts.id JOIN room r ON r.id=br.room_id WHERE ts.training_id=t.id LIMIT 1) AS room_name,
+      (SELECT r.capacity FROM training_session ts JOIN booking_room br ON br.session_id=ts.id JOIN room r ON r.id=br.room_id WHERE ts.training_id=t.id LIMIT 1) AS room_capacity
+      FROM training t JOIN request_form rf ON rf.id=t.request_form_id JOIN account a ON a.id=t.account_id LEFT JOIN industry i ON i.id=a.industry_id JOIN course c ON c.id=t.course_id LEFT JOIN pic_profile pp ON pp.id=t.pic_profile_id WHERE t.id=:id`,
     { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
   );
   if (!rows[0]) throw new AppError(404, "Training not found");
   const form = await readForm(String(rows[0].request_form_id));
   const sessions = await sequelize.query<Record<string, unknown>>(
-    "SELECT [id],[session_number],[starts_at],[ends_at],[class_location] FROM [dbo].[training_session] WHERE [training_id]=:id ORDER BY [session_number]",
+    "SELECT id,session_number,starts_at,ends_at,class_location FROM training_session WHERE training_id=:id ORDER BY session_number",
     { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
   );
   return res.json({ training: rows[0], form, sessions });
 }));
 requestFormReviewRouter.get("/trainings/:id/participants", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
-  const exists = await sequelize.query("SELECT TOP (1) [id] FROM [dbo].[training] WHERE [id]=:id", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
+  const exists = await sequelize.query("SELECT id FROM training WHERE id=:id", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
   if (!exists.length) throw new AppError(404, "Training not found");
   const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT p.[id],COALESCE(sp.[id],p.[student_id]) AS [student_id],p.[student_subject],p.[full_name] AS [name],sp.[email],sp.[company_role],a.[name] AS [account_name]
-       FROM [dbo].[participant] p LEFT JOIN [dbo].[student_master_profile] sp ON sp.[keycloak_subject]=p.[student_subject]
-       LEFT JOIN [dbo].[account] a ON a.[id]=sp.[account_id] WHERE p.[training_id]=:id ORDER BY p.[registered_at],p.[full_name]`,
+    `SELECT p.id,COALESCE(sp.id,p.student_id) AS student_id,p.student_subject,p.full_name AS name,sp.email,sp.company_role,a.name AS account_name
+       FROM participant p LEFT JOIN student_master_profile sp ON sp.keycloak_subject=p.student_subject
+       LEFT JOIN account a ON a.id=sp.account_id WHERE p.training_id=:id ORDER BY p.registered_at,p.full_name`,
     { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
   );
   return res.json({ items });
@@ -377,12 +396,12 @@ requestFormReviewRouter.get("/trainings/:id/student-options", authorizeCapabilit
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   if (search.length > 150) throw new AppError(400, "Student search is too long");
   const replacements: Record<string, unknown> = {};
-  const filter = search ? "AND (sp.[name] LIKE :pattern OR sp.[email] LIKE :pattern OR sp.[company_role] LIKE :pattern OR a.[name] LIKE :pattern)" : "";
+  const filter = search ? "AND (sp.name ILIKE :pattern ESCAPE E'\\\\' OR sp.email ILIKE :pattern ESCAPE E'\\\\' OR sp.company_role ILIKE :pattern ESCAPE E'\\\\' OR a.name ILIKE :pattern ESCAPE E'\\\\')" : "";
   if (search) replacements.pattern = `%${escapeLike(search)}%`;
   const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT TOP (20) sp.[id],sp.[name],sp.[email],sp.[company_role],a.[name] AS [account_name] FROM [dbo].[student_master_profile] sp JOIN [dbo].[account] a ON a.[id]=sp.[account_id]
-      WHERE sp.[portal_enabled]=1 ${filter}
-      ORDER BY sp.[name],sp.[id]`,
+    `SELECT sp.id,sp.name,sp.email,sp.company_role,a.name AS account_name FROM student_master_profile sp JOIN account a ON a.id=sp.account_id
+      WHERE sp.portal_enabled IS TRUE ${filter}
+      ORDER BY sp.name,sp.id LIMIT 20`,
     { replacements, type: QueryTypes.SELECT },
   );
   return res.json({ items });
@@ -392,24 +411,24 @@ requestFormReviewRouter.put("/trainings/:id/participants", authorizeCapability("
   if (!Array.isArray(ids) || ids.some((id: unknown) => typeof id !== "string" || !isUuid(id)) || new Set(ids).size !== ids.length) throw new AppError(400, "Select a valid, unique list of Students");
   const transaction = await sequelize.transaction();
   try {
-    const trainingRows = await sequelize.query<{ expected_students: number | null }>("SELECT TOP (1) [expected_students] FROM [dbo].[training] WITH (UPDLOCK,HOLDLOCK) WHERE [id]=:id", { replacements: { id: req.params.id }, type: QueryTypes.SELECT, transaction });
+    const trainingRows = await sequelize.query<{ expected_students: number | null }>("SELECT expected_students FROM training WHERE id=:id FOR UPDATE", { replacements: { id: req.params.id }, type: QueryTypes.SELECT, transaction });
     if (!trainingRows[0]) throw new AppError(404, "Training not found");
     if (trainingRows[0].expected_students != null && ids.length > trainingRows[0].expected_students) throw new AppError(409, "Participant count cannot exceed the expected student count");
-    const profiles = ids.length ? await sequelize.query<{ id: string; keycloak_subject: string; name: string }>("SELECT [id],[keycloak_subject],[name] FROM [dbo].[student_master_profile] WHERE [portal_enabled]=1 AND [id] IN (:ids)", { replacements: { ids }, type: QueryTypes.SELECT, transaction }) : [];
+    const profiles = ids.length ? await sequelize.query<{ id: string; keycloak_subject: string; name: string }>("SELECT id,keycloak_subject,name FROM student_master_profile WHERE portal_enabled IS TRUE AND id IN (:ids)", { replacements: { ids }, type: QueryTypes.SELECT, transaction }) : [];
     if (profiles.length !== ids.length) throw new AppError(400, "One or more Students are inactive or unavailable");
-    const current = await sequelize.query<{ id: string; student_subject: string | null; student_id: string | null }>("SELECT [id],[student_subject],[student_id] FROM [dbo].[participant] WITH (UPDLOCK,HOLDLOCK) WHERE [training_id]=:trainingId", { replacements: { trainingId: req.params.id }, type: QueryTypes.SELECT, transaction });
+    const current = await sequelize.query<{ id: string; student_subject: string | null; student_id: string | null }>("SELECT id,student_subject,student_id FROM participant WHERE training_id=:trainingId FOR UPDATE", { replacements: { trainingId: req.params.id }, type: QueryTypes.SELECT, transaction });
     const subjects = new Set(profiles.map((profile) => profile.keycloak_subject));
     const removals = current.filter((participant) => participant.student_subject && !subjects.has(participant.student_subject));
     for (const participant of removals) {
-      const refs = await sequelize.query("SELECT TOP (1) [id] FROM [dbo].[attendance] WHERE [participant_id]=:id UNION ALL SELECT TOP (1) [id] FROM [dbo].[evaluation] WHERE [participant_id]=:id UNION ALL SELECT TOP (1) [id] FROM [dbo].[certificate] WHERE [participant_id]=:id UNION ALL SELECT TOP (1) [id] FROM [dbo].[invoice_detail] WHERE [participant_id]=:id", { replacements: { id: participant.id }, type: QueryTypes.SELECT, transaction });
+      const refs = await sequelize.query("SELECT id FROM attendance WHERE participant_id=:id UNION ALL SELECT id FROM evaluation WHERE participant_id=:id UNION ALL SELECT id FROM certificate WHERE participant_id=:id UNION ALL SELECT id FROM invoice_detail WHERE participant_id=:id", { replacements: { id: participant.id }, type: QueryTypes.SELECT, transaction });
       if (refs.length) throw new AppError(409, "A participant with training records cannot be removed");
-      await sequelize.query("DELETE FROM [dbo].[participant] WHERE [id]=:id", { replacements: { id: participant.id }, transaction });
+      await sequelize.query("DELETE FROM participant WHERE id=:id", { replacements: { id: participant.id }, transaction });
     }
     const currentSubjects = new Set(current.map((participant) => participant.student_subject).filter(Boolean));
-    for (const profile of profiles) if (!currentSubjects.has(profile.keycloak_subject)) await sequelize.query("INSERT INTO [dbo].[participant] ([id],[training_id],[student_id],[student_subject],[full_name],[registered_at],[created_at],[updated_at]) VALUES (:id,:trainingId,NULL,:subject,:name,SYSUTCDATETIME(),SYSUTCDATETIME(),SYSUTCDATETIME())", { replacements: { id: randomUUID(), trainingId: req.params.id, subject: profile.keycloak_subject, name: profile.name }, transaction });
+    for (const profile of profiles) if (!currentSubjects.has(profile.keycloak_subject)) await sequelize.query("INSERT INTO participant (id,training_id,student_id,student_subject,full_name,registered_at,created_at,updated_at) VALUES (:id,:trainingId,NULL,:subject,:name,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", { replacements: { id: randomUUID(), trainingId: req.params.id, subject: profile.keycloak_subject, name: profile.name }, transaction });
     await transaction.commit();
   } catch (error) { await transaction.rollback(); throw error; }
-  const items = await sequelize.query<Record<string, unknown>>("SELECT p.[id],COALESCE(sp.[id],p.[student_id]) AS [student_id],p.[student_subject],p.[full_name] AS [name],sp.[email],sp.[company_role],a.[name] AS [account_name] FROM [dbo].[participant] p LEFT JOIN [dbo].[student_master_profile] sp ON sp.[keycloak_subject]=p.[student_subject] LEFT JOIN [dbo].[account] a ON a.[id]=sp.[account_id] WHERE p.[training_id]=:id ORDER BY p.[registered_at],p.[full_name]", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
+  const items = await sequelize.query<Record<string, unknown>>("SELECT p.id,COALESCE(sp.id,p.student_id) AS student_id,p.student_subject,p.full_name AS name,sp.email,sp.company_role,a.name AS account_name FROM participant p LEFT JOIN student_master_profile sp ON sp.keycloak_subject=p.student_subject LEFT JOIN account a ON a.id=sp.account_id WHERE p.training_id=:id ORDER BY p.registered_at,p.full_name", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
   return res.json({ items });
 }));
 requestFormReviewRouter.get("/trainings", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
@@ -421,25 +440,25 @@ requestFormReviewRouter.get("/trainings", authorizeCapability("REQUEST_FORM", AC
   if (search.length > 150 || !["ALL", "SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"].includes(status) || (sessionDate && !validDate(sessionDate))) throw new AppError(400, "Invalid Training filters");
   const filters = ["1=1"];
   const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
-  if (search) { filters.push("(t.[name] LIKE :search OR rf.[request_form_number] LIKE :search)"); replacements.search = escapeLike(search); }
-  if (status !== "ALL") { filters.push("t.[status]=:status"); replacements.status = status; }
-  if (sessionDate) { filters.push("EXISTS (SELECT 1 FROM [dbo].[training_session] dts WHERE dts.[training_id]=t.[id] AND CAST(dts.[starts_at] AS date)=:sessionDate)"); replacements.sessionDate = sessionDate; }
+  if (search) { filters.push("(t.name ILIKE :search ESCAPE E'\\\\' OR rf.request_form_number ILIKE :search ESCAPE E'\\\\')"); replacements.search = escapeLike(search); }
+  if (status !== "ALL") { filters.push("t.status=:status"); replacements.status = status; }
+  if (sessionDate) { filters.push("EXISTS (SELECT 1 FROM training_session dts WHERE dts.training_id=t.id AND CAST(dts.starts_at AS date)=:sessionDate)"); replacements.sessionDate = sessionDate; }
   const where = filters.join(" AND ");
-  const from = `FROM [dbo].[training] t
-    JOIN [dbo].[request_form] rf ON rf.[id]=t.[request_form_id]
-    JOIN [dbo].[account] a ON a.[id]=t.[account_id]
-    JOIN [dbo].[course] c ON c.[id]=t.[course_id]
-    LEFT JOIN [dbo].[pic_profile] pp ON pp.[id]=t.[pic_profile_id]`;
+  const from = `FROM training t
+    JOIN request_form rf ON rf.id=t.request_form_id
+    JOIN account a ON a.id=t.account_id
+    JOIN course c ON c.id=t.course_id
+    LEFT JOIN pic_profile pp ON pp.id=t.pic_profile_id`;
   const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT t.[id],t.[name],t.[training_type],t.[status],t.[expected_students],t.[base_fee],rf.[request_form_number],a.[name] AS [account_name],c.[name] AS [course_name],pp.[name] AS [pic_name],
-      (SELECT STRING_AGG(CONVERT(char(10),CAST(ts.[starts_at] AS date),23),',') FROM [dbo].[training_session] ts WHERE ts.[training_id]=t.[id]) AS [training_dates],
-      (SELECT COUNT(1) FROM [dbo].[training_session] ts WHERE ts.[training_id]=t.[id]) AS [session_count],
-      (SELECT TOP (1) tp.[name] FROM [dbo].[training_trainer_assignment] tta JOIN [dbo].[trainer_profile] tp ON tp.[id]=tta.[trainer_profile_id] WHERE tta.[training_id]=t.[id] AND tta.[ended_at] IS NULL ORDER BY tta.[assigned_at] DESC) AS [trainer_name],
-      (SELECT TOP (1) r.[name] FROM [dbo].[training_session] ts JOIN [dbo].[booking_room] br ON br.[session_id]=ts.[id] JOIN [dbo].[room] r ON r.[id]=br.[room_id] WHERE ts.[training_id]=t.[id]) AS [room_name]
-      ${from} WHERE ${where} ORDER BY t.[created_at] DESC OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+    `SELECT t.id,t.name,t.training_type,t.status,t.expected_students,t.base_fee,rf.request_form_number,a.name AS account_name,c.name AS course_name,pp.name AS pic_name,
+      (SELECT STRING_AGG(TO_CHAR(CAST(ts.starts_at AS date),'YYYY-MM-DD'),',') FROM training_session ts WHERE ts.training_id=t.id) AS training_dates,
+      (SELECT COUNT(1) FROM training_session ts WHERE ts.training_id=t.id) AS session_count,
+      (SELECT tp.name FROM training_trainer_assignment tta JOIN trainer_profile tp ON tp.id=tta.trainer_profile_id WHERE tta.training_id=t.id AND tta.ended_at IS NULL ORDER BY tta.assigned_at DESC LIMIT 1) AS trainer_name,
+      (SELECT r.name FROM training_session ts JOIN booking_room br ON br.session_id=ts.id JOIN room r ON r.id=br.room_id WHERE ts.training_id=t.id LIMIT 1) AS room_name
+      ${from} WHERE ${where} ORDER BY t.created_at DESC LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
-  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT_BIG(1) AS [total] ${from} WHERE ${where}`, { replacements, type: QueryTypes.SELECT });
+  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT(1) AS total ${from} WHERE ${where}`, { replacements, type: QueryTypes.SELECT });
   return res.json({ items, page, pageSize, total: Number(count[0]?.total ?? 0) });
 }));
 requestFormReviewRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
@@ -449,15 +468,15 @@ requestFormReviewRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTI
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   const accountId = typeof req.query.accountId === "string" ? req.query.accountId : "ALL";
   if (!["ALL", "WAITING", "REVISION", "APPROVED"].includes(status)) throw new AppError(400, "Invalid status filter");
-  const filters = [status === "ALL" ? "1=1" : "rf.[status]=:status"];
+  const filters = [status === "ALL" ? "1=1" : "rf.status=:status"];
   const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize, status };
-  if (accountId !== "ALL") { if (!isUuid(accountId)) throw new AppError(400, "Invalid Account filter"); filters.push("rf.[account_id]=:accountId"); replacements.accountId = accountId; }
-  if (search) { filters.push("(a.[name] LIKE :search OR q.[quotation_code] LIKE :search OR EXISTS (SELECT 1 FROM [dbo].[request_form_course] c JOIN [dbo].[course] co ON co.[id]=c.[course_id] WHERE c.[request_form_id]=rf.[id] AND co.[name] LIKE :search))"); replacements.search = escapeLike(search); }
+  if (accountId !== "ALL") { if (!isUuid(accountId)) throw new AppError(400, "Invalid Account filter"); filters.push("rf.account_id=:accountId"); replacements.accountId = accountId; }
+  if (search) { filters.push("(a.name ILIKE :search ESCAPE E'\\\\' OR q.quotation_code ILIKE :search ESCAPE E'\\\\' OR EXISTS (SELECT 1 FROM request_form_course c JOIN course co ON co.id=c.course_id WHERE c.request_form_id=rf.id AND co.name ILIKE :search ESCAPE E'\\\\'))"); replacements.search = escapeLike(search); }
   const where = filters.join(" AND ");
-  const from = "FROM [dbo].[request_form] rf JOIN [dbo].[account] a ON a.[id]=rf.[account_id] JOIN [dbo].[pic_profile] pp ON pp.[id]=rf.[pic_profile_id] LEFT JOIN [dbo].[quotation] q ON q.[id]=rf.[quotation_id]";
-  const rows = await sequelize.query<Record<string, unknown>>(`SELECT rf.[id],rf.[request_form_number],rf.[form_type],rf.[status],rf.[po_reference],rf.[review_note],rf.[created_at],rf.[updated_at],rf.[sla_due_at],CASE WHEN rf.[status]='WAITING' AND rf.[sla_due_at]<=SYSUTCDATETIME() THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS [sla_overdue],a.[id] AS [account_id],a.[name] AS [account_name],pp.[name] AS [pic_name],q.[quotation_code],(SELECT TOP (1) t.[id] FROM [dbo].[training] t WHERE t.[request_form_id]=rf.[id] ORDER BY t.[created_at] DESC) AS [training_id],(SELECT COUNT(1) FROM [dbo].[request_form_course] c WHERE c.[request_form_id]=rf.[id]) AS [course_count],(SELECT TOP (1) co.[name] FROM [dbo].[request_form_course] c JOIN [dbo].[course] co ON co.[id]=c.[course_id] WHERE c.[request_form_id]=rf.[id]) AS [requested_course],(SELECT TOP (1) c.[delivery_type] FROM [dbo].[request_form_course] c WHERE c.[request_form_id]=rf.[id]) AS [delivery_type],(SELECT TOP (1) c.[amount_student] FROM [dbo].[request_form_course] c WHERE c.[request_form_id]=rf.[id]) AS [students],(SELECT STRING_AGG(CONVERT(char(10),s.[requested_date],23),',') FROM [dbo].[request_form_course] c JOIN [dbo].[request_form_session] s ON s.[request_form_course_id]=c.[id] WHERE c.[request_form_id]=rf.[id]) AS [requested_dates] ${from} WHERE ${where} ORDER BY rf.[updated_at] ASC OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`, { replacements, type: QueryTypes.SELECT });
-  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT_BIG(1) AS [total] ${from} WHERE ${where}`, { replacements, type: QueryTypes.SELECT });
-  const accounts = await sequelize.query<{ id: string; name: string }>("SELECT DISTINCT a.[id],a.[name] FROM [dbo].[request_form] rf JOIN [dbo].[account] a ON a.[id]=rf.[account_id] ORDER BY a.[name]", { type: QueryTypes.SELECT });
+  const from = "FROM request_form rf JOIN account a ON a.id=rf.account_id JOIN pic_profile pp ON pp.id=rf.pic_profile_id LEFT JOIN quotation q ON q.id=rf.quotation_id";
+  const rows = await sequelize.query<Record<string, unknown>>(`SELECT rf.id,rf.request_form_number,rf.form_type,rf.status,rf.po_reference,rf.review_note,rf.created_at,rf.updated_at,a.id AS account_id,a.name AS account_name,pp.name AS pic_name,q.quotation_code,(SELECT t.id FROM training t WHERE t.request_form_id=rf.id ORDER BY t.created_at DESC LIMIT 1) AS training_id,(SELECT COUNT(1) FROM request_form_course c WHERE c.request_form_id=rf.id) AS course_count,(SELECT co.name FROM request_form_course c JOIN course co ON co.id=c.course_id WHERE c.request_form_id=rf.id LIMIT 1) AS requested_course,(SELECT c.delivery_type FROM request_form_course c WHERE c.request_form_id=rf.id LIMIT 1) AS delivery_type,(SELECT c.amount_student FROM request_form_course c WHERE c.request_form_id=rf.id LIMIT 1) AS students,(SELECT STRING_AGG(TO_CHAR(s.requested_date,'YYYY-MM-DD'),',') FROM request_form_course c JOIN request_form_session s ON s.request_form_course_id=c.id WHERE c.request_form_id=rf.id) AS requested_dates ${from} WHERE ${where} ORDER BY rf.updated_at ASC LIMIT :pageSize OFFSET :offset`, { replacements, type: QueryTypes.SELECT });
+  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT(1) AS total ${from} WHERE ${where}`, { replacements, type: QueryTypes.SELECT });
+  const accounts = await sequelize.query<{ id: string; name: string }>("SELECT DISTINCT a.id,a.name FROM request_form rf JOIN account a ON a.id=rf.account_id ORDER BY a.name", { type: QueryTypes.SELECT });
   return res.json({ items: rows, accounts, page, pageSize, total: Number(count[0]?.total ?? 0) });
 }));
 requestFormReviewRouter.get("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => res.json(await readForm(req.params.id))));
@@ -467,29 +486,29 @@ requestFormReviewRouter.get("/:id/approval-options", authorizeCapability("REQUES
   if (form.courses.length !== 1) throw new AppError(409, "Approval requires exactly one Course in the Request Form");
   const dates = (form.courses[0].sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
   const trainers = await sequelize.query<Record<string, unknown>>(
-    `SELECT tp.[id],COALESCE(tp.[name],tp.[email]) AS [name],tp.[email],tp.[status],tp.[rating]
-       FROM [dbo].[trainer_profile] tp
-      WHERE tp.[status]='ACTIVE' AND NOT EXISTS (
-        SELECT 1 FROM [dbo].[training_trainer_assignment] tta JOIN [dbo].[training] t ON t.[id]=tta.[training_id]
-        JOIN [dbo].[training_session] ts ON ts.[training_id]=t.[id]
-        WHERE tta.[trainer_profile_id]=tp.[id] AND tta.[ended_at] IS NULL AND t.[status] IN ('SCHEDULED','ONGOING')
-          AND CAST(ts.[starts_at] AS date) IN (:dates)
+    `SELECT tp.id,COALESCE(tp.name,tp.email) AS name,tp.email,tp.status,tp.rating
+       FROM trainer_profile tp
+      WHERE tp.status='ACTIVE' AND NOT EXISTS (
+        SELECT 1 FROM training_trainer_assignment tta JOIN training t ON t.id=tta.training_id
+        JOIN training_session ts ON ts.training_id=t.id
+        WHERE tta.trainer_profile_id=tp.id AND tta.ended_at IS NULL AND t.status IN ('SCHEDULED','ONGOING')
+          AND CAST(ts.starts_at AS date) IN (:dates)
       ) AND NOT EXISTS (
-        SELECT 1 FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id]=sta.[session_id]
-        JOIN [dbo].[training] t ON t.[id]=ts.[training_id]
-        WHERE sta.[trainer_profile_id]=tp.[id] AND sta.[ended_at] IS NULL AND t.[status] IN ('SCHEDULED','ONGOING')
-          AND CAST(ts.[starts_at] AS date) IN (:dates)
-      ) ORDER BY [name]`,
+        SELECT 1 FROM session_trainer_assignment sta JOIN training_session ts ON ts.id=sta.session_id
+        JOIN training t ON t.id=ts.training_id
+        WHERE sta.trainer_profile_id=tp.id AND sta.ended_at IS NULL AND t.status IN ('SCHEDULED','ONGOING')
+          AND CAST(ts.starts_at AS date) IN (:dates)
+      ) ORDER BY name`,
     { replacements: { dates }, type: QueryTypes.SELECT },
   );
   const needsRoom = form.courses[0].location_type === "INTERNAL";
   const rooms = needsRoom ? await sequelize.query<Record<string, unknown>>(
-    `SELECT r.[id],r.[room_code],r.[name],r.[capacity],r.[facilities]
-       FROM [dbo].[room] r WHERE r.[status]='ACTIVE' AND r.[capacity]>=:capacity AND NOT EXISTS (
-         SELECT 1 FROM [dbo].[booking_room] br JOIN [dbo].[training_session] ts ON ts.[id]=br.[session_id]
-         JOIN [dbo].[training] t ON t.[id]=ts.[training_id]
-         WHERE br.[room_id]=r.[id] AND t.[status] IN ('SCHEDULED','ONGOING') AND CAST(ts.[starts_at] AS date) IN (:dates)
-       ) ORDER BY r.[name]`,
+    `SELECT r.id,r.room_code,r.name,r.capacity,r.facilities
+       FROM room r WHERE r.status='ACTIVE' AND r.capacity>=:capacity AND NOT EXISTS (
+         SELECT 1 FROM booking_room br JOIN training_session ts ON ts.id=br.session_id
+         JOIN training t ON t.id=ts.training_id
+         WHERE br.room_id=r.id AND t.status IN ('SCHEDULED','ONGOING') AND CAST(ts.starts_at AS date) IN (:dates)
+       ) ORDER BY r.name`,
     { replacements: { capacity: Number(form.courses[0].amount_student), dates }, type: QueryTypes.SELECT },
   ) : [];
   return res.json({ trainers, rooms, roomRequired: needsRoom, sessions: dates });
@@ -509,24 +528,24 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const dates = (course.sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
   if (!dates.length) throw new AppError(409, "The Request Form has no requested session dates");
   const options = await sequelize.query<{ id: string }>(
-    `SELECT tp.[id] FROM [dbo].[trainer_profile] tp WHERE tp.[id]=:trainerId AND tp.[status]='ACTIVE' AND NOT EXISTS (
-       SELECT 1 FROM [dbo].[training_trainer_assignment] tta JOIN [dbo].[training] t ON t.[id]=tta.[training_id]
-       JOIN [dbo].[training_session] ts ON ts.[training_id]=t.[id]
-       WHERE tta.[trainer_profile_id]=tp.[id] AND tta.[ended_at] IS NULL AND t.[status] IN ('SCHEDULED','ONGOING') AND CAST(ts.[starts_at] AS date) IN (:dates)
+    `SELECT tp.id FROM trainer_profile tp WHERE tp.id=:trainerId AND tp.status='ACTIVE' AND NOT EXISTS (
+       SELECT 1 FROM training_trainer_assignment tta JOIN training t ON t.id=tta.training_id
+       JOIN training_session ts ON ts.training_id=t.id
+       WHERE tta.trainer_profile_id=tp.id AND tta.ended_at IS NULL AND t.status IN ('SCHEDULED','ONGOING') AND CAST(ts.starts_at AS date) IN (:dates)
      ) AND NOT EXISTS (
-       SELECT 1 FROM [dbo].[session_trainer_assignment] sta JOIN [dbo].[training_session] ts ON ts.[id]=sta.[session_id]
-       JOIN [dbo].[training] t ON t.[id]=ts.[training_id]
-       WHERE sta.[trainer_profile_id]=tp.[id] AND sta.[ended_at] IS NULL AND t.[status] IN ('SCHEDULED','ONGOING') AND CAST(ts.[starts_at] AS date) IN (:dates)
+       SELECT 1 FROM session_trainer_assignment sta JOIN training_session ts ON ts.id=sta.session_id
+       JOIN training t ON t.id=ts.training_id
+       WHERE sta.trainer_profile_id=tp.id AND sta.ended_at IS NULL AND t.status IN ('SCHEDULED','ONGOING') AND CAST(ts.starts_at AS date) IN (:dates)
      )`, { replacements: { trainerId, dates }, type: QueryTypes.SELECT });
   if (!options.length) throw new AppError(409, "The selected Trainer is inactive or unavailable on a requested date");
   const needsRoom = course.location_type === "INTERNAL";
   if (needsRoom !== Boolean(roomId)) throw new AppError(400, needsRoom ? "Choose a Room for this internal training location" : "A Room must not be assigned to an external or online training");
   if (roomId) {
     const availableRoom = await sequelize.query<{ id: string }>(
-      `SELECT r.[id] FROM [dbo].[room] r WHERE r.[id]=:roomId AND r.[status]='ACTIVE' AND r.[capacity]>=:capacity AND NOT EXISTS (
-         SELECT 1 FROM [dbo].[booking_room] br JOIN [dbo].[training_session] ts ON ts.[id]=br.[session_id]
-         JOIN [dbo].[training] t ON t.[id]=ts.[training_id]
-         WHERE br.[room_id]=r.[id] AND t.[status] IN ('SCHEDULED','ONGOING') AND CAST(ts.[starts_at] AS date) IN (:dates)
+      `SELECT r.id FROM room r WHERE r.id=:roomId AND r.status='ACTIVE' AND r.capacity>=:capacity AND NOT EXISTS (
+         SELECT 1 FROM booking_room br JOIN training_session ts ON ts.id=br.session_id
+         JOIN training t ON t.id=ts.training_id
+         WHERE br.room_id=r.id AND t.status IN ('SCHEDULED','ONGOING') AND CAST(ts.starts_at AS date) IN (:dates)
        )`, { replacements: { roomId, capacity: Number(course.amount_student), dates }, type: QueryTypes.SELECT });
     if (!availableRoom.length) throw new AppError(409, "The selected Room is inactive, too small, or unavailable on a requested date");
   }
@@ -534,26 +553,26 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const now = new Date();
   await sequelize.transaction(async (transaction) => {
     await sequelize.query(
-      "INSERT INTO [dbo].[training] ([id],[account_id],[name],[course_id],[syllabus_id],[request_form_id],[pic_profile_id],[expected_students],[training_type],[status],[base_fee],[created_at],[updated_at]) VALUES (:id,:accountId,:name,:courseId,NULL,:requestFormId,:picId,:expectedStudents,:type,'SCHEDULED',:baseFee,:now,:now)",
+      "INSERT INTO training (id,account_id,name,course_id,syllabus_id,request_form_id,pic_profile_id,expected_students,training_type,status,base_fee,created_at,updated_at) VALUES (:id,:accountId,:name,:courseId,NULL,:requestFormId,:picId,:expectedStudents,:type,'SCHEDULED',:baseFee,:now,:now)",
       { replacements: { id: trainingId, accountId: form.item.account_id, name: String(form.item.training_title ?? "").slice(0, 255), courseId: course.course_id, requestFormId: form.item.id, picId: form.item.pic_profile_id, expectedStudents: Number(course.amount_student), type: course.delivery_type, baseFee, now }, transaction },
     );
     for (let index = 0; index < dates.length; index += 1) {
       const sessionId = randomUUID();
       await sequelize.query(
-        "INSERT INTO [dbo].[training_session] ([id],[training_id],[session_number],[starts_at],[ends_at],[class_location],[created_at],[updated_at]) VALUES (:id,:trainingId,:number,DATEADD(minute,:startMinutes,CAST(:date AS datetime2)),DATEADD(minute,:endMinutes,CAST(:date AS datetime2)),:classLocation,:now,:now)",
+        "INSERT INTO training_session (id,training_id,session_number,starts_at,ends_at,class_location,created_at,updated_at) VALUES (:id,:trainingId,:number,CAST(:date AS date)+(:startMinutes*INTERVAL '1 minute'),CAST(:date AS date)+(:endMinutes*INTERVAL '1 minute'),:classLocation,:now,:now)",
         { replacements: { id: sessionId, trainingId, number: index + 1, date: dates[index], startMinutes: Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)), endMinutes: Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5)), classLocation: course.delivery_type.startsWith("ONLINE") ? "ONLINE" : "OFFLINE", now }, transaction },
       );
       if (roomId) await sequelize.query(
-        "INSERT INTO [dbo].[booking_room] ([id],[session_id],[room_id],[booking_name],[detail_booking],[start_time],[end_time],[created_at],[updated_at]) VALUES (:id,:sessionId,:roomId,:bookingName,:detail,'00:00:00','23:59:59',:now,:now)",
+        "INSERT INTO booking_room (id,session_id,room_id,booking_name,detail_booking,start_time,end_time,created_at,updated_at) VALUES (:id,:sessionId,:roomId,:bookingName,:detail,'00:00:00','23:59:59',:now,:now)",
         { replacements: { id: randomUUID(), sessionId, roomId, bookingName: String(form.item.training_title ?? "").slice(0, 150), detail: `Request Form ${form.item.request_form_number}`, now }, transaction },
       );
     }
     await sequelize.query(
-      "INSERT INTO [dbo].[training_trainer_assignment] ([id],[training_id],[trainer_profile_id],[assignment_type],[assigned_at],[ended_at],[assigned_by_subject],[ended_by_subject],[created_at],[updated_at]) VALUES (:id,:trainingId,:trainerId,'PRIMARY',:now,NULL,:subject,NULL,:now,:now)",
+      "INSERT INTO training_trainer_assignment (id,training_id,trainer_profile_id,assignment_type,assigned_at,ended_at,assigned_by_subject,ended_by_subject,created_at,updated_at) VALUES (:id,:trainingId,:trainerId,'PRIMARY',:now,NULL,:subject,NULL,:now,:now)",
       { replacements: { id: randomUUID(), trainingId, trainerId, subject: req.auth!.userId, now }, transaction },
     );
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "TRAINING", objectId: trainingId, after: { request_form_id: form.item.id, request_form_number: form.item.request_form_number, account_id: form.item.account_id, pic_profile_id: form.item.pic_profile_id, course_id: course.course_id, expected_students: Number(course.amount_student), status: "SCHEDULED", training_type: course.delivery_type, trainer_id: trainerId, room_id: roomId, base_fee: baseFee, session_dates: dates }, processName: "request-form-approve-create-training" }, transaction);
-    const updated = await sequelize.query<{ id: string }>("UPDATE [dbo].[request_form] SET [status]='APPROVED',[review_note]=NULL,[reviewed_by_subject]=:subject,[approved_at]=:now,[sla_due_at]=NULL,[sla_notified_at]=NULL,[updated_at]=:now OUTPUT INSERTED.[id] WHERE [id]=:id AND [status]='WAITING'", { replacements: { id: form.item.id, subject: req.auth!.userId, now }, type: QueryTypes.SELECT, transaction });
+    const updated = await sequelize.query<{ id: string }>("UPDATE request_form SET status='APPROVED',review_note=NULL,reviewed_by_subject=:subject,approved_at=:now,sla_due_at=NULL,sla_notified_at=NULL,updated_at=:now RETURNING id WHERE id=:id AND status='WAITING'", { replacements: { id: form.item.id, subject: req.auth!.userId, now }, type: QueryTypes.SELECT, transaction });
     if (!updated.length) throw new AppError(409, "The Request Form has already been processed");
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: form.item.id, before: { status: "WAITING", training_id: null, trainer_id: null, room_id: null, base_fee: null }, after: { status: "APPROVED", training_id: trainingId, trainer_id: trainerId, room_id: roomId, base_fee: baseFee }, processName: "request-form-approve" }, transaction);
   });
@@ -561,10 +580,10 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
 }));
 requestFormReviewRouter.patch("/:id/return", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
   if (typeof req.body?.note !== "string" || !req.body.note.trim() || req.body.note.length > 4000) throw new AppError(400, "A revision note is required");
-  const rows = await sequelize.query<RequestFormRow>("SELECT TOP (1) * FROM [dbo].[request_form] WHERE [id]=:id AND [status]='WAITING'", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<RequestFormRow>("SELECT * FROM request_form WHERE id=:id AND status='WAITING'", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
   const form = rows[0]; if (!form) throw new AppError(404, "Waiting Request Form not found");
   await sequelize.transaction(async (transaction) => {
-    await sequelize.query("UPDATE [dbo].[request_form] SET [status]='REVISION',[review_note]=:note,[reviewed_by_subject]=:subject,[sla_due_at]=NULL,[sla_notified_at]=NULL,[updated_at]=:now WHERE [id]=:id", { replacements: { id: form.id, note: req.body.note.trim(), subject: req.auth!.userId, now: new Date() }, transaction });
+    await sequelize.query("UPDATE request_form SET status='REVISION',review_note=:note,reviewed_by_subject=:subject,sla_due_at=NULL,sla_notified_at=NULL,updated_at=:now WHERE id=:id", { replacements: { id: form.id, note: req.body.note.trim(), subject: req.auth!.userId, now: new Date() }, transaction });
     await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: form.id, before: { status: "WAITING", review_note: form.review_note }, after: { status: "REVISION", review_note: req.body.note.trim() }, processName: "request-form-return-for-revision" }, transaction);
   });
   return res.json({ item: { id: form.id, status: "REVISION", review_note: req.body.note.trim() } });

@@ -9,8 +9,7 @@ if (cloudinaryCredentialParts.some(Boolean) && !cloudinaryCredentialParts.every(
 }
 export const env = {
   port: Number(process.env.PORT ?? 4002), nodeEnv: process.env.NODE_ENV ?? "development",
-  dbHost: required("DB_HOST"), dbPort: Number(process.env.DB_PORT ?? 1433), dbName: required("DB_NAME"), dbUser: required("DB_USER"), dbPassword: required("DB_PASSWORD"),
-  dbEncrypt: process.env.DB_ENCRYPT === "true", dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === "true",
+  dbHost: required("DB_HOST"), dbPort: Number(process.env.DB_PORT ?? 5432), dbName: required("DB_NAME"), dbUser: required("DB_USER"), dbPassword: required("DB_PASSWORD"),
   gatewaySharedSecret: required("GATEWAY_SHARED_SECRET"),
   serviceSharedSecret: required("SERVICE_SHARED_SECRET"),
   keycloakUrl: process.env.KEYCLOAK_INTERNAL_URL ?? "http://keycloak:8080",
@@ -34,4 +33,5 @@ export const env = {
   mailEncryption: process.env.MAIL_ENCRYPTION ?? "tls",
   mailFromAddress: process.env.MAIL_FROM_ADDRESS,
   mailFromName: process.env.MAIL_FROM_NAME ?? "ExecuTrain",
+  developerSupportEmail: process.env.DEVELOPER_SUPPORT_EMAIL,
 };

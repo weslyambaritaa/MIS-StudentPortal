@@ -114,7 +114,7 @@ auditTrailRouter.get("/", authorizeActiveRole(ROLES.ADMIN), asyncHandler(async (
   if (to) { predicates.push("created_at <= :toDate"); replacements.toDate = to; }
   const where = predicates.length ? `WHERE ${predicates.join(" AND ")}` : "";
   const countRows = await sequelize.query<{ total: number }>(
-    `SELECT COUNT_BIG(1) AS total FROM (
+    `SELECT COUNT(1) AS total FROM (
        SELECT id FROM audit_trail ${where}
        UNION ALL
        SELECT id FROM audit_trail_archive ${where}
@@ -134,7 +134,7 @@ auditTrailRouter.get("/", authorizeActiveRole(ROLES.ADMIN), asyncHandler(async (
                 CAST('archive' AS VARCHAR(10)) AS storage FROM audit_trail_archive ${where}
        ) AS audit_rows
        ORDER BY created_at DESC, id DESC
-       OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+       LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
   return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });

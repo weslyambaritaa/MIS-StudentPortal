@@ -18,25 +18,19 @@ module.exports = {
           created_at: {
             type: Sequelize.DATE,
             allowNull: false,
-            defaultValue: Sequelize.literal("GETUTCDATE()"),
+            defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
           },
           updated_at: {
             type: Sequelize.DATE,
             allowNull: false,
-            defaultValue: Sequelize.literal("GETUTCDATE()"),
+            defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
           },
         },
         { transaction },
       );
 
-      await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_business_role] CHECK ([role] IN ('student','pic','trainer','sales','admin','finance','management'))",
-        { transaction },
-      );
-      await queryInterface.sequelize.query(
-        "ALTER TABLE [dbo].[role_access_matrix] ADD CONSTRAINT [ck_role_access_matrix_resource_group] CHECK ([resource_group] IN ('ACCOUNT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))",
-        { transaction },
-      );
+      await queryInterface.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_business_role CHECK (role IN ('student','pic','trainer','sales','admin','finance','management'))", { transaction });
+      await queryInterface.sequelize.query("ALTER TABLE role_access_matrix ADD CONSTRAINT ck_role_access_matrix_resource_group CHECK (resource_group IN ('ACCOUNT','INDUSTRY','COURSE','COURSE_CATEGORY','QUOTATION','REQUEST_FORM','TRAINING','TRAINING_SESSION','PARTICIPANT','ATTENDANCE','EVALUATION','CERTIFICATE','INVOICE','ROOM','ROOM_BOOKING','CLASS_MATERIAL','REMOTE_LAB'))", { transaction });
       await queryInterface.addIndex("role_access_matrix", ["role", "resource_group"], {
         name: "uq_role_access_matrix_role_resource",
         unique: true,

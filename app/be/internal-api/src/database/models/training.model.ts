@@ -33,7 +33,7 @@ Training.init(
     base_fee: { type: DataTypes.DECIMAL(19, 4), allowNull: true },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "DRAFT", validate: { isIn: [["DRAFT", "SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"]] } },
   },
-  { sequelize, tableName: "training", hasTrigger: true, timestamps: true, createdAt: "created_at", updatedAt: "updated_at" },
+  { sequelize, tableName: "training", timestamps: true, createdAt: "created_at", updatedAt: "updated_at" },
 );
 
 Account.hasMany(Training, { foreignKey: "account_id", as: "trainings" });

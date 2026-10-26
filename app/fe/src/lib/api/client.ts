@@ -8,23 +8,32 @@ export async function apiRequest<T>(
   activeRole: BusinessRole,
   init: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init.headers,
-      Authorization: `Bearer ${accessToken}`,
-      "X-Active-Role": activeRole,
-      "Content-Type": "application/json",
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${accessToken}`,
+        "X-Active-Role": activeRole,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new Error("We couldn't connect to the service. Check your connection and try again. If the problem continues, contact Developer Support.");
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    let message = `API request failed: ${response.status}`;
+    let message = `The request could not be completed (HTTP ${response.status}).`;
     if (body) {
       try {
-        const payload = JSON.parse(body) as { message?: unknown };
-        if (typeof payload.message === "string" && payload.message.trim()) message = payload.message;
+        const payload = JSON.parse(body) as { error?: { code?: unknown; message?: unknown; requestId?: unknown }; message?: unknown };
+        const apiMessage = payload.error?.message ?? payload.message;
+        const requestId = payload.error?.requestId;
+        if (typeof apiMessage === "string" && apiMessage.trim()) message = apiMessage;
+        if (typeof requestId === "string" && requestId.trim()) message += ` (Reference: ${requestId})`;
       } catch {
         // Keep the status-based message when the server returns non-JSON text.
       }

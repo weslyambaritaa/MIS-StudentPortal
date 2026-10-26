@@ -18,6 +18,7 @@ type NotificationsModalProps = {
   open: boolean;
   onClose: () => void;
   notifications: readonly NotificationItem[];
+  error?: string | null;
   onSelect?: (notification: NotificationItem) => void;
 };
 
@@ -25,6 +26,7 @@ export function NotificationsModal({
   open,
   onClose,
   notifications,
+  error,
   onSelect,
 }: NotificationsModalProps) {
   return (
@@ -49,7 +51,9 @@ export function NotificationsModal({
         </div>
 
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
-          {notifications.length === 0 ? (
+          {error ? (
+            <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-3 py-4 text-sm text-red-700">{error}</p>
+          ) : notifications.length === 0 ? (
             <p className="rounded-2xl border border-rose-50 bg-neutral-50 px-3 py-6 text-center text-sm text-zinc-950/60">
               You don&apos;t have any notifications.
             </p>

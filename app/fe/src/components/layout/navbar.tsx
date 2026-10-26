@@ -35,6 +35,7 @@ export function Navbar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   const loadNotifications = useCallback(async () => {
     if (activeRole !== ROLES.ADMIN) return;
@@ -42,8 +43,10 @@ export function Navbar({
       const result = await api<{ items: NotificationItem[]; unreadCount: number }>("/api/v1/internal/notifications");
       setNotifications(result.items);
       setUnreadNotifications(result.unreadCount);
+      setNotificationsError(null);
     } catch (error) {
       console.error("Could not load in-app notifications", error);
+      setNotificationsError(error instanceof Error ? error.message : "Notifications are temporarily unavailable. Please try again.");
     }
   }, [activeRole, api]);
 
@@ -51,6 +54,7 @@ export function Navbar({
     if (activeRole !== ROLES.ADMIN) {
       setNotifications([]);
       setUnreadNotifications(0);
+      setNotificationsError(null);
       return;
     }
     void loadNotifications();
@@ -154,7 +158,7 @@ export function Navbar({
         onClose={() => setLogoutConfirmationOpen(false)}
         onConfirm={handleLogout}
       />
-      <NotificationsModal open={notificationsOpen} onClose={() => setNotificationsOpen(false)} notifications={notifications} onSelect={(notification) => void selectNotification(notification)} />
+      <NotificationsModal open={notificationsOpen} onClose={() => setNotificationsOpen(false)} notifications={notifications} error={notificationsError} onSelect={(notification) => void selectNotification(notification)} />
     </header>
   );
 }

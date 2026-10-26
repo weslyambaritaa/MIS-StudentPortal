@@ -1,8 +1,8 @@
 "use strict";
 
 const timestamps = (Sequelize) => ({
-  created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("GETUTCDATE()") },
-  updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("GETUTCDATE()") },
+  created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
+  updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
 });
 
 const check = async (qi, name, expression, transaction) =>
@@ -117,7 +117,7 @@ module.exports = {
       await qi.addColumn("training_session", "agenda", { type: S.STRING(255), allowNull: true }, { transaction: t });
       await check(qi, "training_session.ck_training_session_class_location", "class_location IS NULL OR class_location IN ('ONLINE','OFFLINE','HYBRID')", t);
 
-      await qi.addColumn("participant", "registered_at", { type: S.DATE, allowNull: false, defaultValue: S.literal("GETUTCDATE()") }, { transaction: t });
+      await qi.addColumn("participant", "registered_at", { type: S.DATE, allowNull: false, defaultValue: S.literal("CURRENT_TIMESTAMP") }, { transaction: t });
       await qi.createTable("attendance", {
         id: { type: S.UUID, allowNull: false, primaryKey: true },
         participant_id: { type: S.UUID, allowNull: false, references: { model: "participant", key: "id" }, onUpdate: "CASCADE", onDelete: "NO ACTION" },
@@ -133,7 +133,7 @@ module.exports = {
         participant_id: { type: S.UUID, allowNull: false, references: { model: "participant", key: "id" }, onUpdate: "CASCADE", onDelete: "NO ACTION" },
         training_id: { type: S.UUID, allowNull: false, references: { model: "training", key: "id" }, onUpdate: "CASCADE", onDelete: "NO ACTION" },
         score: { type: S.INTEGER, allowNull: true }, comment: { type: S.STRING(255), allowNull: true },
-        submitted_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("GETUTCDATE()") }, ...timestamps(S),
+        submitted_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("CURRENT_TIMESTAMP") }, ...timestamps(S),
       }, { transaction: t });
       await qi.addIndex("evaluation", ["participant_id", "training_id"], { name: "uq_evaluation_participant_training", unique: true, transaction: t });
       await qi.addIndex("evaluation", ["training_id"], { name: "ix_evaluation_training_id", transaction: t });
@@ -207,14 +207,14 @@ module.exports = {
         id: { type: S.UUID, allowNull: false, primaryKey: true }, actor_subject: { type: S.STRING(255), allowNull: true },
         action: { type: S.STRING(50), allowNull: false }, object_type: { type: S.STRING(50), allowNull: false }, object_id: { type: S.STRING(100), allowNull: true },
         data_before: { type: S.TEXT("long"), allowNull: true }, data_after: { type: S.TEXT("long"), allowNull: true },
-        created_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("GETUTCDATE()") },
+        created_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("CURRENT_TIMESTAMP") },
       }, { transaction: t });
       await qi.addIndex("audit_trail", ["actor_subject", "created_at"], { name: "ix_audit_trail_actor_created", transaction: t });
       await qi.addIndex("audit_trail", ["object_type", "object_id"], { name: "ix_audit_trail_object", transaction: t });
 
       await qi.createTable("import_batches", {
         id: { type: S.UUID, allowNull: false, primaryKey: true }, created_by_subject: { type: S.STRING(255), allowNull: true },
-        filename: { type: S.STRING(255), allowNull: false }, uploaded_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("GETUTCDATE()") },
+        filename: { type: S.STRING(255), allowNull: false }, uploaded_at: { type: S.DATE, allowNull: false, defaultValue: S.literal("CURRENT_TIMESTAMP") },
         status: { type: S.STRING(20), allowNull: false, defaultValue: "PENDING" }, ...timestamps(S),
       }, { transaction: t });
       await check(qi, "import_batches.ck_import_batches_status", "status IN ('PENDING','PROCESSING','COMPLETED','FAILED')", t);

@@ -1,6 +1,8 @@
 import express from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import { randomUUID } from "node:crypto";
+import { apiErrorFormatter, createCentralAlertReporter, createHttp5xxMonitor, createLogger } from "@mis/logger";
 
 import { corsMiddleware } from "./middlewares/cors.middleware";
 import { requestId } from "./middlewares/request-id.middleware";
@@ -19,6 +21,7 @@ import { internalProxy, trainerPortalProxy } from "./proxy/internal.proxy";
 import { accountAdminProxy, accessLogsAdminProxy } from "./proxy/admin.proxy";
 
 import { routes } from "./routes";
+import { env } from "./config/env";
 
 import { notFound } from "./middlewares/not-found.middleware";
 import { errorHandler } from "./middlewares/error-handler.middleware";
@@ -30,7 +33,10 @@ export const app = express();
  * Aman digunakan untuk seluruh request.
  */
 app.use(requestId);
+const logger = createLogger("api-gateway");
 app.use(pinoHttp({
+  logger,
+  genReqId: (req, res) => { const id = req.headers["x-request-id"]?.toString() ?? randomUUID(); res.setHeader("x-request-id", id); return id; },
   redact: {
     paths: ["req.headers.authorization", "req.headers.x-gateway-secret", "req.headers.x-service-secret"],
     censor: "[REDACTED]",
@@ -60,6 +66,7 @@ app.use("/admin", adminProxy);
 
 app.use(helmet());
 app.use(corsMiddleware);
+app.use(apiErrorFormatter);
 
 /*
  * Health dan general Gateway routes.
@@ -73,6 +80,7 @@ app.use(routes);
  */
 
 app.use("/api/v1", apiRateLimit);
+app.use(createHttp5xxMonitor({ service: "api-gateway", logger, report: createCentralAlertReporter("api-gateway", env.internalApiUrl, env.gatewaySharedSecret) }));
 
 // Separate administrative identity route; it intentionally does not select or union a business activeRole.
 app.use("/api/v1/admin/accounts", authenticateUserProvisioner, accountAdminProxy);

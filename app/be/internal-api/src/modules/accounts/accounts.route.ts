@@ -25,7 +25,7 @@ const displayName = (user: { firstName?: string; lastName?: string; username: st
 
 async function nextAccountCode(transaction: Transaction) {
   const rows = await sequelize.query<{ value: number | string | bigint }>(
-    "SELECT NEXT VALUE FOR [dbo].[account_code_seq] AS [value]", { type: QueryTypes.SELECT, transaction },
+    "SELECT nextval('account_code_seq') AS value", { type: QueryTypes.SELECT, transaction },
   );
   return `ACC-${String(rows[0].value).padStart(6, "0")}`;
 }
@@ -50,36 +50,36 @@ accountsRouter.get("/", authorizeActiveRole(ROLES.SALES), authorizeCapability("A
   if (industryId !== undefined && (typeof industryId !== "string" || industryId.length > 50)) return res.status(400).json({ message: "Invalid Industry filter" });
   if (status !== "ALL" && !validStatus(status)) return res.status(400).json({ message: "Invalid status filter" });
 
-  const filters: string[] = ["sa.[sales_subject] = :subject", "sa.[ended_at] IS NULL"];
+  const filters: string[] = ["sa.sales_subject = :subject", "sa.ended_at IS NULL"];
   const replacements: Record<string, unknown> = { subject: req.auth!.userId, offset: (page - 1) * pageSize, pageSize };
   if (search) {
-    filters.push("(a.[account_code] LIKE :search OR a.[name] LIKE :search)");
+    filters.push("(a.account_code ILIKE :search OR a.name ILIKE :search)");
     replacements.search = `%${search.replace(/[\[%_]/g, (character) => `[${character}]`)}%`;
   }
-  if (industryId) { filters.push("a.[industry_id] = :industryId"); replacements.industryId = industryId; }
-  if (status !== "ALL") { filters.push("a.[status] = :status"); replacements.status = status; }
+  if (industryId) { filters.push("a.industry_id = :industryId"); replacements.industryId = industryId; }
+  if (status !== "ALL") { filters.push("a.status = :status"); replacements.status = status; }
   const where = `WHERE ${filters.join(" AND ")}`;
   const countRows = await sequelize.query<{ total: number | string }>(
-    `SELECT COUNT_BIG(1) AS [total] FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id] ${where}`,
+    `SELECT COUNT(1) AS total FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id ${where}`,
     { replacements, type: QueryTypes.SELECT },
   );
   const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT a.[id], a.[account_code], a.[name], a.[account_type], a.[industry_id], i.[industry_code], i.[name] AS [industry_name], a.[status], a.[personal_student_subject], sa.[sales_subject],
-       (SELECT COUNT(1) FROM [dbo].[student_master_profile] sp WHERE sp.[account_id] = a.[id] AND sp.[portal_enabled] = 1)
-         + CASE WHEN a.[account_type] = 'PERSONAL' AND a.[personal_student_subject] IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM [dbo].[student_master_profile] linked_sp WHERE linked_sp.[account_id] = a.[id] AND linked_sp.[keycloak_subject] = a.[personal_student_subject] AND linked_sp.[portal_enabled] = 1)
-             AND NOT EXISTS (SELECT 1 FROM [dbo].[student_master_profile] inactive_sp WHERE inactive_sp.[keycloak_subject] = a.[personal_student_subject] AND inactive_sp.[portal_enabled] = 0)
-           THEN 1 ELSE 0 END AS [student_count],
-       (SELECT COUNT(1) FROM [dbo].[pic_account_assignment] pa WHERE pa.[account_id] = a.[id] AND pa.[ended_at] IS NULL) AS [pic_count],
-       (SELECT COUNT(1) FROM [dbo].[training] t WHERE t.[account_id] = a.[id]) AS [training_count]
-     FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id]
-     LEFT JOIN [dbo].[industry] i ON i.[id] = a.[industry_id]
-     ${where} ORDER BY a.[name] ASC, a.[account_code] ASC OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+    `SELECT a.id, a.account_code, a.name, a.account_type, a.industry_id, i.industry_code, i.name AS industry_name, a.status, a.personal_student_subject, sa.sales_subject,
+       (SELECT COUNT(1) FROM student_master_profile sp WHERE sp.account_id = a.id AND sp.portal_enabled IS TRUE)
+         + CASE WHEN a.account_type = 'PERSONAL' AND a.personal_student_subject IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM student_master_profile linked_sp WHERE linked_sp.account_id = a.id AND linked_sp.keycloak_subject = a.personal_student_subject AND linked_sp.portal_enabled IS TRUE)
+             AND NOT EXISTS (SELECT 1 FROM student_master_profile inactive_sp WHERE inactive_sp.keycloak_subject = a.personal_student_subject AND inactive_sp.portal_enabled IS FALSE)
+           THEN 1 ELSE 0 END AS student_count,
+       (SELECT COUNT(1) FROM pic_account_assignment pa WHERE pa.account_id = a.id AND pa.ended_at IS NULL) AS pic_count,
+       (SELECT COUNT(1) FROM training t WHERE t.account_id = a.id) AS training_count
+     FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
+     LEFT JOIN industry i ON i.id = a.industry_id
+     ${where} ORDER BY a.name ASC, a.account_code ASC LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
   const pageIds = rows.map((row) => row.id).filter((id): id is string => typeof id === "string");
   const picRows = pageIds.length ? await sequelize.query<{ account_id: string; keycloak_subject: string; name: string }>(
-    "SELECT [account_id], pp.[keycloak_subject], pp.[name] FROM [dbo].[pic_account_assignment] pa JOIN [dbo].[pic_profile] pp ON pp.[id] = pa.[pic_profile_id] WHERE pa.[ended_at] IS NULL AND pa.[account_id] IN (:accountIds)",
+    "SELECT account_id, pp.keycloak_subject, pp.name FROM pic_account_assignment pa JOIN pic_profile pp ON pp.id = pa.pic_profile_id WHERE pa.ended_at IS NULL AND pa.account_id IN (:accountIds)",
     { replacements: { accountIds: pageIds }, type: QueryTypes.SELECT },
   ) : [];
   const items = rows.map((row) => ({
@@ -99,21 +99,21 @@ accountsRouter.get("/industries", authorizeActiveRole(ROLES.SALES), authorizeCap
 
 accountsRouter.get("/:id/students", authorizeActiveRole(ROLES.SALES), authorizeCapability("ACCOUNT", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const accountRows = await sequelize.query<{ id: string }>(
-    `SELECT TOP (1) a.[id] FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id]
-     WHERE a.[id] = :id AND sa.[sales_subject] = :subject AND sa.[ended_at] IS NULL`,
+    `SELECT a.id FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
+     WHERE a.id = :id AND sa.sales_subject = :subject AND sa.ended_at IS NULL`,
     { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT },
   );
   if (!accountRows.length) return res.status(404).json({ message: "Account not found" });
   const [rows, personalRows, masterStudents] = await Promise.all([
     sequelize.query<{ student_subject: string; training_name: string; training_status: string }>(
-      `SELECT p.[student_subject], t.[name] AS [training_name], t.[status] AS [training_status]
-       FROM [dbo].[participant] p JOIN [dbo].[training] t ON t.[id] = p.[training_id]
-       WHERE t.[account_id] = :id AND p.[student_subject] IS NOT NULL ORDER BY t.[name]`,
+      `SELECT p.student_subject, t.name AS training_name, t.status AS training_status
+       FROM participant p JOIN training t ON t.id = p.training_id
+       WHERE t.account_id = :id AND p.student_subject IS NOT NULL ORDER BY t.name`,
       { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
     ),
-    sequelize.query<{ personal_student_subject: string | null }>("SELECT [personal_student_subject] FROM [dbo].[account] WHERE [id] = :id", { replacements: { id: req.params.id }, type: QueryTypes.SELECT }),
+    sequelize.query<{ personal_student_subject: string | null }>("SELECT personal_student_subject FROM account WHERE id = :id", { replacements: { id: req.params.id }, type: QueryTypes.SELECT }),
     sequelize.query<{ student_subject: string; name: string; email: string; student_id: string | null }>(
-      "SELECT [keycloak_subject] AS [student_subject], [name], [email], [student_id] FROM [dbo].[student_master_profile] WHERE [account_id] = :id",
+      "SELECT keycloak_subject AS student_subject, name, email, student_id FROM student_master_profile WHERE account_id = :id",
       { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
     ),
   ]);
@@ -139,16 +139,16 @@ accountsRouter.get("/:id/students", authorizeActiveRole(ROLES.SALES), authorizeC
 
 accountsRouter.get("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapability("ACCOUNT", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT TOP (1) a.[id], a.[account_code], a.[name], a.[account_type], a.[industry_id], i.[industry_code], i.[name] AS [industry_name], a.[status], a.[personal_student_subject], sa.[sales_subject]
-     FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id]
-     LEFT JOIN [dbo].[industry] i ON i.[id] = a.[industry_id]
-     WHERE a.[id] = :id AND sa.[sales_subject] = :subject AND sa.[ended_at] IS NULL`,
+    `SELECT a.id, a.account_code, a.name, a.account_type, a.industry_id, i.industry_code, i.name AS industry_name, a.status, a.personal_student_subject, sa.sales_subject
+     FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
+     LEFT JOIN industry i ON i.id = a.industry_id
+     WHERE a.id = :id AND sa.sales_subject = :subject AND sa.ended_at IS NULL`,
     { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT },
   );
   if (!rows.length) return res.status(404).json({ message: "Account not found" });
   const picRows = await sequelize.query<{ keycloak_subject: string; name: string; email: string; status: string }>(
-    `SELECT pp.[keycloak_subject], pp.[name], pp.[email], pp.[status] FROM [dbo].[pic_account_assignment] pa JOIN [dbo].[pic_profile] pp ON pp.[id] = pa.[pic_profile_id]
-     WHERE pa.[account_id] = :id AND pa.[ended_at] IS NULL`,
+    `SELECT pp.keycloak_subject, pp.name, pp.email, pp.status FROM pic_account_assignment pa JOIN pic_profile pp ON pp.id = pa.pic_profile_id
+     WHERE pa.account_id = :id AND pa.ended_at IS NULL`,
     { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
   );
   return res.json({ item: rows[0], pics: picRows.map(({ keycloak_subject, name, email, status }) => ({ subject: keycloak_subject, name, email, status })) });
@@ -187,8 +187,8 @@ accountsRouter.put("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapability
   const transaction = await sequelize.transaction();
   try {
     const rows = await sequelize.query<Record<string, unknown>>(
-      `SELECT TOP (1) a.* FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id]
-       WHERE a.[id] = :id AND sa.[sales_subject] = :subject AND sa.[ended_at] IS NULL`,
+      `SELECT a.* FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
+       WHERE a.id = :id AND sa.sales_subject = :subject AND sa.ended_at IS NULL`,
       { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT, transaction },
     );
     if (!rows.length) { await transaction.rollback(); return res.status(404).json({ message: "Account not found" }); }
@@ -201,8 +201,8 @@ accountsRouter.put("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapability
     const nextType = accountTypeForIndustry(industry.industry_code);
     if (nextType !== account.account_type) {
       const [trainingRows, participantRows] = await Promise.all([
-        sequelize.query<{ count: number | string }>("SELECT COUNT_BIG(1) AS [count] FROM [dbo].[training] WHERE [account_id] = :id", { replacements: { id: account.id }, type: QueryTypes.SELECT, transaction }),
-        sequelize.query<{ count: number | string }>("SELECT COUNT_BIG(1) AS [count] FROM [dbo].[participant] p JOIN [dbo].[training] t ON t.[id] = p.[training_id] WHERE t.[account_id] = :id", { replacements: { id: account.id }, type: QueryTypes.SELECT, transaction }),
+        sequelize.query<{ count: number | string }>("SELECT COUNT(1) AS count FROM training WHERE account_id = :id", { replacements: { id: account.id }, type: QueryTypes.SELECT, transaction }),
+        sequelize.query<{ count: number | string }>("SELECT COUNT(1) AS count FROM participant p JOIN training t ON t.id = p.training_id WHERE t.account_id = :id", { replacements: { id: account.id }, type: QueryTypes.SELECT, transaction }),
       ]);
       try { assertAccountTypeChangeAllowed({ linkedPersonalStudent: Boolean(account.personal_student_subject), trainingCount: Number(trainingRows[0]?.count ?? 0), participantCount: Number(participantRows[0]?.count ?? 0) }); }
       catch (error) { await transaction.rollback(); return res.status(409).json({ message: (error as Error).message }); }
@@ -238,8 +238,8 @@ accountsRouter.delete("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapabil
   const transaction = await sequelize.transaction();
   try {
     const rows = await sequelize.query<Record<string, unknown>>(
-      `SELECT TOP (1) a.* FROM [dbo].[account] a JOIN [dbo].[sales_account_assignment] sa ON sa.[account_id] = a.[id]
-       WHERE a.[id] = :id AND sa.[sales_subject] = :subject AND sa.[ended_at] IS NULL`,
+      `SELECT a.* FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
+       WHERE a.id = :id AND sa.sales_subject = :subject AND sa.ended_at IS NULL`,
       { replacements: { id: req.params.id, subject: req.auth!.userId }, type: QueryTypes.SELECT, transaction },
     );
     const found = rows[0];
@@ -249,13 +249,13 @@ accountsRouter.delete("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapabil
     const owner = await SalesAccountAssignment.findOne({ where: { account_id: account.id, ended_at: null }, transaction, lock: transaction.LOCK.UPDATE });
     if (!owner || owner.sales_subject !== req.auth!.userId) { await transaction.rollback(); return res.status(404).json({ message: "Account not found" }); }
     const trainingRows = await sequelize.query<{ count: number | string }>(
-      "SELECT COUNT_BIG(1) AS [count] FROM [dbo].[training] WHERE [account_id] = :id",
+      "SELECT COUNT(1) AS count FROM training WHERE account_id = :id",
       { replacements: { id: req.params.id }, type: QueryTypes.SELECT, transaction },
     );
     try { assertAccountDeletable(Number(trainingRows[0]?.count ?? 0)); }
     catch (error) { await transaction.rollback(); return res.status(409).json({ message: (error as Error).message }); }
     const linkedStudentRows = await sequelize.query<{ count: number | string }>(
-      "SELECT COUNT_BIG(1) AS [count] FROM [dbo].[student_master_profile] WHERE [account_id] = :id",
+      "SELECT COUNT(1) AS count FROM student_master_profile WHERE account_id = :id",
       { replacements: { id: req.params.id }, type: QueryTypes.SELECT, transaction },
     );
     if (Number(linkedStudentRows[0]?.count ?? 0) > 0) {
@@ -268,14 +268,14 @@ accountsRouter.delete("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapabil
       processName: "account-delete",
     }, transaction);
     // Non-training references are removed only after the explicit no-Training check.
-    await sequelize.query("DELETE pa FROM [dbo].[pic_account_assignment] pa WHERE pa.[account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE FROM [dbo].[sales_account_assignment] WHERE [account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE d FROM [dbo].[invoice_detail] d JOIN [dbo].[invoice] i ON i.[id] = d.[invoice_id] WHERE i.[account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE FROM [dbo].[invoice] WHERE [account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE qo FROM [dbo].[quotation_order] qo JOIN [dbo].[quotation] q ON q.[id] = qo.[quotation_id] WHERE q.[account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("UPDATE rf SET [quotation_id] = NULL FROM [dbo].[request_form] rf JOIN [dbo].[quotation] q ON q.[id] = rf.[quotation_id] WHERE q.[account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE FROM [dbo].[quotation] WHERE [account_id] = :id", { replacements: { id: req.params.id }, transaction });
-    await sequelize.query("DELETE FROM [dbo].[account] WHERE [id] = :id", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM pic_account_assignment WHERE account_id = :id", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM sales_account_assignment WHERE account_id = :id", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM invoice_detail WHERE invoice_id IN (SELECT i.id FROM invoice i WHERE i.account_id = :id)", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM invoice WHERE account_id = :id", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM quotation_order WHERE quotation_id IN (SELECT q.id FROM quotation q WHERE q.account_id = :id)", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("UPDATE request_form SET quotation_id = NULL WHERE quotation_id IN (SELECT q.id FROM quotation q WHERE q.account_id = :id)", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM quotation WHERE account_id = :id", { replacements: { id: req.params.id }, transaction });
+    await sequelize.query("DELETE FROM account WHERE id = :id", { replacements: { id: req.params.id }, transaction });
     await transaction.commit();
     return res.status(204).end();
   } catch (error) {
@@ -287,9 +287,9 @@ accountsRouter.delete("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapabil
 // Admin QPD may link a Student Portal identity to a Personal Account. This does not create student_profile.
 accountsRouter.get("/admin/personal-links", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("ACCOUNT", ACCESS_ACTIONS.VIEW), asyncHandler(async (_req, res) => {
   const [accounts, students, linked] = await Promise.all([
-    sequelize.query<Record<string, unknown>>("SELECT [id], [account_code], [name], [status], [personal_student_subject] FROM [dbo].[account] WHERE [account_type] = 'PERSONAL' ORDER BY [name]", { type: QueryTypes.SELECT }),
+    sequelize.query<Record<string, unknown>>("SELECT id, account_code, name, status, personal_student_subject FROM account WHERE account_type = 'PERSONAL' ORDER BY name", { type: QueryTypes.SELECT }),
     keycloakAccountProvisioner.listRoleMembers(ROLES.STUDENT),
-    sequelize.query<{ personal_student_subject: string }>("SELECT [personal_student_subject] FROM [dbo].[account] WHERE [personal_student_subject] IS NOT NULL", { type: QueryTypes.SELECT }),
+    sequelize.query<{ personal_student_subject: string }>("SELECT personal_student_subject FROM account WHERE personal_student_subject IS NOT NULL", { type: QueryTypes.SELECT }),
   ]);
   const linkedSubjects = new Set(linked.map((row) => row.personal_student_subject));
   return res.json({

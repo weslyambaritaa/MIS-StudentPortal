@@ -5,7 +5,7 @@ module.exports = {
     await queryInterface.createTable("keycloak_event_sync_checkpoint", {
       source_system: { type: Sequelize.STRING(50), allowNull: false, primaryKey: true },
       last_seen_at: { type: Sequelize.DATE, allowNull: false },
-      updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("GETUTCDATE()") },
+      updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal("CURRENT_TIMESTAMP") },
     });
   },
   async down() {

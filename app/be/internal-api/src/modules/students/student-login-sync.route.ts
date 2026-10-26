@@ -14,7 +14,7 @@ studentLoginSyncRouter.post("/login", asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "A valid Student identity ID is required" });
   }
   await sequelize.query(
-    "UPDATE [dbo].[student_master_profile] SET [student_id] = :studentId, [first_login_at] = COALESCE([first_login_at], SYSUTCDATETIME()), [updated_at] = SYSUTCDATETIME() WHERE [keycloak_subject] = :subject AND [portal_enabled] = 1",
+    "UPDATE student_master_profile SET student_id = :studentId, first_login_at = COALESCE(first_login_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE keycloak_subject = :subject AND portal_enabled IS TRUE",
     { replacements: { subject: req.auth.userId, studentId } },
   );
   return res.status(204).end();

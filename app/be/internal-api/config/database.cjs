@@ -2,12 +2,11 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 module.exports = {
   development: {
-    dialect: "mssql",
+    dialect: "postgres",
     host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 1433),
+    port: Number(process.env.DB_PORT || 5432),
     database: process.env.DB_NAME,
     username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    dialectOptions: { options: { encrypt: process.env.DB_ENCRYPT === "true", trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === "true" } }
+    password: process.env.DB_PASSWORD
   }
 };

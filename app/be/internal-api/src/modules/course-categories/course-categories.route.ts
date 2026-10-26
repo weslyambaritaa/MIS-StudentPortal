@@ -28,7 +28,7 @@ function codeFor(value: string | number | bigint): string {
 
 async function nextCategoryCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
   const rows = await sequelize.query<{ value: number | string | bigint }>(
-    "SELECT NEXT VALUE FOR [dbo].[course_category_code_seq] AS [value]",
+    "SELECT nextval('course_category_code_seq') AS value",
     { type: QueryTypes.SELECT, transaction },
   );
   return codeFor(rows[0].value);
@@ -41,24 +41,24 @@ courseCategoriesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapab
   const search = req.query.search;
   if (search !== undefined && (typeof search !== "string" || search.length > 150)) return res.status(400).json({ message: "Invalid search" });
 
-  const where = search ? "WHERE c.[category_code] LIKE :search OR c.[name] LIKE :search" : "";
+  const where = search ? "WHERE c.category_code ILIKE :search OR c.name ILIKE :search" : "";
   const replacements = {
     offset: (page - 1) * pageSize,
     pageSize,
-    ...(search ? { search: `%${search.replace(/[\[%_]/g, (character) => `[${character}]`)}%` } : {}),
+    ...(search ? { search: `%${search.replace(/[\\%_]/g, "\\$&")}%` } : {}),
   };
   const countRows = await sequelize.query<{ total: number | string }>(
-    `SELECT COUNT_BIG(1) AS [total] FROM [dbo].[course_category] AS c ${where}`,
+    `SELECT COUNT(1) AS total FROM course_category AS c ${where}`,
     { replacements, type: QueryTypes.SELECT },
   );
   const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT c.[id], c.[category_code], c.[name], c.[created_at], c.[updated_at], COUNT(course.[id]) AS [amount_courses]
-       FROM [dbo].[course_category] AS c
-       LEFT JOIN [dbo].[course] AS course ON course.[category_id] = c.[id]
+    `SELECT c.id, c.category_code, c.name, c.created_at, c.updated_at, COUNT(course.id) AS amount_courses
+       FROM course_category AS c
+       LEFT JOIN course AS course ON course.category_id = c.id
        ${where}
-       GROUP BY c.[id], c.[category_code], c.[name], c.[created_at], c.[updated_at]
-       ORDER BY c.[category_code] ASC
-       OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+       GROUP BY c.id, c.category_code, c.name, c.created_at, c.updated_at
+       ORDER BY c.category_code ASC
+       LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
   return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });

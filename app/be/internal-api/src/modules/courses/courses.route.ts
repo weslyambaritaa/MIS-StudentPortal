@@ -11,17 +11,29 @@ import { authorizeCapability } from "../../middlewares/authorize-capability.midd
 import { AppError } from "../../errors/app-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
+import Joi from "joi";
+import { validateBody } from "../../utils/joi-validation";
 
 export const coursesRouter = Router();
 const LEVELS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 type SyllabusInput = { kind: "URL"; url: string } | { kind: "UPLOAD"; fileName: string; contentBase64: string };
 type CourseInput = { courseCode: string; name: string; categoryId: string; durationDays: number; level: typeof LEVELS[number]; status?: "ACTIVE" | "INACTIVE"; syllabus?: SyllabusInput };
-const escapeLike = (value: string) => `%${value.replace(/[\[%_]/g, character => `[${character}]`)}%`;
+const escapeLike = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 const parsePage = (value: unknown, fallback: number, max: number) => value === undefined ? fallback : typeof value === "string" && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max ? Number(value) : null;
 
 function parseInput(body: unknown, editing = false): CourseInput {
-  if (!body || typeof body !== "object") throw new AppError(400, "Course details are required");
-  const raw = body as Record<string, unknown>;
+  const raw = validateBody<Record<string, unknown>>(Joi.object({
+    courseCode: Joi.string().trim().min(1).max(50).required(),
+    name: Joi.string().trim().min(1).max(150).required(),
+    categoryId: Joi.string().guid({ version: ["uuidv4", "uuidv5"] }).required(),
+    durationDays: Joi.number().integer().min(1).max(365).required(),
+    level: Joi.string().valid(...LEVELS).required(),
+    status: editing ? Joi.string().valid("ACTIVE", "INACTIVE").required() : Joi.forbidden(),
+    syllabus: Joi.alternatives().try(
+      Joi.object({ kind: Joi.valid("URL").required(), url: Joi.string().uri({ scheme: ["http", "https"] }).max(2048).required() }).unknown(false),
+      Joi.object({ kind: Joi.valid("UPLOAD").required(), fileName: Joi.string().max(255).required(), contentBase64: Joi.string().max(14_000_000).pattern(/^[A-Za-z0-9+/]+={0,2}$/).required() }).unknown(false),
+    ).allow(null).optional(),
+  }).unknown(false), body);
   if (typeof raw.courseCode !== "string" || !raw.courseCode.trim() || raw.courseCode.trim().length > 50 || typeof raw.name !== "string" || !raw.name.trim() || raw.name.trim().length > 150 || typeof raw.categoryId !== "string" || !/^[0-9a-f-]{36}$/i.test(raw.categoryId) || !Number.isSafeInteger(raw.durationDays) || Number(raw.durationDays) < 1 || Number(raw.durationDays) > 365 || !LEVELS.includes(raw.level as typeof LEVELS[number])) throw new AppError(400, "Enter a course code, name, category, duration, and course level");
   if (editing && raw.status !== "ACTIVE" && raw.status !== "INACTIVE") throw new AppError(400, "Course status must be Active or Inactive");
   let syllabus: SyllabusInput | undefined;
@@ -82,7 +94,7 @@ function versionLabel(createdAt: unknown) {
 async function syllabusRows(courseIds: string[]) {
   if (!courseIds.length) return [];
   return sequelize.query<Record<string, unknown>>(
-    "SELECT [id], [course_id], [file_url], [cloudinary_public_id], [created_at] FROM [dbo].[syllabus] WHERE [course_id] IN (:ids) ORDER BY [created_at] DESC, [id] DESC",
+    "SELECT id, course_id, file_url, cloudinary_public_id, created_at FROM syllabus WHERE course_id IN (:ids) ORDER BY created_at DESC, id DESC",
     { replacements: { ids: courseIds }, type: QueryTypes.SELECT },
   );
 }
@@ -110,16 +122,16 @@ coursesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("CO
   if (status !== undefined && status !== "ALL" && status !== "ACTIVE" && status !== "INACTIVE") return res.status(400).json({ message: "Invalid status filter" });
   const conditions: string[] = [];
   const replacements: Record<string, string | number> = { offset: (page - 1) * pageSize, pageSize };
-  if (search) { conditions.push("(c.[course_code] LIKE :search OR c.[name] LIKE :search OR category.[name] LIKE :search)"); replacements.search = escapeLike(search as string); }
-  if (categoryId && categoryId !== "ALL") { conditions.push("c.[category_id] = :categoryId"); replacements.categoryId = categoryId as string; }
-  if (level && level !== "ALL") { conditions.push("c.[level] = :level"); replacements.level = level as string; }
-  if (status && status !== "ALL") { conditions.push("c.[status] = :status"); replacements.status = status as string; }
+  if (search) { conditions.push("(c.course_code ILIKE :search ESCAPE E'\\\\' OR c.name ILIKE :search ESCAPE E'\\\\' OR category.name ILIKE :search ESCAPE E'\\\\')"); replacements.search = escapeLike(search as string); }
+  if (categoryId && categoryId !== "ALL") { conditions.push("c.category_id = :categoryId"); replacements.categoryId = categoryId as string; }
+  if (level && level !== "ALL") { conditions.push("c.level = :level"); replacements.level = level as string; }
+  if (status && status !== "ALL") { conditions.push("c.status = :status"); replacements.status = status as string; }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT_BIG(1) AS [total] FROM [dbo].[course] c JOIN [dbo].[course_category] category ON category.[id]=c.[category_id] ${where}`, { replacements, type: QueryTypes.SELECT });
+  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT(1) AS total FROM course c JOIN course_category category ON category.id=c.category_id ${where}`, { replacements, type: QueryTypes.SELECT });
   const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT c.[id],c.[course_code],c.[name],c.[category_id],category.[name] AS [category_name],c.[duration_minutes],c.[level],c.[status],c.[created_at],c.[updated_at]
-       FROM [dbo].[course] c JOIN [dbo].[course_category] category ON category.[id]=c.[category_id] ${where}
-       ORDER BY c.[course_code] ASC OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY`,
+    `SELECT c.id,c.course_code,c.name,c.category_id,category.name AS category_name,c.duration_minutes,c.level,c.status,c.created_at,c.updated_at
+       FROM course c JOIN course_category category ON category.id=c.category_id ${where}
+       ORDER BY c.course_code ASC LIMIT :pageSize OFFSET :offset`,
     { replacements, type: QueryTypes.SELECT },
   );
   const items = withLatestSyllabus(rows, await syllabusRows(rows.map(row => String(row.id))));
@@ -129,17 +141,17 @@ coursesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("CO
 coursesRouter.get("/:id/syllabuses", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const course = await Course.findByPk(req.params.id);
   if (!course) return res.status(404).json({ message: "Course not found" });
-  const rows = await sequelize.query<Record<string, unknown>>("SELECT [id],[file_url],[cloudinary_public_id],[created_at] FROM [dbo].[syllabus] WHERE [course_id]=:id ORDER BY [created_at] DESC,[id] DESC", { replacements: { id: course.id }, type: QueryTypes.SELECT });
+  const rows = await sequelize.query<Record<string, unknown>>("SELECT id,file_url,cloudinary_public_id,created_at FROM syllabus WHERE course_id=:id ORDER BY created_at DESC,id DESC", { replacements: { id: course.id }, type: QueryTypes.SELECT });
   return res.json({ items: rows.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) })) });
 }));
 
 coursesRouter.get("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const rows = await sequelize.query<Record<string, unknown>>(
-    "SELECT c.[id],c.[course_code],c.[name],c.[category_id],category.[name] AS [category_name],c.[duration_minutes],c.[level],c.[status],c.[created_at],c.[updated_at] FROM [dbo].[course] c JOIN [dbo].[course_category] category ON category.[id]=c.[category_id] WHERE c.[id]=:id",
+    "SELECT c.id,c.course_code,c.name,c.category_id,category.name AS category_name,c.duration_minutes,c.level,c.status,c.created_at,c.updated_at FROM course c JOIN course_category category ON category.id=c.category_id WHERE c.id=:id",
     { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
   );
   if (!rows[0]) return res.status(404).json({ message: "Course not found" });
-  const versions = await sequelize.query<Record<string, unknown>>("SELECT [id],[file_url],[cloudinary_public_id],[created_at] FROM [dbo].[syllabus] WHERE [course_id]=:id ORDER BY [created_at] DESC,[id] DESC", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
+  const versions = await sequelize.query<Record<string, unknown>>("SELECT id,file_url,cloudinary_public_id,created_at FROM syllabus WHERE course_id=:id ORDER BY created_at DESC,id DESC", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
   const syllabuses = versions.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) }));
   return res.json({ item: { ...rows[0], duration_days: Math.max(1, Math.ceil(Number(rows[0].duration_minutes) / 480)), syllabuses } });
 }));
@@ -193,11 +205,11 @@ coursesRouter.delete("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
     const course = await Course.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!course) { await transaction.rollback(); return res.status(404).json({ message: "Course not found" }); }
     const [quotations, trainings] = await Promise.all([
-      sequelize.query<{ total: number | string }>("SELECT COUNT_BIG(1) AS [total] FROM [dbo].[quotation_order] WHERE [course_id]=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
-      sequelize.query<{ total: number | string }>("SELECT COUNT_BIG(1) AS [total] FROM [dbo].[training] WHERE [course_id]=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
+      sequelize.query<{ total: number | string }>("SELECT COUNT(1) AS total FROM quotation_order WHERE course_id=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
+      sequelize.query<{ total: number | string }>("SELECT COUNT(1) AS total FROM training WHERE course_id=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
     ]);
     if (Number(quotations[0]?.total ?? 0) + Number(trainings[0]?.total ?? 0) > 0) { await transaction.rollback(); return res.status(409).json({ message: "This Course is used by a Quotation or Training and cannot be deleted. You can deactivate it instead." }); }
-    const assets = await sequelize.query<{ cloudinary_public_id: string }>("SELECT [cloudinary_public_id] FROM [dbo].[syllabus] WHERE [course_id]=:id AND [cloudinary_public_id] IS NOT NULL", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction });
+    const assets = await sequelize.query<{ cloudinary_public_id: string }>("SELECT cloudinary_public_id FROM syllabus WHERE course_id=:id AND cloudinary_public_id IS NOT NULL", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction });
     const before = { course_code: course.course_code, name: course.name, category_id: course.category_id };
     await appendRequestAuditTrail(req, { action: "DELETE", objectType: "COURSE", objectId: course.id, before, processName: "course-delete" }, transaction);
     await Syllabus.destroy({ where: { course_id: course.id }, transaction });

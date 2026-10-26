@@ -30,103 +30,70 @@ services:
 
 
   # =========================================================
-  # INTERNAL DATABASE - SQL Server
+  # INTERNAL DATABASE - PostgreSQL
   # =========================================================
   internal-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:18-alpine
     container_name: mis-internal-db
 
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
+      POSTGRES_DB: ${INTERNAL_DB_NAME}
+      POSTGRES_USER: ${INTERNAL_DB_USER:-mis_internal}
+      POSTGRES_PASSWORD: ${INTERNAL_DB_PASSWORD}
 
     ports:
-      - "${INTERNAL_DB_PORT}:1433"
+      - "${INTERNAL_DB_PORT}:5432"
 
     volumes:
-      - internal-db-data:/var/opt/mssql
+      - internal-postgres-data:/var/lib/postgresql
 
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -b || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
       timeout: 5s
-      retries: 30
-      start_period: 30s
+      retries: 20
 
     networks:
       - internal-net
 
 
   # =========================================================
-  # KEYCLOAK DATABASE - SQL Server
+  # KEYCLOAK DATABASE - PostgreSQL
   # =========================================================
   keycloak-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:18-alpine
     container_name: mis-keycloak-db
 
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:-mis_keycloak}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
 
     ports:
-      - "${KEYCLOAK_DB_PORT}:1433"
+      - "${KEYCLOAK_DB_PORT}:5432"
 
     volumes:
-      - keycloak-db-data:/var/opt/mssql
+      - keycloak-postgres-data:/var/lib/postgresql
 
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -b || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
       timeout: 5s
-      retries: 30
-      start_period: 30s
+      retries: 20
 
     networks:
       - auth-net
 
 
   # =========================================================
-  # DATABASE BOOTSTRAP
-  # Membuat database SQL Server jika belum tersedia
-  # =========================================================
-  database-bootstrap:
-    build:
-      context: .
-      dockerfile: infrastructure/database-bootstrap/Dockerfile
-
-    container_name: mis-database-bootstrap
-
-    environment:
-      INTERNAL_DB_HOST: internal-db
-      INTERNAL_DB_PORT_INTERNAL: 1433
-      INTERNAL_DB_NAME: ${INTERNAL_DB_NAME}
-      INTERNAL_DB_SA_PASSWORD: ${INTERNAL_DB_SA_PASSWORD}
-
-      KEYCLOAK_DB_HOST: keycloak-db
-      KEYCLOAK_DB_PORT_INTERNAL: 1433
-      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME}
-      KEYCLOAK_DB_SA_PASSWORD: ${KEYCLOAK_DB_SA_PASSWORD}
-
-    depends_on:
-      internal-db:
-        condition: service_healthy
-      keycloak-db:
-        condition: service_healthy
-
-    networks:
-      - internal-net
-      - auth-net
-
-    restart: "no"
-
-
   # =========================================================
   # KEYCLOAK
   # =========================================================
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.3
+    image: mis-keycloak-st01:26.7.3
+    build:
+      context: .
+      dockerfile: keycloak/Dockerfile
     container_name: mis-keycloak
 
     env_file:
@@ -152,8 +119,8 @@ services:
       - ./keycloak/themes:/opt/keycloak/themes:ro
 
     depends_on:
-      database-bootstrap:
-        condition: service_completed_successfully
+      keycloak-db:
+        condition: service_healthy
 
     networks:
       - auth-net
@@ -191,7 +158,6 @@ services:
 
     networks:
       - external-net
-      - event-net
 
     volumes:
       - ./app/be/student-api:/workspace/app/be/student-api
@@ -219,27 +185,56 @@ services:
       NODE_ENV: development
 
       DB_HOST: internal-db
-      DB_PORT: 1433
-
-      DB_ENCRYPT: "false"
-      DB_TRUST_SERVER_CERTIFICATE: "true"
+      DB_PORT: 5432
+      DB_USER: ${INTERNAL_DB_USER:-mis_internal}
+      DB_PASSWORD: ${INTERNAL_DB_PASSWORD}
+      DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
 
     expose:
       - "4002"
 
     depends_on:
-      database-bootstrap:
-        condition: service_completed_successfully
+      internal-db:
+        condition: service_healthy
 
     networks:
       - internal-net
-      - event-net
       - keycloak-admin-net
 
     volumes:
       - ./app/be/internal-api:/workspace/app/be/internal-api
       - ./packages/shared-types:/workspace/packages/shared-types
       - internal-api-node-modules:/workspace/node_modules
+
+
+  # =========================================================
+  # SYSTEM HEALTH MONITOR
+  # Runs independently from the monitored APIs and sends outage alerts.
+  # =========================================================
+  system-monitor:
+    build:
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+
+    container_name: mis-system-monitor
+    env_file:
+      - ./app/be/internal-api/.env
+    environment:
+      NODE_ENV: development
+      DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+      MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
+      MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
+      MONITOR_STUDENT_HEALTH_URL: http://student-api:4001/health
+      MONITOR_KEYCLOAK_HEALTH_URL: http://keycloak:8080/realms/mis-student-portal
+      MONITOR_INTERVAL_MS: 30000
+      MONITOR_FAILURE_THRESHOLD: 2
+      MONITOR_STARTUP_GRACE_MS: 90000
+    command: ["npm", "run", "monitor"]
+    restart: unless-stopped
+    networks:
+      - internal-net
+      - external-net
+      - keycloak-admin-net
 
 
   # =========================================================
@@ -289,10 +284,6 @@ services:
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX: 100
 
-      # Redis optional for now
-      CACHE_ENABLED: "false"
-      REDIS_URL: redis://redis:6379
-
     ports:
       - "${GATEWAY_PORT}:4000"
 
@@ -310,7 +301,6 @@ services:
       auth-net:
       external-net:
       internal-net:
-      gateway-infra-net:
 
     volumes:
       - ./gateway:/workspace/gateway
@@ -357,60 +347,13 @@ services:
       - frontend-next:/workspace/app/fe/.next
 
 
-  # =========================================================
-  # REDIS
-  # Optional platform service
-  # =========================================================
-  redis:
-    image: redis:8-alpine
-    container_name: mis-redis
-
-    profiles:
-      - platform
-
-    ports:
-      - "${REDIS_PORT}:6379"
-
-    networks:
-      - gateway-infra-net
-
-    volumes:
-      - redis-data:/data
-
-
-  # =========================================================
-  # RABBITMQ
-  # Optional platform service
-  # =========================================================
-  rabbitmq:
-    image: rabbitmq:4-management-alpine
-    container_name: mis-rabbitmq
-
-    profiles:
-      - platform
-
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-
-    ports:
-      - "${RABBITMQ_AMQP_PORT}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
-
-    networks:
-      - event-net
-
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-
-
 # =========================================================
 # VOLUMES
 # =========================================================
 volumes:
   student-db-data:
-  internal-db-data:
-  keycloak-db-data:
+  internal-postgres-data:
+  keycloak-postgres-data:
 
   frontend-node-modules:
   frontend-next:
@@ -419,8 +362,6 @@ volumes:
   student-api-node-modules:
   internal-api-node-modules:
 
-  redis-data:
-  rabbitmq-data:
 
 
 # =========================================================
@@ -436,14 +377,8 @@ networks:
   # Gateway ↔ Student API ↔ PostgreSQL
   external-net:
 
-  # Gateway ↔ Internal API ↔ SQL Server
+  # Gateway ↔ Internal API ↔ PostgreSQL
   internal-net:
-
-  # Gateway ↔ Redis
-  gateway-infra-net:
-
-  # APIs ↔ RabbitMQ
-  event-net:
 
   # Internal API reaches Keycloak Admin API without joining the Keycloak DB network.
   keycloak-admin-net:

@@ -1,9 +1,4 @@
-param(
-    [ValidateSet('Immediate5Minutes', 'ProgressiveTo5Minutes')]
-    [string]$LockoutMode,
-
-    [switch]$Apply
-)
+param([switch]$Apply)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -37,7 +32,7 @@ foreach ($key in $requiredMail) { if ([string]::IsNullOrWhiteSpace($mailEnv[$key
 
 $baseUrl = "http://localhost:$($rootEnv['KEYCLOAK_PORT'])"
 $realmUrl = "$baseUrl/admin/realms/mis-student-portal"
-$lockoutWaitSeconds = if ($LockoutMode -eq 'Immediate5Minutes') { 300 } else { 60 }
+$frontendClientId = 'mis-student-portal-frontend'
 
 try {
     $tokenReply = Invoke-RestMethod -Method Post `
@@ -51,9 +46,23 @@ try {
         }
     $headers = @{ Authorization = "Bearer $($tokenReply.access_token)" }
     $realm = Invoke-RestMethod -Method Get -Uri $realmUrl -Headers $headers
+    $clientMatches = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients?clientId=$frontendClientId" -Headers $headers
+    if (!$clientMatches -or $clientMatches.Count -ne 1) {
+        throw 'The frontend OIDC client could not be resolved in the MIS realm.'
+    }
+    $frontendClient = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients/$($clientMatches[0].id)" -Headers $headers
 } catch {
-    throw 'Could not authenticate to the local Keycloak Admin API. Check that Keycloak is running and the bootstrap admin credentials in .env are valid.'
+    throw 'Could not read the MIS realm or frontend client from the local Keycloak Admin API. Check that Keycloak is running and the bootstrap admin credentials in .env are valid.'
 }
+
+$frontendClient.publicClient = $true
+$frontendClient.standardFlowEnabled = $true
+$clientAttributes = $frontendClient.attributes
+if ($null -eq $clientAttributes) {
+    $clientAttributes = [pscustomobject]@{}
+    $frontendClient | Add-Member -NotePropertyName attributes -NotePropertyValue $clientAttributes -Force
+}
+$clientAttributes | Add-Member -NotePropertyName 'pkce.code.challenge.method' -NotePropertyValue 'S256' -Force
 
 $attributes = $realm.attributes
 if ($null -eq $attributes) {
@@ -65,14 +74,15 @@ $attributes | Add-Member -NotePropertyName 'actionTokenGeneratedByUserLifespan.r
 $realm.loginWithEmailAllowed = $true
 $realm.registrationEmailAsUsername = $false
 $realm.resetPasswordAllowed = $true
-if ($LockoutMode) {
-    $realm.bruteForceProtected = $true
-    $realm.permanentLockout = $false
-    $realm.failureFactor = 10
-    $realm.bruteForceStrategy = 'MULTIPLE'
-    $realm.waitIncrementSeconds = $lockoutWaitSeconds
-    $realm.maxFailureWaitSeconds = 300
-}
+$realm.internationalizationEnabled = $true
+$realm | Add-Member -NotePropertyName 'supportedLocales' -NotePropertyValue @('en') -Force
+$realm | Add-Member -NotePropertyName 'defaultLocale' -NotePropertyValue 'en' -Force
+$realm.bruteForceProtected = $true
+$realm.permanentLockout = $false
+$realm.failureFactor = 10
+$realm.bruteForceStrategy = 'MULTIPLE'
+$realm.waitIncrementSeconds = 60
+$realm.maxFailureWaitSeconds = 60
 $realm.smtpServer = [pscustomobject]@{
     host = $mailEnv['MAIL_HOST']
     port = $mailEnv['MAIL_PORT']
@@ -86,17 +96,17 @@ $realm.smtpServer = [pscustomobject]@{
 }
 
 if (!$Apply) {
-    $lockoutPreview = if ($LockoutMode) { "Lockout mode: $LockoutMode." } else { 'Lockout settings will be left unchanged until a mode is selected.' }
-    Write-Output "Ready to configure ST-01. $lockoutPreview No settings were changed. Re-run with -Apply to apply."
+    Write-Output 'Ready to configure ST-01 and the browser frontend client (public client with PKCE S256). No settings were changed. Re-run with -Apply to apply.'
     exit 0
 }
 
 try {
     $body = $realm | ConvertTo-Json -Depth 100 -Compress
     Invoke-RestMethod -Method Put -Uri $realmUrl -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
+    $clientBody = $frontendClient | ConvertTo-Json -Depth 100 -Compress
+    Invoke-RestMethod -Method Put -Uri "$realmUrl/clients/$($clientMatches[0].id)" -Headers $headers -ContentType 'application/json' -Body $clientBody | Out-Null
 } catch {
-    throw 'Keycloak rejected the ST-01 realm update. No credentials or server response details were printed.'
+    throw 'Keycloak rejected the ST-01 or frontend-client update. No credentials or server response details were printed.'
 }
 
-$lockoutStatus = if ($LockoutMode) { "Lockout: $LockoutMode." } else { 'Lockout policy unchanged; choose it before enabling brute-force protection.' }
-Write-Output "ST-01 realm settings saved. Reset link lifetime: 15 minutes; login accepts username or email; $lockoutStatus SMTP configured from keycloak/.env."
+Write-Output 'ST-01 realm settings saved. The frontend client is public with PKCE S256. Reset link lifetime: 15 minutes; login accepts username or email; accounts lock for 1 minute after 10 consecutive failures. SMTP configured from keycloak/.env.'

@@ -6,6 +6,7 @@ import { BookOpen, Building2, CalendarDays, ChevronDown, ExternalLink, Eye, File
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/components/ui/toast";
@@ -26,8 +27,6 @@ type Item = {
   delivery_type: string | null;
   students: number | null;
   requested_dates: string | null;
-  sla_overdue?: boolean;
-  sla_due_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -317,7 +316,7 @@ export default function RequestFormReviewPage() {
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="rounded-xl bg-neutral-100 text-xs text-gray-600"><tr>{["REQUEST FORM #", "QUOTATION", "ACCOUNT", "Requested Course", "FORM TYPE", "STUDENTS", "Requested Date", "STATUS", "ACTION"].map((label) => <th className="px-3 py-3 font-medium" key={label}>{label}</th>)}</tr></thead>
             <tbody>{items.map((item) => <tr className="border-b border-rose-50 text-gray-600" key={item.id}>
-              <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td><td className="px-3 py-3">{item.quotation_code ?? "-"}</td><td className="px-3 py-3">{item.account_name}</td><td className="px-3 py-3">{item.requested_course ?? "-"}</td><td className="whitespace-nowrap px-3 py-3"><span className="font-medium">{formName(item)}</span><span className="ml-1 text-xs text-zinc-500">({deliveryLabel(item.delivery_type)})</span></td><td className="px-3 py-3">{item.students ?? "-"}</td><td className="px-3 py-3">{formatDates(datesFromItem(item))}</td><td className="px-3 py-3"><div className="flex flex-col items-start gap-1"><Badge variant={statusVariant(item.status)} showDot>{statusLabel(item.status)}</Badge>{item.sla_overdue && <span className="rounded-full border border-red-500 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600">SLA overdue</span>}</div></td>
+              <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td><td className="px-3 py-3">{item.quotation_code ?? "-"}</td><td className="px-3 py-3">{item.account_name}</td><td className="px-3 py-3">{item.requested_course ?? "-"}</td><td className="whitespace-nowrap px-3 py-3"><span className="font-medium">{formName(item)}</span><span className="ml-1 text-xs text-zinc-500">({deliveryLabel(item.delivery_type)})</span></td><td className="px-3 py-3">{item.students ?? "-"}</td><td className="px-3 py-3">{formatDates(datesFromItem(item))}</td><td className="px-3 py-3"><Badge variant={statusVariant(item.status)} showDot>{statusLabel(item.status)}</Badge></td>
               <td className="px-3 py-3"><div className="flex items-center gap-2"><button aria-label={`View ${formName(item)} details`} className="rounded-full p-2 text-zinc-600 hover:bg-neutral-100" onClick={() => void open(item.id)}><Eye size={16} /></button>{item.status === "WAITING" && <Button size="sm" onClick={() => void open(item.id)}>Approval</Button>}</div></td>
             </tr>)}{!items.length && <tr><td className="p-8 text-center text-gray-500" colSpan={9}>No requested training found.</td></tr>}</tbody>
           </table>
