@@ -2,6 +2,7 @@ import { DataTypes, Model } from "sequelize";
 
 import { sequelize } from "../sequelize";
 import { Account } from "./account.model";
+import { PicProfile } from "./pic-profile.model";
 
 export class Training extends Model {
   declare id: string;
@@ -38,3 +39,4 @@ Training.init(
 
 Account.hasMany(Training, { foreignKey: "account_id", as: "trainings" });
 Training.belongsTo(Account, { foreignKey: "account_id", as: "account" });
+Training.belongsTo(PicProfile, { foreignKey: "pic_profile_id", as: "pic" });

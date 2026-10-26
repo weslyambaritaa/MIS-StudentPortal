@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op, col, fn, literal } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
@@ -30,11 +30,8 @@ function codeFor(value: string | number | bigint): string {
 }
 
 async function nextIndustryCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
-  const rows = await sequelize.query<{ value: number | string | bigint }>(
-    "SELECT nextval('industry_code_seq') AS value",
-    { type: QueryTypes.SELECT, transaction },
-  );
-  return codeFor(rows[0].value);
+  const row = await Industry.findOne({ attributes: [[literal("nextval('industry_code_seq')"), "value"]], raw: true, transaction }) as unknown as { value: number | string | bigint };
+  return codeFor(row.value);
 }
 
 /** Internal roles can read; the stored active-role matrix controls the exact capability. */
@@ -48,32 +45,36 @@ industriesRouter.get("/", authorizeCapability("INDUSTRY", ACCESS_ACTIONS.VIEW), 
   if (search !== undefined && (typeof search !== "string" || search.length > 150)) return res.status(400).json({ message: "Invalid search" });
   if (status !== undefined && status !== "ALL" && !validStatus(status)) return res.status(400).json({ message: "Invalid status" });
 
-  const where: string[] = [];
-  const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
-  if (search) {
-    where.push("(i.industry_code ILIKE :search OR i.name ILIKE :search)");
-    replacements.search = `%${search.replace(/[\[%_]/g, (character) => `[${character}]`)}%`;
-  }
-  if (status && status !== "ALL") { where.push("i.status = :status"); replacements.status = status; }
-  const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-  const countRows = await sequelize.query<{ total: number | string }>(
-    `SELECT COUNT(1) AS total FROM industry AS i ${clause}`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT i.id, i.industry_code, i.name, i.status, i.created_at, i.updated_at,
-            COUNT(a.id) AS amount_account,
-            EXISTS (SELECT 1 FROM account_industry_history h WHERE h.industry_id = i.id) AS ever_used
-       FROM industry AS i
-       LEFT JOIN account AS a ON a.industry_id = i.id
-       ${clause}
-       GROUP BY i.id, i.industry_code, i.name, i.status, i.created_at, i.updated_at
-       ORDER BY i.industry_code ASC
-       LIMIT :pageSize OFFSET :offset`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });
+  const escapedSearch = search ? `%${search.replace(/[\\%_]/g, "\\$&")}%` : undefined;
+  const where = {
+    ...(escapedSearch ? { [Op.or]: [
+      { industry_code: { [Op.iLike]: escapedSearch } },
+      { name: { [Op.iLike]: escapedSearch } },
+    ] } : {}),
+    ...(status && status !== "ALL" ? { status } : {}),
+  };
+  const [total, rows] = await Promise.all([
+    Industry.count({ where }),
+    Industry.findAll({
+      attributes: ["id", "industry_code", "name", "status", "created_at", "updated_at", [fn("COUNT", col("accounts.id")), "amount_account"]],
+      where,
+      include: [{ model: Account, as: "accounts", attributes: [], required: false }],
+      group: ["Industry.id", "Industry.industry_code", "Industry.name", "Industry.status", "Industry.created_at", "Industry.updated_at"],
+      order: [["industry_code", "ASC"]],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }),
+  ]);
+  const ids = rows.map((row) => row.id);
+  const histories = ids.length ? await AccountIndustryHistory.findAll({
+    attributes: ["industry_id"],
+    where: { industry_id: { [Op.in]: ids } },
+    group: ["industry_id"],
+    raw: true,
+  }) as unknown as Array<{ industry_id: string }> : [];
+  const everUsedIds = new Set(histories.map((row) => row.industry_id));
+  const items = rows.map((row) => ({ ...row.get({ plain: true }), ever_used: everUsedIds.has(row.id) }));
+  return res.json({ items, page, pageSize, total });
 }));
 
 industriesRouter.post("/", authorizeCapability("INDUSTRY", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {

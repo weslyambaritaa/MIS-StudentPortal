@@ -1,5 +1,6 @@
 import { DataTypes, Model } from "sequelize";
 import { sequelize } from "../sequelize";
+import { Account } from "./account.model";
 
 /** Admin-managed Student data. Keycloak remains the identity and role authority. */
 export class StudentMasterProfile extends Model {
@@ -41,3 +42,6 @@ StudentMasterProfile.init({
     { name: "ix_student_master_account", fields: ["account_id", "name"] },
   ],
 });
+
+Account.hasMany(StudentMasterProfile, { foreignKey: "account_id", as: "studentProfiles" });
+StudentMasterProfile.belongsTo(Account, { foreignKey: "account_id", as: "account" });

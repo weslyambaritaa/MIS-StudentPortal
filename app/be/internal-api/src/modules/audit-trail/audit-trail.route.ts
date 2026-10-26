@@ -1,10 +1,9 @@
-import { QueryTypes } from "sequelize";
+import { Op } from "sequelize";
 import { Router } from "express";
 import { isBusinessRole, ROLES, isAuditTrailAction, type AuditTrailEvent } from "@mis/shared-types";
-import { sequelize } from "../../database/sequelize";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { asyncHandler } from "../../utils/async-handler";
-import { AuditTrail } from "../../database/models";
+import { AuditTrail, AuditTrailArchive } from "../../database/models";
 
 export const auditTrailRouter = Router();
 export const auditTrailIngestionRouter = Router();
@@ -107,35 +106,22 @@ auditTrailRouter.get("/", authorizeActiveRole(ROLES.ADMIN), asyncHandler(async (
     return res.status(400).json({ message: "Invalid date/time filter" });
   }
 
-  const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
-  const predicates: string[] = [];
-  if (role) { predicates.push("active_role = :role"); replacements.role = role; }
-  if (from) { predicates.push("created_at >= :fromDate"); replacements.fromDate = from; }
-  if (to) { predicates.push("created_at <= :toDate"); replacements.toDate = to; }
-  const where = predicates.length ? `WHERE ${predicates.join(" AND ")}` : "";
-  const countRows = await sequelize.query<{ total: number }>(
-    `SELECT COUNT(1) AS total FROM (
-       SELECT id FROM audit_trail ${where}
-       UNION ALL
-       SELECT id FROM audit_trail_archive ${where}
-     ) AS audit_rows`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT id, created_at, actor_subject, actor_name, actor_type, active_role, process_name,
-            action, object_type, object_id, ip_address, source_service, data_before, data_after, storage
-       FROM (
-         SELECT id, created_at, actor_subject, actor_name, actor_type, active_role, process_name,
-                action, object_type, object_id, ip_address, source_service, data_before, data_after,
-                CAST('active' AS VARCHAR(10)) AS storage FROM audit_trail ${where}
-         UNION ALL
-         SELECT id, created_at, actor_subject, actor_name, actor_type, active_role, process_name,
-                action, object_type, object_id, ip_address, source_service, data_before, data_after,
-                CAST('archive' AS VARCHAR(10)) AS storage FROM audit_trail_archive ${where}
-       ) AS audit_rows
-       ORDER BY created_at DESC, id DESC
-       LIMIT :pageSize OFFSET :offset`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });
+  const where = {
+    ...(role ? { active_role: role } : {}),
+    ...(from || to ? { created_at: { ...(from ? { [Op.gte]: from } : {}), ...(to ? { [Op.lte]: to } : {}) } } : {}),
+  };
+  const offset = (page - 1) * pageSize;
+  const queryOptions = { where, order: [["created_at", "DESC"], ["id", "DESC"]] as Array<[string, "DESC"]>, limit: offset + pageSize };
+  const [activeCount, archivedCount, activeRows, archivedRows] = await Promise.all([
+    AuditTrail.count({ where }),
+    AuditTrailArchive.count({ where }),
+    AuditTrail.findAll(queryOptions),
+    AuditTrailArchive.findAll(queryOptions),
+  ]);
+  const merged = [
+    ...activeRows.map((entry) => ({ ...entry.get({ plain: true }), storage: "active" })),
+    ...archivedRows.map((entry) => ({ ...entry.get({ plain: true }), storage: "archive" })),
+  ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime() || String(right.id).localeCompare(String(left.id)));
+  const items = merged.slice(offset, offset + pageSize);
+  return res.json({ items, page, pageSize, total: activeCount + archivedCount });
 }));

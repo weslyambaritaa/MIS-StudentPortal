@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
-import { QueryTypes, type Transaction } from "sequelize";
+import { Op, type Transaction } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Course, CourseCategory, Syllabus } from "../../database/models";
+import { Course, CourseCategory, QuotationOrder, Syllabus, Training } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -93,10 +93,12 @@ function versionLabel(createdAt: unknown) {
 
 async function syllabusRows(courseIds: string[]) {
   if (!courseIds.length) return [];
-  return sequelize.query<Record<string, unknown>>(
-    "SELECT id, course_id, file_url, cloudinary_public_id, created_at FROM syllabus WHERE course_id IN (:ids) ORDER BY created_at DESC, id DESC",
-    { replacements: { ids: courseIds }, type: QueryTypes.SELECT },
-  );
+  return Syllabus.findAll({
+    attributes: ["id", "course_id", "file_url", "cloudinary_public_id", "created_at"],
+    where: { course_id: { [Op.in]: courseIds } },
+    order: [["created_at", "DESC"], ["id", "DESC"]],
+    raw: true,
+  }) as unknown as Promise<Record<string, unknown>[]>;
 }
 
 function withLatestSyllabus<T extends Record<string, unknown>>(rows: T[], versions: Record<string, unknown>[]) {
@@ -120,40 +122,52 @@ coursesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("CO
   if (categoryId !== undefined && categoryId !== "ALL" && (typeof categoryId !== "string" || !/^[0-9a-f-]{36}$/i.test(categoryId))) return res.status(400).json({ message: "Invalid category filter" });
   if (level !== undefined && level !== "ALL" && !LEVELS.includes(level as typeof LEVELS[number])) return res.status(400).json({ message: "Invalid level filter" });
   if (status !== undefined && status !== "ALL" && status !== "ACTIVE" && status !== "INACTIVE") return res.status(400).json({ message: "Invalid status filter" });
-  const conditions: string[] = [];
-  const replacements: Record<string, string | number> = { offset: (page - 1) * pageSize, pageSize };
-  if (search) { conditions.push("(c.course_code ILIKE :search ESCAPE E'\\\\' OR c.name ILIKE :search ESCAPE E'\\\\' OR category.name ILIKE :search ESCAPE E'\\\\')"); replacements.search = escapeLike(search as string); }
-  if (categoryId && categoryId !== "ALL") { conditions.push("c.category_id = :categoryId"); replacements.categoryId = categoryId as string; }
-  if (level && level !== "ALL") { conditions.push("c.level = :level"); replacements.level = level as string; }
-  if (status && status !== "ALL") { conditions.push("c.status = :status"); replacements.status = status as string; }
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const count = await sequelize.query<{ total: number | string }>(`SELECT COUNT(1) AS total FROM course c JOIN course_category category ON category.id=c.category_id ${where}`, { replacements, type: QueryTypes.SELECT });
-  const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT c.id,c.course_code,c.name,c.category_id,category.name AS category_name,c.duration_minutes,c.level,c.status,c.created_at,c.updated_at
-       FROM course c JOIN course_category category ON category.id=c.category_id ${where}
-       ORDER BY c.course_code ASC LIMIT :pageSize OFFSET :offset`,
-    { replacements, type: QueryTypes.SELECT },
-  );
+  const pattern = search ? escapeLike(search as string) : undefined;
+  const where = {
+    ...(pattern ? { [Op.or]: [
+      { course_code: { [Op.iLike]: pattern } },
+      { name: { [Op.iLike]: pattern } },
+      { "$category.name$": { [Op.iLike]: pattern } },
+    ] } : {}),
+    ...(categoryId && categoryId !== "ALL" ? { category_id: categoryId as string } : {}),
+    ...(level && level !== "ALL" ? { level: level as string } : {}),
+    ...(status && status !== "ALL" ? { status: status as string } : {}),
+  };
+  const include = [{ model: CourseCategory, as: "category", attributes: ["name"], required: true }];
+  const [total, records] = await Promise.all([
+    Course.count({ where, include }),
+    Course.findAll({
+      where,
+      include,
+      order: [["course_code", "ASC"]],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }),
+  ]);
+  const rows: Array<Record<string, unknown> & { id: string }> = records.map((record) => {
+    const row = record.get({ plain: true }) as Record<string, any> & { id: string; category: { name: string } };
+    return { ...row, category_name: row.category.name };
+  });
   const items = withLatestSyllabus(rows, await syllabusRows(rows.map(row => String(row.id))));
-  return res.json({ items, page, pageSize, total: Number(count[0]?.total ?? 0) });
+  return res.json({ items, page, pageSize, total });
 }));
 
 coursesRouter.get("/:id/syllabuses", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const course = await Course.findByPk(req.params.id);
   if (!course) return res.status(404).json({ message: "Course not found" });
-  const rows = await sequelize.query<Record<string, unknown>>("SELECT id,file_url,cloudinary_public_id,created_at FROM syllabus WHERE course_id=:id ORDER BY created_at DESC,id DESC", { replacements: { id: course.id }, type: QueryTypes.SELECT });
+  const rows = await Syllabus.findAll({ where: { course_id: course.id }, order: [["created_at", "DESC"], ["id", "DESC"]], raw: true }) as unknown as Record<string, unknown>[];
   return res.json({ items: rows.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) })) });
 }));
 
 coursesRouter.get("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
-  const rows = await sequelize.query<Record<string, unknown>>(
-    "SELECT c.id,c.course_code,c.name,c.category_id,category.name AS category_name,c.duration_minutes,c.level,c.status,c.created_at,c.updated_at FROM course c JOIN course_category category ON category.id=c.category_id WHERE c.id=:id",
-    { replacements: { id: req.params.id }, type: QueryTypes.SELECT },
-  );
-  if (!rows[0]) return res.status(404).json({ message: "Course not found" });
-  const versions = await sequelize.query<Record<string, unknown>>("SELECT id,file_url,cloudinary_public_id,created_at FROM syllabus WHERE course_id=:id ORDER BY created_at DESC,id DESC", { replacements: { id: req.params.id }, type: QueryTypes.SELECT });
+  const course = await Course.findByPk(req.params.id, { include: [{ model: CourseCategory, as: "category", attributes: ["name"], required: true }] });
+  if (!course) return res.status(404).json({ message: "Course not found" });
+  const courseRow = course.get({ plain: true }) as Record<string, any> & { category: { name: string } };
+  const { category, ...courseFields } = courseRow;
+  const row: Record<string, any> = { ...courseFields, category_name: category.name };
+  const versions = await Syllabus.findAll({ where: { course_id: req.params.id }, order: [["created_at", "DESC"], ["id", "DESC"]], raw: true }) as unknown as Record<string, unknown>[];
   const syllabuses = versions.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) }));
-  return res.json({ item: { ...rows[0], duration_days: Math.max(1, Math.ceil(Number(rows[0].duration_minutes) / 480)), syllabuses } });
+  return res.json({ item: { ...row, duration_days: Math.max(1, Math.ceil(Number(row.duration_minutes) / 480)), syllabuses } });
 }));
 
 coursesRouter.post("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
@@ -204,12 +218,12 @@ coursesRouter.delete("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
   try {
     const course = await Course.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!course) { await transaction.rollback(); return res.status(404).json({ message: "Course not found" }); }
-    const [quotations, trainings] = await Promise.all([
-      sequelize.query<{ total: number | string }>("SELECT COUNT(1) AS total FROM quotation_order WHERE course_id=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
-      sequelize.query<{ total: number | string }>("SELECT COUNT(1) AS total FROM training WHERE course_id=:id", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction }),
+    const [quotationCount, trainingCount] = await Promise.all([
+      QuotationOrder.count({ where: { course_id: course.id }, transaction }),
+      Training.count({ where: { course_id: course.id }, transaction }),
     ]);
-    if (Number(quotations[0]?.total ?? 0) + Number(trainings[0]?.total ?? 0) > 0) { await transaction.rollback(); return res.status(409).json({ message: "This Course is used by a Quotation or Training and cannot be deleted. You can deactivate it instead." }); }
-    const assets = await sequelize.query<{ cloudinary_public_id: string }>("SELECT cloudinary_public_id FROM syllabus WHERE course_id=:id AND cloudinary_public_id IS NOT NULL", { replacements: { id: course.id }, type: QueryTypes.SELECT, transaction });
+    if (quotationCount + trainingCount > 0) { await transaction.rollback(); return res.status(409).json({ message: "This Course is used by a Quotation or Training and cannot be deleted. You can deactivate it instead." }); }
+    const assets = await Syllabus.findAll({ attributes: ["cloudinary_public_id"], where: { course_id: course.id, cloudinary_public_id: { [Op.ne]: null } }, transaction });
     const before = { course_code: course.course_code, name: course.name, category_id: course.category_id };
     await appendRequestAuditTrail(req, { action: "DELETE", objectType: "COURSE", objectId: course.id, before, processName: "course-delete" }, transaction);
     await Syllabus.destroy({ where: { course_id: course.id }, transaction });
@@ -217,7 +231,7 @@ coursesRouter.delete("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
     await transaction.commit();
     if (env.cloudinaryConfigured && assets.length) {
       configureCloudinary();
-      await Promise.all(assets.map(asset => cloudinary.uploader.destroy(asset.cloudinary_public_id, { resource_type: "image", type: "authenticated" }).catch(() => undefined)));
+      await Promise.all(assets.map(asset => cloudinary.uploader.destroy(asset.cloudinary_public_id!, { resource_type: "image", type: "authenticated" }).catch(() => undefined)));
     }
     return res.status(204).end();
   } catch (error) { await transaction.rollback(); if ((error as { name?: string }).name === "SequelizeForeignKeyConstraintError") return res.status(409).json({ message: "This Course is in use and cannot be deleted. You can deactivate it instead." }); throw error; }

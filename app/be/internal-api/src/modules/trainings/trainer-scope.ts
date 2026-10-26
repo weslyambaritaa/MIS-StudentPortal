@@ -1,127 +1,75 @@
-import { QueryTypes } from "sequelize";
+import { Op } from "sequelize";
 
-import { sequelize } from "../../database/sequelize";
+import { SessionTrainerAssignment } from "../../database/models/session-trainer-assignment.model";
+import { SessionTrainerReplacement } from "../../database/models/session-trainer-replacement.model";
+import { TrainingSession } from "../../database/models/training-session.model";
+import { TrainingTrainerAssignment } from "../../database/models/training-trainer-assignment.model";
+import { Training } from "../../database/models/training.model";
 
-export type TrainerTrainingScopeRow = {
-  id: string;
-  account_id: string;
-  name: string;
-};
-
-export type TrainerSessionScopeRow = {
-  id: string;
-  training_id: string;
-  session_number: number;
-  starts_at: Date;
-  ends_at: Date;
-};
+export type TrainerTrainingScopeRow = { id: string; account_id: string; name: string };
+export type TrainerSessionScopeRow = { id: string; training_id: string; session_number: number; starts_at: Date; ends_at: Date };
 
 function requireTrainerProfileId(trainerProfileId: string) {
-  if (!trainerProfileId.trim()) {
-    throw new Error("A Trainer profile ID is required to resolve scope");
+  if (!trainerProfileId.trim()) throw new Error("A Trainer profile ID is required to resolve scope");
+}
+
+async function loadEffectiveAssignments(trainerProfileId: string) {
+  const [trainingAssignments, sessionAssignments] = await Promise.all([
+    TrainingTrainerAssignment.findAll({ where: { trainer_profile_id: trainerProfileId, ended_at: null } }),
+    SessionTrainerAssignment.findAll({ where: { trainer_profile_id: trainerProfileId, ended_at: null } }),
+  ]);
+  const assignedTrainingIds = [...new Set(trainingAssignments.map((assignment) => assignment.training_id))];
+  const ownSessionIds = [...new Set(sessionAssignments.map((assignment) => assignment.session_id))];
+  const sessions = await TrainingSession.findAll({ where: { [Op.or]: [
+    ...(assignedTrainingIds.length ? [{ training_id: { [Op.in]: assignedTrainingIds } }] : []),
+    ...(ownSessionIds.length ? [{ id: { [Op.in]: ownSessionIds } }] : []),
+  ] } });
+  const sessionIds = sessions.map((session) => session.id);
+  const replacements = sessionIds.length ? await SessionTrainerReplacement.findAll({ where: { session_id: { [Op.in]: sessionIds }, ended_at: null } }) : [];
+  const substituteIds = [...new Set(replacements.map((replacement) => replacement.substitute_assignment_id))];
+  const activeSubstitutes = substituteIds.length ? await SessionTrainerAssignment.findAll({ where: { id: { [Op.in]: substituteIds }, ended_at: null }, attributes: ["id"] }) : [];
+  const activeAssignmentIds = new Set(activeSubstitutes.map((assignment) => assignment.id));
+  const activeReplacements = replacements.filter((replacement) => activeAssignmentIds.has(replacement.substitute_assignment_id));
+  const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+  const replacedSessionIds = new Set(activeReplacements.map((replacement) => replacement.replaced_session_assignment_id).filter((id): id is string => Boolean(id)));
+  const replacedTrainingBySession = new Map<string, Set<string>>();
+  for (const replacement of activeReplacements) {
+    if (replacement.replaced_training_assignment_id) {
+      const set = replacedTrainingBySession.get(replacement.session_id) ?? new Set<string>();
+      set.add(replacement.replaced_training_assignment_id);
+      replacedTrainingBySession.set(replacement.session_id, set);
+    }
   }
+  const ownReplacementAssignmentIds = new Set(activeReplacements.map((replacement) => replacement.substitute_assignment_id));
+  const eligibleOwnSessionAssignments = sessionAssignments.filter((assignment) =>
+    (assignment.assignment_type === "ASSISTANT" || ownReplacementAssignmentIds.has(assignment.id)) && !replacedSessionIds.has(assignment.id),
+  );
+  return { trainingAssignments, eligibleOwnSessionAssignments, sessions, sessionMap, replacedTrainingBySession };
 }
 
 /** Training-level assignments grant Training scope; session assignments grant only their Session. */
-export function findTrainingsInTrainerScope(trainerProfileId: string) {
+export async function findTrainingsInTrainerScope(trainerProfileId: string) {
   requireTrainerProfileId(trainerProfileId);
-
-  return sequelize.query<TrainerTrainingScopeRow>(
-    `SELECT DISTINCT t.id, t.account_id, t.name
-     FROM training AS t
-     WHERE EXISTS (
-       SELECT 1
-       FROM training_trainer_assignment AS tta
-       WHERE tta.training_id = t.id
-         AND tta.trainer_profile_id = :trainerProfileId
-         AND tta.ended_at IS NULL
-     ) OR EXISTS (
-       SELECT 1
-       FROM training_session AS s
-       INNER JOIN session_trainer_assignment AS sta ON sta.session_id = s.id
-       WHERE s.training_id = t.id
-         AND sta.trainer_profile_id = :trainerProfileId
-         AND sta.ended_at IS NULL
-         AND (
-           sta.assignment_type = 'ASSISTANT'
-           OR EXISTS (
-             SELECT 1
-             FROM session_trainer_replacement AS own_replacement
-             WHERE own_replacement.session_id = s.id
-               AND own_replacement.substitute_assignment_id = sta.id
-               AND own_replacement.ended_at IS NULL
-           )
-         )
-         AND NOT EXISTS (
-           SELECT 1
-           FROM session_trainer_replacement AS replacement
-           INNER JOIN session_trainer_assignment AS substitute
-             ON substitute.id = replacement.substitute_assignment_id
-            AND substitute.ended_at IS NULL
-           WHERE replacement.session_id = s.id
-             AND replacement.replaced_session_assignment_id = sta.id
-             AND replacement.ended_at IS NULL
-         )
-     )
-     ORDER BY t.name ASC`,
-    { replacements: { trainerProfileId }, type: QueryTypes.SELECT },
-  );
+  const scope = await loadEffectiveAssignments(trainerProfileId);
+  const trainingIds = new Set(scope.trainingAssignments.map((assignment) => assignment.training_id));
+  for (const assignment of scope.eligibleOwnSessionAssignments) {
+    const session = scope.sessionMap.get(assignment.session_id);
+    if (session) trainingIds.add(session.training_id);
+  }
+  return Training.findAll({ where: { id: { [Op.in]: [...trainingIds] } }, attributes: ["id", "account_id", "name"], order: [["name", "ASC"]], raw: true });
 }
 
-/**
- * Computes effective Session scope in SQL. Active substitutes are included;
- * the assignment they replace is excluded only for the affected Session.
- */
-export function findSessionsInTrainerScope(trainerProfileId: string) {
+/** Computes effective Session scope, including active substitutes and excluding replaced trainers for that Session. */
+export async function findSessionsInTrainerScope(trainerProfileId: string) {
   requireTrainerProfileId(trainerProfileId);
-
-  return sequelize.query<TrainerSessionScopeRow>(
-    `SELECT DISTINCT s.id, s.training_id, s.session_number, s.starts_at, s.ends_at
-     FROM training_session AS s
-     WHERE EXISTS (
-       SELECT 1
-       FROM training_trainer_assignment AS tta
-       WHERE tta.training_id = s.training_id
-         AND tta.trainer_profile_id = :trainerProfileId
-         AND tta.ended_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1
-           FROM session_trainer_replacement AS replacement
-           INNER JOIN session_trainer_assignment AS substitute
-             ON substitute.id = replacement.substitute_assignment_id
-            AND substitute.ended_at IS NULL
-           WHERE replacement.session_id = s.id
-             AND replacement.replaced_training_assignment_id = tta.id
-             AND replacement.ended_at IS NULL
-         )
-     ) OR EXISTS (
-       SELECT 1
-       FROM session_trainer_assignment AS sta
-       WHERE sta.session_id = s.id
-         AND sta.trainer_profile_id = :trainerProfileId
-         AND sta.ended_at IS NULL
-         AND (
-           sta.assignment_type = 'ASSISTANT'
-           OR EXISTS (
-             SELECT 1
-             FROM session_trainer_replacement AS own_replacement
-             WHERE own_replacement.session_id = s.id
-               AND own_replacement.substitute_assignment_id = sta.id
-               AND own_replacement.ended_at IS NULL
-           )
-         )
-         AND NOT EXISTS (
-           SELECT 1
-           FROM session_trainer_replacement AS replacement
-           INNER JOIN session_trainer_assignment AS substitute
-             ON substitute.id = replacement.substitute_assignment_id
-            AND substitute.ended_at IS NULL
-           WHERE replacement.session_id = s.id
-             AND replacement.replaced_session_assignment_id = sta.id
-             AND replacement.ended_at IS NULL
-         )
-     )
-     ORDER BY s.starts_at ASC`,
-    { replacements: { trainerProfileId }, type: QueryTypes.SELECT },
-  );
+  const scope = await loadEffectiveAssignments(trainerProfileId);
+  const trainingAssignmentIds = new Set(scope.trainingAssignments.map((assignment) => assignment.id));
+  const assignedTrainingIds = new Set(scope.trainingAssignments.map((assignment) => assignment.training_id));
+  const scoped = scope.sessions.filter((session) => {
+    const trainingIsAssigned = assignedTrainingIds.has(session.training_id) &&
+      !(scope.replacedTrainingBySession.get(session.id)?.size && [...(scope.replacedTrainingBySession.get(session.id) ?? [])].some((id) => trainingAssignmentIds.has(id)));
+    const sessionIsAssigned = scope.eligibleOwnSessionAssignments.some((assignment) => assignment.session_id === session.id);
+    return trainingIsAssigned || sessionIsAssigned;
+  });
+  return scoped.sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime()).map(({ id, training_id, session_number, starts_at, ends_at }) => ({ id, training_id, session_number, starts_at, ends_at }));
 }

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op, col, fn, where } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { StudentMasterProfile } from "../../database/models";
+import { Account, Participant, StudentMasterProfile, Training } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { asyncHandler } from "../../utils/async-handler";
@@ -25,19 +25,11 @@ const nameParts = (name: string) => {
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
 };
 async function activeAccount(accountId: string) {
-  const rows = await sequelize.query<{ id: string; name: string; status: string }>(
-    "SELECT id, name, status FROM account WHERE id = :accountId AND status = 'ACTIVE'",
-    { replacements: { accountId }, type: QueryTypes.SELECT }
-  );
-  return rows[0] ?? null;
+  return Account.findOne({ attributes: ["id", "name", "status"], where: { id: accountId, status: "ACTIVE" }, raw: true });
 }
 
 async function existingAccount(accountId: string) {
-  const rows = await sequelize.query<{ id: string; name: string; status: string }>(
-    "SELECT id, name, status FROM account WHERE id = :accountId",
-    { replacements: { accountId }, type: QueryTypes.SELECT }
-  );
-  return rows[0] ?? null;
+  return Account.findOne({ attributes: ["id", "name", "status"], where: { id: accountId }, raw: true });
 }
 
 type BulkStudentInput = {
@@ -90,10 +82,7 @@ async function validateBulkStudents(rawRows: unknown[]): Promise<BulkStudentVali
     if ((emailCounts.get(item.email) ?? 0) > 1)
       item.errors.push("Email appears more than once in this file.");
 
-  const accounts = await sequelize.query<{ id: string; name: string; status: string }>(
-    "SELECT id, name, status FROM account",
-    { type: QueryTypes.SELECT }
-  );
+  const accounts = await Account.findAll({ attributes: ["id", "name", "status"], raw: true });
   const accountsByName = new Map<string, typeof accounts>();
   for (const account of accounts) {
     const key = normalizedText(account.name);
@@ -123,10 +112,11 @@ async function validateBulkStudents(rawRows: unknown[]): Promise<BulkStudentVali
     ),
   ];
   if (uniqueCandidateEmails.length) {
-    const existingProfiles = await sequelize.query<{ email: string }>(
-      "SELECT email FROM student_master_profile WHERE LOWER(email) IN (:emails)",
-      { replacements: { emails: uniqueCandidateEmails }, type: QueryTypes.SELECT }
-    );
+    const existingProfiles = await StudentMasterProfile.findAll({
+      attributes: ["email"],
+      where: where(fn("LOWER", col("email")), { [Op.in]: uniqueCandidateEmails }),
+      raw: true,
+    });
     const profileEmails = new Set(existingProfiles.map((row) => row.email.toLowerCase()));
     const keycloakEmails = await keycloakAccountProvisioner.findUsersByEmails(
       uniqueCandidateEmails.filter((email) => !profileEmails.has(email))
@@ -229,14 +219,20 @@ async function provisionStudentProfile(
 }
 
 async function loadStudent(id: string) {
-  const rows = await sequelize.query<Record<string, unknown>>(
-    `SELECT sp.id, sp.keycloak_subject, sp.account_id, sp.name, sp.email, sp.company_role,
-            sp.portal_enabled, sp.first_login_at, sp.last_login_at, sp.activation_expires_at, a.name AS "account_name", a.status AS "account_status",
-            (SELECT COUNT(1) FROM participant p WHERE p.student_subject = sp.keycloak_subject OR (sp.student_id IS NOT NULL AND p.student_id = sp.student_id)) AS class_history_count
-     FROM student_master_profile sp JOIN account a ON a.id = sp.account_id WHERE sp.id = :id`,
-    { replacements: { id }, type: QueryTypes.SELECT }
-  );
-  return rows[0] ?? null;
+  const profile = await StudentMasterProfile.findByPk(id, { include: [{ model: Account, as: "account", attributes: ["name", "status"], required: true }] });
+  if (!profile) return null;
+  const account = profile.get("account") as Account;
+  const historyWhere = { [Op.or]: [
+    { student_subject: profile.keycloak_subject },
+    ...(profile.student_id ? [{ student_id: profile.student_id }] : []),
+  ] };
+  const classHistoryCount = await Participant.count({ where: historyWhere });
+  return {
+    id: profile.id, keycloak_subject: profile.keycloak_subject, account_id: profile.account_id, name: profile.name, email: profile.email,
+    company_role: profile.company_role, portal_enabled: profile.portal_enabled, first_login_at: profile.first_login_at,
+    last_login_at: profile.last_login_at, activation_expires_at: profile.activation_expires_at,
+    account_name: account.name, account_status: account.status, class_history_count: classHistoryCount,
+  } as Record<string, unknown>;
 }
 
 function responseStudent(row: Record<string, unknown>) {
@@ -262,10 +258,7 @@ studentManagementRouter.get(
   authorizeActiveRole(ROLES.ADMIN),
   authorizeCapability("STUDENT", ACCESS_ACTIONS.CREATE),
   asyncHandler(async (_req, res) => {
-    const items = await sequelize.query<{ id: string; account_code: string; name: string }>(
-      "SELECT id, account_code, name FROM account WHERE status = 'ACTIVE' ORDER BY name",
-      { type: QueryTypes.SELECT }
-    );
+    const items = await Account.findAll({ attributes: ["id", "account_code", "name"], where: { status: "ACTIVE" }, order: [["name", "ASC"]], raw: true });
     return res.json({ items });
   })
 );
@@ -274,10 +267,10 @@ studentManagementRouter.post(
   "/portal-login",
   authorizeActiveRole(ROLES.STUDENT),
   asyncHandler(async (req, res) => {
-    await sequelize.query(
-      "UPDATE student_master_profile SET first_login_at = COALESCE(first_login_at, CURRENT_TIMESTAMP), last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE keycloak_subject = :subject AND portal_enabled IS TRUE",
-      { replacements: { subject: req.auth!.userId } }
-    );
+    await StudentMasterProfile.update({
+      first_login_at: fn("COALESCE", col("first_login_at"), fn("NOW")),
+      last_login_at: fn("NOW"),
+    }, { where: { keycloak_subject: req.auth!.userId, portal_enabled: true } });
     return res.status(204).end();
   })
 );
@@ -369,40 +362,53 @@ studentManagementRouter.get(
     if (!["ALL", "ACTIVE", "INACTIVE", "HAVENT_LOGIN"].includes(String(status)))
       return res.status(400).json({ message: "Invalid portal status filter" });
 
-    const clauses = ["1 = 1"];
-    const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
-    if (search) {
-      clauses.push(
-        "(sp.name ILIKE :search ESCAPE E'\\\\' OR sp.email ILIKE :search ESCAPE E'\\\\' OR sp.company_role ILIKE :search ESCAPE E'\\\\')"
-      );
-      replacements.search = `%${String(search).replace(/[\\%_]/g, "\\$&")}%`;
-    }
-    if (accountId) {
-      clauses.push("a.id = :accountId");
-      replacements.accountId = accountId;
-    }
-    if (status === "INACTIVE") clauses.push("sp.portal_enabled IS FALSE");
-    if (status === "HAVENT_LOGIN")
-      clauses.push("sp.portal_enabled IS TRUE AND sp.first_login_at IS NULL");
-    if (status === "ACTIVE")
-      clauses.push("sp.portal_enabled IS TRUE AND sp.first_login_at IS NOT NULL");
-    const where = `WHERE ${clauses.join(" AND ")}`;
-    const totalRows = await sequelize.query<{ total: number | string }>(
-      `SELECT COUNT(1) AS total FROM student_master_profile sp JOIN account a ON a.id = sp.account_id ${where}`,
-      { replacements, type: QueryTypes.SELECT }
-    );
-    const rows = await sequelize.query<Record<string, unknown>>(
-      `SELECT sp.id, sp.keycloak_subject, sp.account_id, sp.name, sp.email, sp.company_role, sp.portal_enabled, sp.first_login_at, sp.last_login_at, sp.activation_expires_at, a.name AS account_name, a.status AS account_status,
-       (SELECT COUNT(1) FROM participant p WHERE p.student_subject = sp.keycloak_subject OR (sp.student_id IS NOT NULL AND p.student_id = sp.student_id)) AS class_history_count
-     FROM student_master_profile sp JOIN account a ON a.id = sp.account_id ${where}
-     ORDER BY sp.name, sp.id LIMIT :pageSize OFFSET :offset`,
-      { replacements, type: QueryTypes.SELECT }
-    );
+    const pattern = search ? `%${String(search).replace(/[\\%_]/g, "\\$&")}%` : undefined;
+    const where = {
+      ...(pattern ? { [Op.or]: [
+        { name: { [Op.iLike]: pattern } },
+        { email: { [Op.iLike]: pattern } },
+        { company_role: { [Op.iLike]: pattern } },
+      ] } : {}),
+      ...(status === "INACTIVE" ? { portal_enabled: false } : {}),
+      ...(status === "HAVENT_LOGIN" ? { portal_enabled: true, first_login_at: null } : {}),
+      ...(status === "ACTIVE" ? { portal_enabled: true, first_login_at: { [Op.ne]: null } } : {}),
+      ...(accountId ? { account_id: accountId } : {}),
+    };
+    const { count: total, rows: profiles } = await StudentMasterProfile.findAndCountAll({
+      where,
+      include: [{ model: Account, as: "account", attributes: ["name", "status"], required: true }],
+      distinct: true,
+      order: [["name", "ASC"], ["id", "ASC"]],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+    const subjects = profiles.map((profile) => profile.keycloak_subject);
+    const studentIds = profiles.map((profile) => profile.student_id).filter((id): id is string => Boolean(id));
+    const historyRows = subjects.length || studentIds.length ? await Participant.findAll({
+      attributes: ["student_subject", "student_id"],
+      where: { [Op.or]: [
+        ...(subjects.length ? [{ student_subject: { [Op.in]: subjects } }] : []),
+        ...(studentIds.length ? [{ student_id: { [Op.in]: studentIds } }] : []),
+      ] },
+      raw: true,
+    }) : [];
+    const rows = profiles.map((profile) => {
+      const account = profile.get("account") as Account;
+      const classHistoryCount = historyRows.filter((participant) =>
+        participant.student_subject === profile.keycloak_subject || Boolean(profile.student_id && participant.student_id === profile.student_id)
+      ).length;
+      return {
+        ...profile.get({ plain: true }),
+        account_name: account.name,
+        account_status: account.status,
+        class_history_count: classHistoryCount,
+      } as Record<string, unknown>;
+    });
     return res.json({
       items: rows.map(responseStudent),
       page,
       pageSize,
-      total: Number(totalRows[0]?.total ?? 0),
+      total,
     });
   })
 );
@@ -453,19 +459,18 @@ studentManagementRouter.get(
     if (!row) return res.status(404).json({ message: "Student not found" });
     const profile = await StudentMasterProfile.findByPk(req.params.id);
     if (!profile) return res.status(404).json({ message: "Student not found" });
-    const trainings = await sequelize.query<{
-      id: string;
-      name: string;
-      status: string;
-      training_type: string;
-    }>(
-      `SELECT DISTINCT t.id, t.name, t.status, t.training_type FROM participant p JOIN training t ON t.id = p.training_id
-     WHERE p.student_subject = :subject OR p.student_id = :studentId ORDER BY t.name`,
-      {
-        replacements: { subject: profile.keycloak_subject, studentId: profile.student_id },
-        type: QueryTypes.SELECT,
-      }
-    );
+    const participantRows = await Participant.findAll({
+      attributes: ["training_id"],
+      where: { [Op.or]: [
+        { student_subject: profile.keycloak_subject },
+        ...(profile.student_id ? [{ student_id: profile.student_id }] : []),
+      ] },
+      include: [{ model: Training, as: "training", attributes: ["id", "name", "status", "training_type"], required: true }],
+    });
+    const trainings = [...new Map(participantRows.map((participant) => {
+      const training = participant.get("training") as Training;
+      return [training.id, { id: training.id, name: training.name, status: training.status, training_type: training.training_type }];
+    })).values()].sort((left, right) => left.name.localeCompare(right.name));
     return res.json({ item: responseStudent(row), trainings });
   })
 );
@@ -632,14 +637,10 @@ studentManagementRouter.delete(
   asyncHandler(async (req, res) => {
     const profile = await StudentMasterProfile.findByPk(req.params.id);
     if (!profile) return res.status(404).json({ message: "Student not found" });
-    const [history] = await sequelize.query<{ count: number | string }>(
-      "SELECT COUNT(1) AS count FROM participant WHERE student_subject = :subject OR student_id = :studentId",
-      {
-        replacements: { subject: profile.keycloak_subject, studentId: profile.student_id },
-        type: QueryTypes.SELECT,
-      }
-    );
-    const historyCount = Number(history?.count ?? 0);
+    const historyCount = await Participant.count({ where: { [Op.or]: [
+      { student_subject: profile.keycloak_subject },
+      ...(profile.student_id ? [{ student_id: profile.student_id }] : []),
+    ] } });
     if (historyCount > 0)
       return res
         .status(409)
@@ -675,10 +676,10 @@ studentManagementRouter.delete(
         },
         transaction
       );
-      await sequelize.query(
-        "UPDATE account SET personal_student_subject = NULL, updated_at = CURRENT_TIMESTAMP WHERE personal_student_subject = :subject",
-        { replacements: { subject: profile.keycloak_subject }, transaction }
-      );
+      await Account.update({ personal_student_subject: null }, {
+        where: { personal_student_subject: profile.keycloak_subject },
+        transaction,
+      });
       await profile.destroy({ transaction });
       await transaction.commit();
       return res.status(204).end();

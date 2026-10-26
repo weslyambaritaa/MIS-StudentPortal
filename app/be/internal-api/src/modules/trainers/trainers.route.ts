@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op, col, fn } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { TrainerProfile } from "../../database/models";
+import { Course, Evaluation, SessionTrainerAssignment, TrainerCertification, TrainerProfile, Training, TrainingSession, TrainingTrainerAssignment } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { asyncHandler } from "../../utils/async-handler";
@@ -47,15 +47,14 @@ function validateInput(body: Record<string, unknown>, isEdit = false) {
 
 async function loadCertifications(trainerIds: string[]) {
   if (!trainerIds.length) return new Map<string, Record<string, unknown>[]>();
-  const rows = await sequelize.query<Record<string, unknown>>(
-    "SELECT id, trainer_profile_id, name, expires_at, (expires_at::date - CURRENT_DATE) AS days_until_expiry FROM trainer_certification WHERE trainer_profile_id IN (:ids) ORDER BY expires_at, name",
-    { replacements: { ids: trainerIds }, type: QueryTypes.SELECT }
-  );
+  const rows = await TrainerCertification.findAll({ where: { trainer_profile_id: { [Op.in]: trainerIds } }, order: [["expires_at", "ASC"], ["name", "ASC"]], raw: true }) as unknown as Array<Record<string, unknown> & { trainer_profile_id: string; expires_at: string }>;
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   const byTrainer = new Map<string, Record<string, unknown>[]>();
   for (const row of rows) {
     const id = String(row.trainer_profile_id);
-    const rawDaysUntilExpiry = row.days_until_expiry;
-    const daysUntilExpiry = rawDaysUntilExpiry == null ? null : Number(rawDaysUntilExpiry);
+    const [year, month, day] = row.expires_at.slice(0, 10).split("-").map(Number);
+    const daysUntilExpiry = Math.floor((Date.UTC(year, month - 1, day) - todayUtc) / 86_400_000);
     byTrainer.set(id, [
       ...(byTrainer.get(id) ?? []),
       {
@@ -71,20 +70,46 @@ async function loadCertifications(trainerIds: string[]) {
 
 async function loadTrainerRatings(trainerIds: string[]) {
   if (!trainerIds.length) return new Map<string, number>();
-  const rows = await sequelize.query<{ trainer_profile_id: string; rating: number | string }>(
-    `SELECT assignments.trainer_profile_id, COALESCE(AVG(CAST(ev.score AS DECIMAL(5,2))), 0) AS rating
-       FROM (
-         SELECT DISTINCT training_id, trainer_profile_id FROM training_trainer_assignment
-         UNION
-         SELECT DISTINCT ts.training_id, sta.trainer_profile_id FROM session_trainer_assignment sta
-           JOIN training_session ts ON ts.id = sta.session_id
-       ) assignments
-       LEFT JOIN evaluation ev ON ev.training_id = assignments.training_id AND ev.score IS NOT NULL
-      WHERE assignments.trainer_profile_id IN (:ids)
-      GROUP BY assignments.trainer_profile_id`,
-    { replacements: { ids: trainerIds }, type: QueryTypes.SELECT }
-  );
-  return new Map(rows.map((row) => [String(row.trainer_profile_id), Number(row.rating)]));
+  const assignments = await loadTrainerAssignments(trainerIds);
+  const distinctTrainingIds = [...new Set(assignments.flatMap((row) => row.training_id))];
+  const evaluations = distinctTrainingIds.length ? await Evaluation.findAll({
+    attributes: ["training_id", "score"],
+    where: { training_id: { [Op.in]: distinctTrainingIds }, score: { [Op.ne]: null } },
+    raw: true,
+  }) as unknown as Array<{ training_id: string; score: number }> : [];
+  const scoresByTraining = new Map<string, number[]>();
+  for (const evaluation of evaluations) scoresByTraining.set(evaluation.training_id, [...(scoresByTraining.get(evaluation.training_id) ?? []), Number(evaluation.score)]);
+  const pairKeys = new Set(assignments.map((row) => `${row.trainer_profile_id}:${row.training_id}`));
+  const sums = new Map<string, { sum: number; count: number }>();
+  for (const pair of pairKeys) {
+    const [trainerId, trainingId] = pair.split(":");
+    for (const score of scoresByTraining.get(trainingId) ?? []) {
+      const current = sums.get(trainerId) ?? { sum: 0, count: 0 };
+      current.sum += score;
+      current.count += 1;
+      sums.set(trainerId, current);
+    }
+  }
+  return new Map(trainerIds.map((id) => [id, (sums.get(id)?.sum ?? 0) / (sums.get(id)?.count || 1)]));
+}
+
+type TrainerAssignmentRow = { trainer_profile_id: string; training_id: string; assigned_at: Date };
+async function loadTrainerAssignments(trainerIds: string[]): Promise<TrainerAssignmentRow[]> {
+  if (!trainerIds.length) return [];
+  const [direct, session] = await Promise.all([
+    TrainingTrainerAssignment.findAll({ attributes: ["trainer_profile_id", "training_id", "assigned_at"], where: { trainer_profile_id: { [Op.in]: trainerIds } }, raw: true }),
+    SessionTrainerAssignment.findAll({
+      attributes: ["trainer_profile_id", "assigned_at"],
+      where: { trainer_profile_id: { [Op.in]: trainerIds } },
+      include: [{ model: TrainingSession, as: "session", attributes: ["training_id"], required: true }],
+    }),
+  ]);
+  const sessionRows = session.map((assignment) => ({
+    trainer_profile_id: assignment.trainer_profile_id,
+    training_id: (assignment.get("session") as TrainingSession).training_id,
+    assigned_at: assignment.assigned_at,
+  }));
+  return [...direct as unknown as TrainerAssignmentRow[], ...sessionRows];
 }
 
 const activateRequiredActionsEmail = (subject: string) =>
@@ -101,10 +126,13 @@ trainersRouter.get(
   authorizeActiveRole(ROLES.ADMIN),
   authorizeCapability("TRAINER", ACCESS_ACTIONS.VIEW),
   asyncHandler(async (_req, res) => {
-    const rows = await sequelize.query<{ specialization: string }>(
-      "SELECT DISTINCT specialization FROM trainer_profile WHERE specialization IS NOT NULL AND specialization <> '' ORDER BY specialization",
-      { type: QueryTypes.SELECT }
-    );
+    const rows = await TrainerProfile.findAll({
+      attributes: ["specialization"],
+      where: { specialization: { [Op.ne]: "" } },
+      group: ["specialization"],
+      order: [["specialization", "ASC"]],
+      raw: true,
+    }) as unknown as Array<{ specialization: string }>;
     return res.json({ items: rows.map((row) => row.specialization) });
   })
 );
@@ -130,53 +158,49 @@ trainersRouter.get(
       return res.status(400).json({ message: "Invalid specialization filter" });
     if (!["ALL", "PENDING", "ACTIVE", "INACTIVE"].includes(String(status)))
       return res.status(400).json({ message: "Invalid status filter" });
-    const clauses = ["1 = 1"];
-    const replacements: Record<string, unknown> = { offset: (page - 1) * pageSize, pageSize };
-    if (search) {
-      clauses.push(
-        "(tp.trainer_code ILIKE :search ESCAPE E'\\\\' OR tp.name ILIKE :search ESCAPE E'\\\\' OR tp.email ILIKE :search ESCAPE E'\\\\' OR tp.specialization ILIKE :search ESCAPE E'\\\\')"
-      );
-      replacements.search = `%${String(search).replace(/[\\%_]/g, "\\$&")}%`;
+    const pattern = search ? `%${String(search).replace(/[\\%_]/g, "\\$&")}%` : undefined;
+    const where = {
+      ...(pattern ? { [Op.or]: [
+        { trainer_code: { [Op.iLike]: pattern } },
+        { name: { [Op.iLike]: pattern } },
+        { email: { [Op.iLike]: pattern } },
+        { specialization: { [Op.iLike]: pattern } },
+      ] } : {}),
+      ...(specialization ? { specialization } : {}),
+      ...(status !== "ALL" ? { status: String(status) } : {}),
+    };
+    const { count: total, rows: profiles } = await TrainerProfile.findAndCountAll({
+      where,
+      order: [["trainer_code", "ASC"], ["name", "ASC"]],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+    const trainerIds = profiles.map((row) => row.id);
+    const assignments = await loadTrainerAssignments(trainerIds);
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth();
+    const stats = new Map<string, { yearly: Set<string>; monthly: Set<string>; history: Set<string> }>();
+    for (const assignment of assignments) {
+      const value = stats.get(assignment.trainer_profile_id) ?? { yearly: new Set<string>(), monthly: new Set<string>(), history: new Set<string>() };
+      value.history.add(assignment.training_id);
+      const assignedAt = new Date(assignment.assigned_at);
+      if (assignedAt.getUTCFullYear() === currentYear) {
+        value.yearly.add(assignment.training_id);
+        if (assignedAt.getUTCMonth() === currentMonth) value.monthly.add(assignment.training_id);
+      }
+      stats.set(assignment.trainer_profile_id, value);
     }
-    if (specialization) {
-      clauses.push("tp.specialization = :specialization");
-      replacements.specialization = specialization;
-    }
-    if (status !== "ALL") {
-      clauses.push("tp.status = :status");
-      replacements.status = status;
-    }
-    const where = `WHERE ${clauses.join(" AND ")}`;
-    const totals = await sequelize.query<{ total: number | string }>(
-      `SELECT COUNT(1) AS total FROM trainer_profile tp ${where}`,
-      { replacements, type: QueryTypes.SELECT }
-    );
-    const rows = await sequelize.query<Record<string, unknown>>(
-      `SELECT tp.id, tp.keycloak_subject, tp.trainer_code, tp.name, tp.email, tp.specialization, tp.rating, tp.status, tp.first_login_at, tp.activation_expires_at,
-      (SELECT COUNT(DISTINCT assigned.training_id) FROM (
-        SELECT tta.training_id, tta.trainer_profile_id, tta.assigned_at, tta.ended_at FROM training_trainer_assignment tta
-        UNION ALL SELECT ts.training_id, sta.trainer_profile_id, sta.assigned_at, sta.ended_at FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id
-      ) assigned WHERE assigned.trainer_profile_id = tp.id AND EXTRACT(YEAR FROM assigned.assigned_at) = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)) AS yearly_class_count,
-      (SELECT COUNT(DISTINCT assigned.training_id) FROM (
-        SELECT tta.training_id, tta.trainer_profile_id, tta.assigned_at, tta.ended_at FROM training_trainer_assignment tta
-        UNION ALL SELECT ts.training_id, sta.trainer_profile_id, sta.assigned_at, sta.ended_at FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id
-      ) assigned WHERE assigned.trainer_profile_id = tp.id AND EXTRACT(YEAR FROM assigned.assigned_at) = EXTRACT(YEAR FROM CURRENT_TIMESTAMP) AND EXTRACT(MONTH FROM assigned.assigned_at) = EXTRACT(MONTH FROM CURRENT_TIMESTAMP)) AS monthly_class_count
-      ,(SELECT COUNT(1) FROM (
-        SELECT training_id FROM training_trainer_assignment WHERE trainer_profile_id = tp.id
-        UNION SELECT ts.training_id FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id WHERE sta.trainer_profile_id = tp.id
-      ) history) AS "training_history_count"
-     FROM trainer_profile tp ${where} ORDER BY tp.trainer_code, tp.name LIMIT :pageSize OFFSET :offset`,
-      { replacements, type: QueryTypes.SELECT }
-    );
-    const trainerIds = rows.map((row) => String(row.id));
     const [certificationMap, ratingMap] = await Promise.all([
       loadCertifications(trainerIds),
       loadTrainerRatings(trainerIds),
     ]);
     const keycloakTrainers = await keycloakAccountProvisioner.listRoleMembers(ROLES.TRAINER, true);
     const identities = new Map(keycloakTrainers.map((user) => [user.userId, user]));
-    const items = rows.map((row) => {
+    const items = profiles.map((profile) => {
+      const row = profile.get({ plain: true }) as Record<string, unknown>;
       const identity = identities.get(String(row.keycloak_subject));
+      const counts = stats.get(profile.id);
       return {
         ...row,
         name:
@@ -186,13 +210,13 @@ trainersRouter.get(
             null),
         email: row.email ?? identity?.email ?? null,
         rating: ratingMap.get(String(row.id)) ?? 0,
-        yearly_class_count: Number(row.yearly_class_count ?? 0),
-        monthly_class_count: Number(row.monthly_class_count ?? 0),
-        training_history_count: Number(row.training_history_count ?? 0),
+        yearly_class_count: counts?.yearly.size ?? 0,
+        monthly_class_count: counts?.monthly.size ?? 0,
+        training_history_count: counts?.history.size ?? 0,
         certifications: certificationMap.get(String(row.id)) ?? [],
       };
     });
-    return res.json({ items, page, pageSize, total: Number(totals[0]?.total ?? 0) });
+    return res.json({ items, page, pageSize, total });
   })
 );
 
@@ -200,10 +224,10 @@ trainersRouter.post(
   "/portal-login",
   authorizeActiveRole(ROLES.TRAINER),
   asyncHandler(async (req, res) => {
-    await sequelize.query(
-      "UPDATE trainer_profile SET first_login_at = COALESCE(first_login_at, CURRENT_TIMESTAMP), status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP WHERE keycloak_subject = :subject AND status <> 'INACTIVE'",
-      { replacements: { subject: req.auth!.userId } }
-    );
+    await TrainerProfile.update({
+      first_login_at: fn("COALESCE", col("first_login_at"), fn("NOW")),
+      status: "ACTIVE",
+    }, { where: { keycloak_subject: req.auth!.userId, status: { [Op.ne]: "INACTIVE" } } });
     return res.status(204).end();
   })
 );
@@ -227,11 +251,8 @@ trainersRouter.post(
     const specialization = String(body.specialization).trim();
     const rating = 0;
     const certifications = body.certifications as CertificationInput[];
-    const existingCode = await sequelize.query<{ trainer_code: string }>(
-      "SELECT trainer_code FROM trainer_profile WHERE trainer_code = :code",
-      { replacements: { code: trainerCode }, type: QueryTypes.SELECT }
-    );
-    if (existingCode.length)
+    const existingCode = await TrainerProfile.findOne({ attributes: ["id"], where: { trainer_code: trainerCode } });
+    if (existingCode)
       return res.status(409).json({ message: "Trainer code is already in use." });
     if ((await keycloakAccountProvisioner.findUsersByEmail(email)).length)
       return res.status(409).json({ message: "An account with this email address already exists" });
@@ -273,19 +294,12 @@ trainersRouter.post(
           },
           { transaction }
         );
-        for (const certification of certifications)
-          await sequelize.query(
-            "INSERT INTO trainer_certification (id,trainer_profile_id,name,expires_at,created_at,updated_at) VALUES (:id,:trainerId,:name,:expiresAt,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
-            {
-              replacements: {
-                id: randomUUID(),
-                trainerId: profile.id,
-                name: certification.name.trim(),
-                expiresAt: certification.expiresAt,
-              },
-              transaction,
-            }
-          );
+        await TrainerCertification.bulkCreate(certifications.map((certification) => ({
+          id: randomUUID(),
+          trainer_profile_id: profile.id,
+          name: certification.name.trim(),
+          expires_at: certification.expiresAt,
+        })), { transaction });
         await appendRequestAuditTrail(
           req,
           {
@@ -348,26 +362,47 @@ trainersRouter.get(
     const profile = await TrainerProfile.findByPk(req.params.id);
     if (!profile) return res.status(404).json({ message: "Trainer not found." });
     const [trainingRows, certificationMap, ratingMap] = await Promise.all([
-      sequelize.query<Record<string, unknown>>(
-        `SELECT assigned.id, assigned.name, assigned.course_name, assigned.status, MAX(assigned.assigned_at) AS assigned_at FROM (
-      SELECT t.id, t.name, c.name AS course_name, t.status, tta.assigned_at FROM training_trainer_assignment tta JOIN training t ON t.id = tta.training_id JOIN course c ON c.id = t.course_id WHERE tta.trainer_profile_id = :id AND tta.ended_at IS NULL
-      UNION ALL SELECT t.id, t.name, c.name AS course_name, t.status, sta.assigned_at FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id JOIN training t ON t.id = ts.training_id JOIN course c ON c.id = t.course_id WHERE sta.trainer_profile_id = :id AND sta.ended_at IS NULL
-    ) assigned WHERE assigned.status IN ('SCHEDULED','ONGOING') GROUP BY assigned.id, assigned.name, assigned.course_name, assigned.status ORDER BY MAX(assigned.assigned_at) DESC`,
-        { replacements: { id: profile.id }, type: QueryTypes.SELECT }
-      ),
+      (async () => {
+        const [direct, session] = await Promise.all([
+          TrainingTrainerAssignment.findAll({ attributes: ["training_id", "assigned_at"], where: { trainer_profile_id: profile.id, ended_at: null } }),
+          SessionTrainerAssignment.findAll({
+            attributes: ["assigned_at"],
+            where: { trainer_profile_id: profile.id, ended_at: null },
+            include: [{ model: TrainingSession, as: "session", attributes: ["training_id"], required: true }],
+          }),
+        ]);
+        const latestAssignedAt = new Map<string, Date>();
+        for (const row of direct) {
+          const previous = latestAssignedAt.get(row.training_id);
+          if (!previous || row.assigned_at > previous) latestAssignedAt.set(row.training_id, row.assigned_at);
+        }
+        for (const row of session) {
+          const trainingId = (row.get("session") as TrainingSession).training_id;
+          const previous = latestAssignedAt.get(trainingId);
+          if (!previous || row.assigned_at > previous) latestAssignedAt.set(trainingId, row.assigned_at);
+        }
+        if (!latestAssignedAt.size) return [];
+        const trainings = await Training.findAll({
+          attributes: ["id", "name", "status"],
+          where: { id: { [Op.in]: [...latestAssignedAt.keys()] }, status: { [Op.in]: ["SCHEDULED", "ONGOING"] } },
+          include: [{ model: Course, as: "course", attributes: ["name"], required: true }],
+        });
+        return trainings.map((training) => ({
+          id: training.id,
+          name: training.name,
+          course_name: (training.get("course") as Course).name,
+          status: training.status,
+          assigned_at: latestAssignedAt.get(training.id),
+        })).sort((left, right) => new Date(right.assigned_at!).getTime() - new Date(left.assigned_at!).getTime());
+      })(),
       loadCertifications([profile.id]),
       loadTrainerRatings([profile.id]),
     ]);
-    const [identity, historyRows] = await Promise.all([
+    const [identity, assignmentHistory] = await Promise.all([
       keycloakAccountProvisioner.getIdentity(profile.keycloak_subject),
-      sequelize.query<{ count: number | string }>(
-        `SELECT COUNT(1) AS count FROM (
-      SELECT training_id FROM training_trainer_assignment WHERE trainer_profile_id = :id
-      UNION SELECT ts.training_id FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id WHERE sta.trainer_profile_id = :id
-    ) history`,
-        { replacements: { id: profile.id }, type: QueryTypes.SELECT }
-      ),
+      loadTrainerAssignments([profile.id]),
     ]);
+    const historyCount = new Set(assignmentHistory.map((row) => row.training_id)).size;
     return res.json({
       item: {
         id: profile.id,
@@ -381,7 +416,7 @@ trainersRouter.get(
         status: profile.status,
         first_login_at: profile.first_login_at,
         activation_expires_at: profile.activation_expires_at,
-        training_history_count: Number(historyRows[0]?.count ?? 0),
+        training_history_count: historyCount,
         certifications: certificationMap.get(profile.id) ?? [],
       },
       trainings: trainingRows,
@@ -449,13 +484,12 @@ trainersRouter.put(
     const specialization = String(body.specialization).trim();
     const nextStatus = String(body.status) as "PENDING" | "ACTIVE" | "INACTIVE";
     const certifications = body.certifications as CertificationInput[];
-    const previousCertifications = await sequelize.query<{
-      name: string;
-      expires_at: string | Date;
-    }>(
-      "SELECT name, expires_at FROM trainer_certification WHERE trainer_profile_id = :id ORDER BY expires_at, name",
-      { replacements: { id: profile.id }, type: QueryTypes.SELECT }
-    );
+    const previousCertifications = await TrainerCertification.findAll({
+      attributes: ["name", "expires_at"],
+      where: { trainer_profile_id: profile.id },
+      order: [["expires_at", "ASC"], ["name", "ASC"]],
+      raw: true,
+    }) as unknown as Array<{ name: string; expires_at: string | Date }>;
     const before = {
       name: profile.name,
       specialization: profile.specialization,
@@ -505,23 +539,13 @@ trainersRouter.put(
       const transaction = await sequelize.transaction();
       try {
         await profile.update(changes, { transaction });
-        await sequelize.query(
-          "DELETE FROM trainer_certification WHERE trainer_profile_id = :id",
-          { replacements: { id: profile.id }, transaction }
-        );
-        for (const certification of certifications)
-          await sequelize.query(
-            "INSERT INTO trainer_certification (id,trainer_profile_id,name,expires_at,created_at,updated_at) VALUES (:id,:trainerId,:name,:expiresAt,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
-            {
-              replacements: {
-                id: randomUUID(),
-                trainerId: profile.id,
-                name: certification.name.trim(),
-                expiresAt: certification.expiresAt,
-              },
-              transaction,
-            }
-          );
+        await TrainerCertification.destroy({ where: { trainer_profile_id: profile.id }, transaction });
+        await TrainerCertification.bulkCreate(certifications.map((certification) => ({
+          id: randomUUID(),
+          trainer_profile_id: profile.id,
+          name: certification.name.trim(),
+          expires_at: certification.expiresAt,
+        })), { transaction });
         await appendRequestAuditTrail(
           req,
           {
@@ -577,14 +601,8 @@ trainersRouter.delete(
   asyncHandler(async (req, res) => {
     const profile = await TrainerProfile.findByPk(req.params.id);
     if (!profile) return res.status(404).json({ message: "Trainer not found." });
-    const history = await sequelize.query<{ count: number | string }>(
-      `SELECT COUNT(1) AS count FROM (
-    SELECT training_id FROM training_trainer_assignment WHERE trainer_profile_id = :id
-    UNION SELECT ts.training_id FROM session_trainer_assignment sta JOIN training_session ts ON ts.id = sta.session_id WHERE sta.trainer_profile_id = :id
-  ) history`,
-      { replacements: { id: profile.id }, type: QueryTypes.SELECT }
-    );
-    const historyCount = Number(history[0]?.count ?? 0);
+    const assignments = await loadTrainerAssignments([profile.id]);
+    const historyCount = new Set(assignments.map((row) => row.training_id)).size;
     if (historyCount > 0)
       return res
         .status(409)

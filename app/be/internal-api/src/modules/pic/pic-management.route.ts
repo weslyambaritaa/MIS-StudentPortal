@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
 import { env } from "../../config/env";
-import { PicAccountAssignment, PicProfile } from "../../database/models";
+import { Account, Industry, Participant, PicAccountAssignment, PicProfile, SalesAccountAssignment, Training } from "../../database/models";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { asyncHandler } from "../../utils/async-handler";
@@ -38,40 +38,43 @@ const publicProfile = (profile: PicProfile, account?: Record<string, unknown>) =
 });
 
 async function isSalesAccount(accountId: string, salesSubject: string, requireActive = false) {
-  const rows = await sequelize.query<{
-    id: string;
-    name: string;
-    status: string;
-    industry_name: string | null;
-  }>(
-    `SELECT a.id, a.name, a.status, i.name AS industry_name
-     FROM account a JOIN sales_account_assignment sa ON sa.account_id = a.id
-     LEFT JOIN industry i ON i.id = a.industry_id
-     WHERE a.id = :accountId AND sa.sales_subject = :salesSubject AND sa.ended_at IS NULL${requireActive ? " AND a.status = 'ACTIVE'" : ""}`,
-    { replacements: { accountId, salesSubject }, type: QueryTypes.SELECT }
-  );
-  return rows[0] ?? null;
+  const account = await Account.findOne({
+    attributes: ["id", "name", "status", "industry_id"],
+    where: { id: accountId, ...(requireActive ? { status: "ACTIVE" } : {}) },
+    include: [
+      { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: salesSubject, ended_at: null }, required: true },
+      { model: Industry, as: "industry", attributes: ["name"], required: false },
+    ],
+  });
+  if (!account) return null;
+  const plain = account.get({ plain: true }) as Record<string, unknown> & { industry?: { name: string } | null };
+  return { id: plain.id, name: plain.name, status: plain.status, industry_name: plain.industry?.name ?? null };
 }
 
 async function loadPic(profileId: string, salesSubject: string) {
-  const rows = await sequelize.query<{
-    id: string;
-    name: string;
-    email: string;
-    status: PicProfile["status"];
-    activation_expires_at: Date | null;
-    account_id: string;
-    account_name: string;
-    account_status: string;
-    industry_name: string | null;
-  }>(
-    `SELECT pp.id, pp.name, pp.email, pp.status, pp.activation_expires_at, a.id AS account_id, a.name AS account_name, a.status AS account_status, i.name AS industry_name
-     FROM pic_profile pp JOIN pic_account_assignment pa ON pa.pic_profile_id = pp.id AND pa.ended_at IS NULL
-     JOIN account a ON a.id = pa.account_id JOIN sales_account_assignment sa ON sa.account_id = a.id AND sa.sales_subject = :salesSubject AND sa.ended_at IS NULL
-     LEFT JOIN industry i ON i.id = a.industry_id WHERE pp.id = :profileId`,
-    { replacements: { profileId, salesSubject }, type: QueryTypes.SELECT }
-  );
-  return rows[0] ?? null;
+  const assignment = await PicAccountAssignment.findOne({
+    where: { ended_at: null },
+    include: [
+      { model: PicProfile, as: "picProfile", attributes: ["id", "name", "email", "status", "activation_expires_at"], where: { id: profileId }, required: true },
+      { model: Account, as: "account", attributes: ["id", "name", "status"], required: true, include: [
+        { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: salesSubject, ended_at: null }, required: true },
+        { model: Industry, as: "industry", attributes: ["name"], required: false },
+      ] },
+    ],
+  });
+  if (!assignment) return null;
+  const plain = assignment.get({ plain: true }) as unknown as { picProfile: PicProfile; account: Account & { industry?: Industry | null } };
+  return {
+    id: plain.picProfile.id,
+    name: plain.picProfile.name,
+    email: plain.picProfile.email,
+    status: plain.picProfile.status,
+    activation_expires_at: plain.picProfile.activation_expires_at,
+    account_id: plain.account.id,
+    account_name: plain.account.name,
+    account_status: plain.account.status,
+    industry_name: plain.account.industry?.name ?? null,
+  };
 }
 
 async function activateCompletedProfiles(profiles: PicProfile[]) {
@@ -113,17 +116,18 @@ picManagementRouter.get(
   authorizeActiveRole(ROLES.SALES),
   authorizeCapability("PIC", ACCESS_ACTIONS.CREATE),
   asyncHandler(async (req, res) => {
-    const items = await sequelize.query<{
-      id: string;
-      account_code: string;
-      name: string;
-      industry_name: string | null;
-    }>(
-      `SELECT a.id, a.account_code, a.name, a.status, i.name AS industry_name FROM account a
-     JOIN sales_account_assignment sa ON sa.account_id = a.id AND sa.sales_subject = :subject AND sa.ended_at IS NULL
-     LEFT JOIN industry i ON i.id = a.industry_id ORDER BY a.name`,
-      { replacements: { subject: req.auth!.userId }, type: QueryTypes.SELECT }
-    );
+    const accounts = await Account.findAll({
+      attributes: ["id", "account_code", "name", "status"],
+      include: [
+        { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true },
+        { model: Industry, as: "industry", attributes: ["name"], required: false },
+      ],
+      order: [["name", "ASC"]],
+    });
+    const items = accounts.map((account) => {
+      const row = account.get({ plain: true }) as Record<string, unknown> & { industry?: { name: string } | null };
+      return { id: row.id, account_code: row.account_code, name: row.name, status: row.status, industry_name: row.industry?.name ?? null };
+    });
     return res.json({ items });
   })
 );
@@ -145,40 +149,29 @@ picManagementRouter.get(
       return res.status(400).json({ message: "Invalid Account filter" });
     if (!["ALL", "PENDING", "ACTIVE", "INACTIVE"].includes(String(status)))
       return res.status(400).json({ message: "Invalid status filter" });
-    const clauses = [
-      "sa.sales_subject = :subject",
-      "sa.ended_at IS NULL",
-      "pa.ended_at IS NULL",
-    ];
-    const replacements: Record<string, unknown> = {
-      subject: req.auth!.userId,
+    const pattern = search ? `%${String(search).replace(/[\\%_]/g, "\\$&")}%` : undefined;
+    const { count: total, rows: profiles } = await PicProfile.findAndCountAll({
+      where: { ...(status !== "ALL" ? { status: String(status) } : {}), ...(pattern ? { [Op.or]: [{ name: { [Op.iLike]: pattern } }, { email: { [Op.iLike]: pattern } }] } : {}) },
+      include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: [], where: { ended_at: null }, required: true,
+        include: [{ model: Account, as: "account", attributes: ["id", "name", "status"], where: accountId ? { id: accountId } : undefined, required: true,
+          include: [
+            { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true },
+            { model: Industry, as: "industry", attributes: ["name"], required: false },
+          ] },
+      ] }],
+      distinct: true,
+      order: [["name", "ASC"], ["id", "ASC"]],
+      limit: pageSize,
       offset: (page - 1) * pageSize,
-      pageSize,
-    };
-    if (search) {
-      clauses.push("(pp.name ILIKE :search ESCAPE E'\\\\' OR pp.email ILIKE :search ESCAPE E'\\\\')");
-      replacements.search = `%${String(search).replace(/[\\%_]/g, "\\$&")}%`;
-    }
-    if (accountId) {
-      clauses.push("a.id = :accountId");
-      replacements.accountId = accountId;
-    }
-    if (status !== "ALL") {
-      clauses.push("pp.status = :status");
-      replacements.status = status;
-    }
-    const where = `WHERE ${clauses.join(" AND ")}`;
-    const totalRows = await sequelize.query<{ total: number | string }>(
-      `SELECT COUNT(1) AS total FROM pic_profile pp JOIN pic_account_assignment pa ON pa.pic_profile_id = pp.id JOIN account a ON a.id = pa.account_id JOIN sales_account_assignment sa ON sa.account_id = a.id ${where}`,
-      { replacements, type: QueryTypes.SELECT }
-    );
-    const rows = await sequelize.query<Record<string, unknown>>(
-      `SELECT pp.id, pp.name, pp.email, pp.status, pp.activation_expires_at, a.id AS account_id, a.name AS account_name, a.status AS account_status, i.name AS industry_name
-     FROM pic_profile pp JOIN pic_account_assignment pa ON pa.pic_profile_id = pp.id AND pa.ended_at IS NULL
-     JOIN account a ON a.id = pa.account_id JOIN sales_account_assignment sa ON sa.account_id = a.id AND sa.sales_subject = :subject AND sa.ended_at IS NULL
-     LEFT JOIN industry i ON i.id = a.industry_id ${where} ORDER BY pp.name, pp.id LIMIT :pageSize OFFSET :offset`,
-      { replacements, type: QueryTypes.SELECT }
-    );
+    });
+    const rows = profiles.map((profile) => {
+      const row = profile.get({ plain: true }) as Record<string, unknown> & { accountAssignments: Array<{ account: Record<string, unknown> & { industry?: { name: string } | null } }> };
+      const account = row.accountAssignments[0]?.account;
+      return {
+        id: row.id, name: row.name, email: row.email, status: row.status, activation_expires_at: row.activation_expires_at,
+        account_id: account?.id ?? null, account_name: account?.name ?? null, account_status: account?.status ?? null, industry_name: account?.industry?.name ?? null,
+      };
+    });
     const pending = await PicProfile.findAll({
       where: { id: rows.filter((row) => row.status === "PENDING").map((row) => row.id as string) },
     });
@@ -192,7 +185,7 @@ picManagementRouter.get(
         }
       }
     }
-    return res.json({ items: rows, page, pageSize, total: Number(totalRows[0]?.total ?? 0) });
+    return res.json({ items: rows, page, pageSize, total });
   })
 );
 
@@ -319,16 +312,13 @@ picManagementRouter.get(
       await profile.reload();
     }
     const identity = await keycloakAccountProvisioner.getIdentity(profile.keycloak_subject);
-    const trainingRows = await sequelize.query<{
-      student_subject: string;
-      training_name: string;
-      training_status: string;
-    }>(
-      `SELECT DISTINCT p.student_subject, t.name AS training_name, t.status AS training_status FROM participant p JOIN training t ON t.id = p.training_id
-     WHERE t.account_id = :accountId AND p.student_subject IS NOT NULL ORDER BY p.student_subject, t.name`,
-      { replacements: { accountId: item.account_id }, type: QueryTypes.SELECT }
-    );
-    const subjects = [...new Set(trainingRows.map((row) => row.student_subject))];
+    const participantRows = await Participant.findAll({
+      attributes: ["student_subject"],
+      where: { student_subject: { [Op.ne]: null } },
+      include: [{ model: Training, as: "training", attributes: ["name", "status"], where: { account_id: item.account_id }, required: true }],
+      order: [["student_subject", "ASC"]],
+    });
+    const subjects = [...new Set(participantRows.map((row) => row.student_subject).filter((subject): subject is string => Boolean(subject)))];
     const students = subjects.length
       ? await keycloakAccountProvisioner.listRoleMembers(ROLES.STUDENT, true)
       : [];
@@ -345,11 +335,9 @@ picManagementRouter.get(
               : "Student account unavailable",
             ongoingTrainings: [
               ...new Set(
-                trainingRows
-                  .filter(
-                    (row) => row.student_subject === subject && row.training_status === "ONGOING"
-                  )
-                  .map((row) => row.training_name)
+                participantRows
+                  .filter((row) => row.student_subject === subject && (row.get("training") as Training).status === "ONGOING")
+                  .map((row) => (row.get("training") as Training).name)
               ),
             ],
           };

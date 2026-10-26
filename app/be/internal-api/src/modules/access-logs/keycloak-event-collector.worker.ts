@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { StudentMasterProfile } from "../../database/models/student-master-profile.model";
 import { sequelize } from "../../database/sequelize";
 import { KeycloakEventSyncCheckpoint, SecurityAccessLog } from "../../database/models";
 import { env } from "../../config/env";
@@ -114,10 +115,17 @@ async function importSource(source: "KEYCLOAK_USER" | "KEYCLOAK_ADMIN", token: s
     for (const event of normalized) {
       await SecurityAccessLog.findOrCreate({ where: { event_key: event.event_key }, defaults: event, transaction });
       if (source === "KEYCLOAK_USER" && event.event_type === "LOGIN" && event.outcome === "SUCCESS" && event.actor_subject) {
-        await sequelize.query(
-          "UPDATE student_master_profile SET first_login_at = COALESCE(first_login_at, :occurredAt), last_login_at = CASE WHEN last_login_at IS NULL OR last_login_at < :occurredAt THEN :occurredAt ELSE last_login_at END, updated_at = CURRENT_TIMESTAMP WHERE keycloak_subject = :subject",
-          { replacements: { subject: event.actor_subject, occurredAt: event.occurred_at }, transaction },
-        );
+        const profile = await StudentMasterProfile.findOne({
+          where: { keycloak_subject: event.actor_subject },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (profile) {
+          await profile.update({
+            first_login_at: profile.first_login_at ?? event.occurred_at,
+            last_login_at: !profile.last_login_at || profile.last_login_at < event.occurred_at ? event.occurred_at : profile.last_login_at,
+          }, { transaction });
+        }
       }
     }
     if (checkpoint) {

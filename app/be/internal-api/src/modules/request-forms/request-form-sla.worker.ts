@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op } from "sequelize";
 import { ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
+import { InAppNotification, RequestForm } from "../../database/models";
 import { keycloakAccountProvisioner } from "../accounts/keycloak-account-provisioner";
 import { backgroundFailure } from "../monitoring/background-failure";
 // Business SLA: one elapsed day after the form enters Waiting.
@@ -20,10 +21,11 @@ function asDate(value: Date | string) {
 }
 
 export async function processRequestFormSla(now = new Date()) {
-  const forms = await sequelize.query<WaitingForm>(
-    "SELECT id,request_form_number,training_title,updated_at,sla_due_at FROM request_form WHERE status='WAITING' AND sla_notified_at IS NULL ORDER BY updated_at",
-    { type: QueryTypes.SELECT }
-  );
+  const forms = await RequestForm.findAll({
+    attributes: ["id", "request_form_number", "training_title", "updated_at", "sla_due_at"],
+    where: { status: "WAITING", sla_notified_at: null },
+    order: [["updated_at", "ASC"]],
+  }) as unknown as WaitingForm[];
   if (!forms.length) return 0;
 
   const dueForms: Array<{ form: WaitingForm; dueAt: Date }> = [];
@@ -32,10 +34,9 @@ export async function processRequestFormSla(now = new Date()) {
     // are aligned with the current SLA duration.
     const dueAt = new Date(asDate(form.updated_at).getTime() + SLA_DURATION_MS);
     if (!form.sla_due_at || asDate(form.sla_due_at).getTime() !== dueAt.getTime()) {
-      await sequelize.query(
-        "UPDATE request_form SET sla_due_at=:dueAt WHERE id=:id AND status='WAITING' AND sla_notified_at IS NULL",
-        { replacements: { id: form.id, dueAt } }
-      );
+      await RequestForm.update({ sla_due_at: dueAt }, {
+        where: { id: form.id, status: "WAITING", sla_notified_at: null },
+      });
     }
     if (dueAt <= now) dueForms.push({ form, dueAt });
   }
@@ -48,28 +49,21 @@ export async function processRequestFormSla(now = new Date()) {
     const waitingSince = asDate(form.updated_at).toISOString();
     const eventKey = `REQUEST_FORM_SLA:${form.id}:${waitingSince}`;
     await sequelize.transaction(async (transaction) => {
-      const claimed = await sequelize.query<{ id: string }>(
-        "UPDATE request_form SET sla_notified_at=:now WHERE id=:id AND status='WAITING' AND sla_notified_at IS NULL AND sla_due_at<=:now RETURNING id",
-        { replacements: { id: form.id, now }, type: QueryTypes.SELECT, transaction }
-      );
-      if (!claimed.length) return;
-      for (const admin of admins) {
-        await sequelize.query(
-          "INSERT INTO in_app_notification (id,recipient_subject,event_key,title,message,target_path,created_at,read_at) VALUES (:id,:recipient,:eventKey,:title,:message,:targetPath,:now,NULL)",
-          {
-            replacements: {
-              id: randomUUID(),
-              recipient: admin.userId,
-              eventKey,
-              title: "Request Form SLA overdue",
-              message: `${form.request_form_number}${form.training_title ? ` · ${form.training_title}` : ""} has been Waiting for more than 24 hours.`,
-              targetPath: "/admin/trainings",
-              now,
-            },
-            transaction,
-          }
-        );
-      }
+      const [claimedCount] = await RequestForm.update({ sla_notified_at: now }, {
+        where: { id: form.id, status: "WAITING", sla_notified_at: null, sla_due_at: { [Op.lte]: now } },
+        transaction,
+      });
+      if (!claimedCount) return;
+      await InAppNotification.bulkCreate(admins.map((admin) => ({
+        id: randomUUID(),
+        recipient_subject: admin.userId,
+        event_key: eventKey,
+        title: "Request Form SLA overdue",
+        message: `${form.request_form_number}${form.training_title ? ` · ${form.training_title}` : ""} has been Waiting for more than 24 hours.`,
+        target_path: "/admin/trainings",
+        created_at: now,
+        read_at: null,
+      })), { transaction });
       notifiedCount += admins.length;
     });
   }

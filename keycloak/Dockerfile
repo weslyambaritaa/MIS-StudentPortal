@@ -10,5 +10,6 @@ RUN /opt/keycloak/bin/kc.sh build
 
 FROM quay.io/keycloak/keycloak:26.7.3
 COPY --from=keycloak-build /opt/keycloak/ /opt/keycloak/
+COPY --chown=1000:0 keycloak/themes/ /opt/keycloak/themes/
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
 CMD ["start-dev", "--import-realm"]

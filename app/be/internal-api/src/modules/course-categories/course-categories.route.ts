@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { QueryTypes } from "sequelize";
+import { Op, col, fn, literal } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
@@ -27,11 +27,8 @@ function codeFor(value: string | number | bigint): string {
 }
 
 async function nextCategoryCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
-  const rows = await sequelize.query<{ value: number | string | bigint }>(
-    "SELECT nextval('course_category_code_seq') AS value",
-    { type: QueryTypes.SELECT, transaction },
-  );
-  return codeFor(rows[0].value);
+  const row = await CourseCategory.findOne({ attributes: [[literal("nextval('course_category_code_seq')"), "value"]], raw: true, transaction }) as unknown as { value: number | string | bigint };
+  return codeFor(row.value);
 }
 
 courseCategoriesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE_CATEGORY", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
@@ -41,27 +38,24 @@ courseCategoriesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapab
   const search = req.query.search;
   if (search !== undefined && (typeof search !== "string" || search.length > 150)) return res.status(400).json({ message: "Invalid search" });
 
-  const where = search ? "WHERE c.category_code ILIKE :search OR c.name ILIKE :search" : "";
-  const replacements = {
-    offset: (page - 1) * pageSize,
-    pageSize,
-    ...(search ? { search: `%${search.replace(/[\\%_]/g, "\\$&")}%` } : {}),
-  };
-  const countRows = await sequelize.query<{ total: number | string }>(
-    `SELECT COUNT(1) AS total FROM course_category AS c ${where}`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  const items = await sequelize.query<Record<string, unknown>>(
-    `SELECT c.id, c.category_code, c.name, c.created_at, c.updated_at, COUNT(course.id) AS amount_courses
-       FROM course_category AS c
-       LEFT JOIN course AS course ON course.category_id = c.id
-       ${where}
-       GROUP BY c.id, c.category_code, c.name, c.created_at, c.updated_at
-       ORDER BY c.category_code ASC
-       LIMIT :pageSize OFFSET :offset`,
-    { replacements, type: QueryTypes.SELECT },
-  );
-  return res.json({ items, page, pageSize, total: Number(countRows[0]?.total ?? 0) });
+  const escapedSearch = search ? `%${search.replace(/[\\%_]/g, "\\$&")}%` : undefined;
+  const where = escapedSearch ? { [Op.or]: [
+    { category_code: { [Op.iLike]: escapedSearch } },
+    { name: { [Op.iLike]: escapedSearch } },
+  ] } : undefined;
+  const [total, items] = await Promise.all([
+    CourseCategory.count({ where }),
+    CourseCategory.findAll({
+      attributes: ["id", "category_code", "name", "created_at", "updated_at", [fn("COUNT", col("courses.id")), "amount_courses"]],
+      where,
+      include: [{ model: Course, as: "courses", attributes: [], required: false }],
+      group: ["CourseCategory.id", "CourseCategory.category_code", "CourseCategory.name", "CourseCategory.created_at", "CourseCategory.updated_at"],
+      order: [["category_code", "ASC"]],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }),
+  ]);
+  return res.json({ items, page, pageSize, total });
 }));
 
 courseCategoriesRouter.post("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE_CATEGORY", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
