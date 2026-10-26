@@ -197,7 +197,17 @@ export default function QuotationPage() {
         classType: form.classType,
         lines: form.lines,
       });
-      const saved = await api<{ item: { id: string } }>(
+      const contentUnchanged = editor && form.quotationCode === editor.item.quotation_code
+        && form.accountId === editor.item.account_id && form.picId === editor.item.pic_profile_id
+        && form.classType === editor.item.class_type && form.lines.length === editor.lines.length
+        && form.lines.every((line, index) => {
+          const original = editor.lines[index];
+          return line.courseId === original.course_id && line.amountStudent === Number(original.amount_student)
+            && line.pricePerPax === Number(original.price) && line.location === original.location;
+        });
+      // A status-only change must not regenerate or email the quotation.
+      const statusOnly = contentUnchanged && form.status !== "WAITING";
+      const saved = statusOnly ? { item: { id: editor!.item.id } } : await api<{ item: { id: string } }>(
         created ? "/api/v1/internal/quotations" : `/api/v1/internal/quotations/${editor!.item.id}`,
         { method: created ? "POST" : "PUT", body }
       );

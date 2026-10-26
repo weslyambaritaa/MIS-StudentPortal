@@ -3,6 +3,27 @@ import test from "node:test";
 
 import { apiRequest } from "../src/lib/api/client";
 
+test("validation feedback omits technical reference IDs", async () => {
+  const originalFetch = globalThis.fetch;
+  const message = "Upload at least one RF Attachment before submitting to Admin (QPD)";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: { code: "VALIDATION_ERROR", message, requestId: "52a39c36-fb7f-4164-9a50-378da912930d" },
+  }), { status: 400 });
+  try {
+    await assert.rejects(apiRequest("/test", "test-token", "sales"), { message });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("non-JSON service errors show a plain-language message", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("Bad Gateway", { status: 502 });
+  try {
+    await assert.rejects(apiRequest("/test", "test-token", "sales"), {
+      message: "We couldn't complete your request. Please try again.",
+    });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("central API client sends bearer token and active role headers", async () => {
   const originalFetch = globalThis.fetch;
   let requestHeaders: Headers | undefined;

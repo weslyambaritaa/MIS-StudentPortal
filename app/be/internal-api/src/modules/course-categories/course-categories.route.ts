@@ -49,6 +49,8 @@ courseCategoriesRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapab
       attributes: ["id", "category_code", "name", "created_at", "updated_at", [fn("COUNT", col("courses.id")), "amount_courses"]],
       where,
       include: [{ model: Course, as: "courses", attributes: [], required: false }],
+      // Count the joined courses before applying pagination to category groups.
+      subQuery: false,
       group: ["CourseCategory.id", "CourseCategory.category_code", "CourseCategory.name", "CourseCategory.created_at", "CourseCategory.updated_at"],
       order: [["category_code", "ASC"]],
       limit: pageSize,

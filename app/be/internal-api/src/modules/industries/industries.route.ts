@@ -59,6 +59,8 @@ industriesRouter.get("/", authorizeCapability("INDUSTRY", ACCESS_ACTIONS.VIEW), 
       attributes: ["id", "industry_code", "name", "status", "created_at", "updated_at", [fn("COUNT", col("accounts.id")), "amount_account"]],
       where,
       include: [{ model: Account, as: "accounts", attributes: [], required: false }],
+      // Count the joined accounts before applying pagination to industry groups.
+      subQuery: false,
       group: ["Industry.id", "Industry.industry_code", "Industry.name", "Industry.status", "Industry.created_at", "Industry.updated_at"],
       order: [["industry_code", "ASC"]],
       limit: pageSize,

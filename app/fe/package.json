@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "pretest": "npm run build --workspace @mis/shared-types",
-    "test": "tsx --test test/active-role.test.ts test/api-client.test.ts test/route-access.test.ts"
+    "test": "tsx --test test/active-role.test.ts test/api-client.test.ts test/route-access.test.ts test/normalize-calendar-dates.test.ts"
   },
   "dependencies": {
     "@mis/shared-types": "*",
