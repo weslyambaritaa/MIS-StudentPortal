@@ -100,7 +100,7 @@ services:
       - ../files/student-api.env
     environment:
       PORT: 4001
-      NODE_ENV: development
+      NODE_ENV: production
       DB_HOST: student-db
       DB_PORT: 5432
     expose:
@@ -127,7 +127,7 @@ services:
       - ../files/internal-api.env
     environment:
       PORT: 4002
-      NODE_ENV: development
+      NODE_ENV: production
       DB_HOST: internal-db
       DB_PORT: 5432
       DB_USER: ${INTERNAL_DB_USER:-mis_internal}
@@ -157,7 +157,7 @@ services:
     env_file:
       - ../files/internal-api.env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
       MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
       MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
