@@ -101,6 +101,14 @@ npm run migrate:internal
 
 The root scripts execute Sequelize CLI inside the running backend containers, so the migration receives the same DB environment used by the service.
 
+After migrating a fresh internal database, initialize the Industry access policy:
+
+```bash
+docker compose exec -T internal-api npx sequelize-cli db:seed --seed 202610060001-seed-industry-access.cjs --config config/database.cjs
+```
+
+This grants Sales CRUD access and Admin, Finance, and Management read access to Industry. It inserts missing policies only, preserves existing decisions, and records newly created grants in the audit trail. It can be rerun without creating duplicate grants or audit entries. Without this policy, Industry endpoints deny access by default with HTTP 403.
+
 Development/test seed data (tidak membuat user atau subject Keycloak):
 
 ```bash

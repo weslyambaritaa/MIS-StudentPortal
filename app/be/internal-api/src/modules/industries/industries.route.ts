@@ -64,8 +64,7 @@ industriesRouter.get("/", authorizeCapability("INDUSTRY", ACCESS_ACTIONS.VIEW), 
   const items = await sequelize.query<Record<string, unknown>>(
     `SELECT i.id, i.industry_code, i.name, i.status, i.created_at, i.updated_at,
             COUNT(a.id) AS amount_account,
-            CASE WHEN EXISTS (SELECT 1 FROM account_industry_history h WHERE h.industry_id = i.id)
-                 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS ever_used
+            EXISTS (SELECT 1 FROM account_industry_history h WHERE h.industry_id = i.id) AS ever_used
        FROM industry AS i
        LEFT JOIN account AS a ON a.industry_id = i.id
        ${clause}

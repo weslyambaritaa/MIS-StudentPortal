@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("node:crypto");
+
 const GRANTS = [
   { id: "62000000-0000-4000-8000-000000000001", role: "sales", resource_group: "INDUSTRY", can_view: true, can_create: true, can_edit: true, can_delete: true },
   { id: "62000000-0000-4000-8000-000000000002", role: "admin", resource_group: "INDUSTRY", can_view: true, can_create: false, can_edit: false, can_delete: false },
@@ -12,16 +14,24 @@ module.exports = {
     const transaction = await queryInterface.sequelize.transaction();
     try {
       for (const grant of GRANTS) {
-        const [rows] = await queryInterface.sequelize.query(
-          "SELECT TOP (1) [id] FROM [dbo].[role_access_matrix] WITH (UPDLOCK, HOLDLOCK) WHERE [role] = :role AND [resource_group] = :resource_group",
-          { replacements: { role: grant.role, resource_group: grant.resource_group }, transaction },
-        );
-        if (rows.length) continue;
         const now = new Date();
-        await queryInterface.bulkInsert("role_access_matrix", [{ ...grant, created_at: now, updated_at: now }], { transaction });
+        const [rows] = await queryInterface.sequelize.query(
+          `INSERT INTO role_access_matrix
+             (id, role, resource_group, can_view, can_create, can_edit, can_delete, created_at, updated_at)
+           VALUES (:id, :role, :resource_group, :can_view, :can_create, :can_edit, :can_delete, :now, :now)
+           ON CONFLICT (role, resource_group) DO NOTHING
+           RETURNING id`,
+          { replacements: { ...grant, now }, transaction },
+        );
+        // Preserve existing policy, including explicit denials; audit only newly inserted grants.
+        if (!rows.length) continue;
         await queryInterface.bulkInsert("audit_trail", [{
-          id: `62000000-0000-4000-8000-${String(Number(grant.id.slice(-12)) + 100).padStart(12, "0")}`,
+          id: randomUUID(),
           actor_subject: "SYSTEM:ST10_SEED",
+          actor_name: "Industry access setup",
+          actor_type: "SYSTEM",
+          process_name: "industry-access-seed",
+          source_service: "internal-api",
           action: "CREATE",
           object_type: "ROLE_ACCESS_MATRIX",
           object_id: grant.id,
