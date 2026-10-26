@@ -48,10 +48,10 @@
       "directAccessGrantsEnabled": false,
       "attributes": {"pkce.code.challenge.method": "S256"},
       "redirectUris": [
-        "http://localhost:3000/api/auth/callback/keycloak",
-        "http://localhost:3000/dashboard"
+        "https://mis.executrain.co.id/api/auth/callback/keycloak",
+        "https://mis.executrain.co.id/dashboard"
       ],
-      "webOrigins": ["http://localhost:3000"],
+      "webOrigins": ["https://mis.executrain.co.id"],
       "fullScopeAllowed": true,
       "protocolMappers": [
         {
