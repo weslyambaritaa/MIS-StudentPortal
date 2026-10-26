@@ -104,10 +104,13 @@ async function deliver(quoteId: string, salesSubject: string) {
   const asset = await uploadPdf(pdf, `quotations/${quote.id}/v${version}`);
   await sendPdf(picEmail, quote.quotation_code, pdf);
   const now = new Date();
+  // Model.update mutates this instance. Capture the original state first.
+  // Document versions also distinguish resends while status stays WAITING.
+  const beforeDelivery = { status: quote.status, version: version - 1 };
   await sequelize.transaction(async (transaction) => {
     await QuotationDocument.create({ id: randomUUID(), quotation_id: quoteId, version, cloudinary_public_id: asset.publicId, cloudinary_asset_id: asset.assetId, recipient_email: picEmail, sent_at: now }, { transaction });
     await quote.update({ status: "WAITING", sent_at: now }, { transaction });
-    await appendAuditTrail({ action: "UPDATE", objectType: "QUOTATION_DELIVERY", objectId: quoteId, before: { status: quote.status }, after: { status: "WAITING" }, processName: `quotation-email-sent-v${version}` }, { userId: salesSubject, activeRole: ROLES.SALES }, { transaction });
+    await appendAuditTrail({ action: "UPDATE", objectType: "QUOTATION_DELIVERY", objectId: quoteId, before: beforeDelivery, after: { status: "WAITING", version }, processName: `quotation-email-sent-v${version}` }, { userId: salesSubject, activeRole: ROLES.SALES }, { transaction });
   });
   return { status: "WAITING", version, recipient: picEmail };
 }
@@ -191,10 +194,15 @@ quotationsRouter.put("/:id", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDI
   if (!old) throw new AppError(404, "Quotation not found");
   await sequelize.transaction(async (transaction) => {
     await assertAvailableCode(input.quotationCode, req.params.id, transaction);
+    const previousLines = await QuotationOrder.findAll({ where: { quotation_id: req.params.id }, attributes: ["course_id", "amount_student", "price", "location"], raw: true, transaction });
+    const normalizeLines = (lines: LineInput[]) => [...lines].sort((a, b) => a.courseId.localeCompare(b.courseId));
+    const before = { quotation_code: old.quotation_code, account_id: old.account_id, pic_profile_id: old.pic_profile_id, class_type: old.class_type, status: old.status,
+      lines: normalizeLines(previousLines.map((line) => ({ courseId: line.course_id, amountStudent: Number(line.amount_student), pricePerPax: Number(line.price), location: line.location ?? "" }))) };
+    const after = { quotation_code: input.quotationCode, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED", lines: normalizeLines(input.lines) };
     await old.update({ quotation_code: input.quotationCode, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED" }, { transaction });
     await QuotationOrder.destroy({ where: { quotation_id: req.params.id }, transaction });
     await QuotationOrder.bulkCreate(input.lines.map((line) => ({ id: randomUUID(), quotation_id: req.params.id, course_id: line.courseId, class_type: input.classType.startsWith("ONLINE_") ? "ONLINE" : input.classType, amount_student: line.amountStudent, price: line.pricePerPax, location: line.location })), { transaction });
-    await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "QUOTATION", objectId: req.params.id, before: { quotation_code: old.quotation_code, account_id: old.account_id, pic_profile_id: old.pic_profile_id, class_type: old.class_type, status: old.status }, after: { quotation_code: input.quotationCode, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED" }, processName: "quotation-edit-resend" }, transaction);
+    if (JSON.stringify(before) !== JSON.stringify(after)) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "QUOTATION", objectId: req.params.id, before, after, processName: "quotation-edit-resend" }, transaction);
   });
   const delivery = await deliver(req.params.id, req.auth!.userId);
   return res.json({ item: { id: req.params.id, quotation_code: input.quotationCode, status: delivery.status, delivery_status: "SENT" }, message: "Updated quotation sent to PIC" });

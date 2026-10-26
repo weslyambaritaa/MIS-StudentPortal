@@ -13,6 +13,7 @@ import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
 import Joi from "joi";
 import { validateBody } from "../../utils/joi-validation";
+import { trainingDates } from "./training-dates";
 
 export const requestFormsRouter = Router();
 export const requestFormReviewRouter = Router();
@@ -458,7 +459,7 @@ requestFormReviewRouter.get("/trainings/:id/detail", authorizeCapability("REQUES
   const sessionRows = training.get("sessions") as TrainingSession[];
   const booking = sessionRows.flatMap((session) => session.get("roomBookings") as BookingRoom[]).map((row) => row.get("room") as Room | null).find(Boolean);
   const sessions = sessionRows.sort((a, b) => a.session_number - b.session_number).map(({ id, session_number, starts_at, ends_at, class_location }) => ({ id, session_number, starts_at, ends_at, class_location }));
-  return res.json({ training: { ...training.toJSON(), course_name: course.name, account_name: account.name, industry_id: account.industry_id, industry_name: industry?.name ?? null, pic_name: pic?.name ?? null, pic_email: pic?.email ?? null, trainer_name: trainer?.name ?? null, room_id: booking?.id ?? null, room_name: booking?.name ?? null, room_capacity: booking?.capacity ?? null }, form, sessions });
+  return res.json({ training: { ...training.toJSON(), training_dates: trainingDates(sessions.map((session) => session.starts_at)), course_name: course.name, account_name: account.name, industry_id: account.industry_id, industry_name: industry?.name ?? null, pic_name: pic?.name ?? null, pic_email: pic?.email ?? null, trainer_name: trainer?.name ?? null, room_id: booking?.id ?? null, room_name: booking?.name ?? null, room_capacity: booking?.capacity ?? null }, form, sessions });
 }));
 requestFormReviewRouter.get("/trainings/:id/participants", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const exists = await Training.findByPk(req.params.id, { attributes: ["id"] });
@@ -542,7 +543,7 @@ requestFormReviewRouter.get("/trainings", authorizeCapability("REQUEST_FORM", AC
     const assignment = assignments.find((row) => row.training_id === training.id);
     const roomBooking = ownSessions.flatMap((session) => session.get("roomBookings") as BookingRoom[]).find(Boolean);
     const room = roomBooking?.get("room") as Room | undefined;
-    return { id: training.id, name: training.name, training_type: training.training_type, status: training.status, expected_students: training.expected_students, base_fee: training.base_fee, request_form_number: requestForm.request_form_number, account_name: account.name, course_name: course.name, pic_name: pic?.name ?? null, training_dates: ownSessions.map((session) => String(session.starts_at).slice(0, 10)).join(","), session_count: ownSessions.length, trainer_name: (assignment?.get("trainerProfile") as TrainerProfile | undefined)?.name ?? null, room_name: room?.name ?? null };
+    return { id: training.id, name: training.name, training_type: training.training_type, status: training.status, expected_students: training.expected_students, base_fee: training.base_fee, request_form_number: requestForm.request_form_number, account_name: account.name, course_name: course.name, pic_name: pic?.name ?? null, training_dates: trainingDates(ownSessions.map((session) => session.starts_at)), session_count: ownSessions.length, trainer_name: (assignment?.get("trainerProfile") as TrainerProfile | undefined)?.name ?? null, room_name: room?.name ?? null };
   });
   return res.json({ items, page, pageSize, total: count });
 }));

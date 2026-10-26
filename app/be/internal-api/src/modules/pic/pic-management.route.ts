@@ -152,7 +152,7 @@ picManagementRouter.get(
     const pattern = search ? `%${String(search).replace(/[\\%_]/g, "\\$&")}%` : undefined;
     const { count: total, rows: profiles } = await PicProfile.findAndCountAll({
       where: { ...(status !== "ALL" ? { status: String(status) } : {}), ...(pattern ? { [Op.or]: [{ name: { [Op.iLike]: pattern } }, { email: { [Op.iLike]: pattern } }] } : {}) },
-      include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: [], where: { ended_at: null }, required: true,
+      include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: ["id"], where: { ended_at: null }, required: true,
         include: [{ model: Account, as: "account", attributes: ["id", "name", "status"], where: accountId ? { id: accountId } : undefined, required: true,
           include: [
             { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true },
@@ -160,6 +160,9 @@ picManagementRouter.get(
           ] },
       ] }],
       distinct: true,
+      // Active-assignment unique indexes guarantee one Account and Sales owner.
+      // Keep nested joins together; paginate PICs without a hasMany subquery.
+      subQuery: false,
       order: [["name", "ASC"], ["id", "ASC"]],
       limit: pageSize,
       offset: (page - 1) * pageSize,

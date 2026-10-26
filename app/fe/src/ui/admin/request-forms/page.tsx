@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/components/ui/toast";
+import { normalizeCalendarDates } from "@/lib/normalize-calendar-dates";
 
 type Item = {
   id: string;
@@ -55,7 +56,7 @@ const deliveryLabel = (value: unknown) => ({ PUBLIC: "Public", PRIVATE: "Private
 const statusLabel = (value: Item["status"]) => ({ DRAFT: "Draft", WAITING: "Waiting", REVISION: "Declined", APPROVED: "Approved" })[value];
 const statusVariant = (value: Item["status"]) => value === "WAITING" ? "warning" as const : value === "APPROVED" ? "success" as const : value === "REVISION" ? "danger" as const : "neutral" as const;
 function formatDates(values: string[]) {
-  const sorted = [...new Set(values.filter(Boolean))].sort();
+  const sorted = normalizeCalendarDates(values);
   if (!sorted.length) return "-";
   const grouped = new Map<string, number[]>();
   for (const value of sorted) {

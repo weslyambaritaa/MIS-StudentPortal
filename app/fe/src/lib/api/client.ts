@@ -29,14 +29,18 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    let message = `The request could not be completed (HTTP ${response.status}).`;
+    let message = response.status === 401
+      ? "Your session has expired. Please sign in again."
+      : response.status === 403
+        ? "You don't have permission to perform this action."
+        : response.status === 404
+          ? "The requested information could not be found."
+          : "We couldn't complete your request. Please try again.";
     if (body) {
       try {
         const payload = JSON.parse(body) as { error?: { code?: unknown; message?: unknown; requestId?: unknown }; message?: unknown };
         const apiMessage = payload.error?.message ?? payload.message;
-        const requestId = payload.error?.requestId;
         if (typeof apiMessage === "string" && apiMessage.trim()) message = apiMessage;
-        if (typeof requestId === "string" && requestId.trim()) message += ` (Reference: ${requestId})`;
       } catch {
         // Keep the status-based message when the server returns non-JSON text.
       }
