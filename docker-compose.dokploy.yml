@@ -1,7 +1,23 @@
-
+x-migrate-command: &migrate-command
+  - sh
+  - -c
+  - |
+    cat > /tmp/mig.cjs <<'EOF'
+    const c = {
+      username: process.env.MIG_USER,
+      password: process.env.MIG_PASS,
+      database: process.env.MIG_DB,
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT || 5432),
+      dialect: 'postgres'
+    };
+    module.exports = { development: c, production: c, test: c };
+    EOF
+    cd "$$MIG_DIR" && npx sequelize-cli db:migrate --config /tmp/mig.cjs
+ 
 services:
   # ---------------------------------------------------------
-  # STUDENT DATABASE
+  # DATABASES
   # ---------------------------------------------------------
   student-db:
     image: postgres:18-alpine
@@ -19,10 +35,7 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-
-  # ---------------------------------------------------------
-  # INTERNAL DATABASE
-  # ---------------------------------------------------------
+ 
   internal-db:
     image: postgres:18-alpine
     environment:
@@ -39,10 +52,7 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-
-  # ---------------------------------------------------------
-  # KEYCLOAK DATABASE
-  # ---------------------------------------------------------
+ 
   keycloak-db:
     image: postgres:18-alpine
     environment:
@@ -59,9 +69,11 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-
+ 
   # ---------------------------------------------------------
-  # KEYCLOAK (diakses publik lewat api-gateway di https://${AUTH_DOMAIN})
+  # KEYCLOAK (publik lewat api-gateway di https://${AUTH_DOMAIN})
+  # Untuk startup lebih cepat: pakai Dockerfile.keycloak.prod lalu
+  # tambahkan "--optimized" setelah "start".
   # ---------------------------------------------------------
   keycloak:
     image: mis-keycloak-st01:26.7.3
@@ -72,6 +84,7 @@ services:
       - ../files/keycloak.env
     environment:
       KC_HOSTNAME: https://${AUTH_DOMAIN}
+      KC_HOSTNAME_ADMIN: https://${AUTH_DOMAIN}
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
@@ -80,7 +93,6 @@ services:
       - --import-realm
     volumes:
       - ./keycloak/realm:/opt/keycloak/data/import:ro
-      - ./keycloak/themes:/opt/keycloak/themes:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -88,11 +100,57 @@ services:
       - auth-net
       - keycloak-admin-net
     restart: unless-stopped
-
+ 
+  # ---------------------------------------------------------
+  # MIGRASI DATABASE (sekali jalan tiap deploy, hanya db:migrate)
+  # ---------------------------------------------------------
+  migrate-internal:
+    image: mis-internal-api:prod
+    build:
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+    environment:
+      NODE_ENV: production
+      MIG_DIR: /workspace/app/be/internal-api
+      DB_HOST: internal-db
+      DB_PORT: 5432
+      MIG_DB: ${INTERNAL_DB_NAME}
+      MIG_USER: ${INTERNAL_DB_USER:-mis_internal}
+      MIG_PASS: ${INTERNAL_DB_PASSWORD}
+    command: *migrate-command
+    depends_on:
+      internal-db:
+        condition: service_healthy
+    networks:
+      - internal-net
+    restart: "no"
+ 
+  migrate-student:
+    image: mis-student-api:prod
+    build:
+      context: .
+      dockerfile: app/be/student-api/Dockerfile
+    environment:
+      NODE_ENV: production
+      MIG_DIR: /workspace/app/be/student-api
+      DB_HOST: student-db
+      DB_PORT: 5432
+      MIG_DB: ${STUDENT_DB_NAME}
+      MIG_USER: ${STUDENT_DB_USER}
+      MIG_PASS: ${STUDENT_DB_PASSWORD}
+    command: *migrate-command
+    depends_on:
+      student-db:
+        condition: service_healthy
+    networks:
+      - external-net
+    restart: "no"
+ 
   # ---------------------------------------------------------
   # STUDENT API
   # ---------------------------------------------------------
   student-api:
+    image: mis-student-api:prod
     build:
       context: .
       dockerfile: app/be/student-api/Dockerfile
@@ -108,18 +166,17 @@ services:
     depends_on:
       student-db:
         condition: service_healthy
+      migrate-student:
+        condition: service_completed_successfully
     networks:
       - external-net
-    volumes:
-      - ./app/be/student-api:/workspace/app/be/student-api
-      - ./packages/shared-types:/workspace/packages/shared-types
-      - student-api-node-modules:/workspace/node_modules
     restart: unless-stopped
-
+ 
   # ---------------------------------------------------------
   # INTERNAL API
   # ---------------------------------------------------------
   internal-api:
+    image: mis-internal-api:prod
     build:
       context: .
       dockerfile: app/be/internal-api/Dockerfile
@@ -138,22 +195,18 @@ services:
     depends_on:
       internal-db:
         condition: service_healthy
+      migrate-internal:
+        condition: service_completed_successfully
     networks:
       - internal-net
       - keycloak-admin-net
-    volumes:
-      - ./app/be/internal-api:/workspace/app/be/internal-api
-      - ./packages/shared-types:/workspace/packages/shared-types
-      - internal-api-node-modules:/workspace/node_modules
     restart: unless-stopped
-
+ 
   # ---------------------------------------------------------
-  # SYSTEM HEALTH MONITOR
+  # SYSTEM HEALTH MONITOR (image sama dengan internal-api)
   # ---------------------------------------------------------
   system-monitor:
-    build:
-      context: .
-      dockerfile: app/be/internal-api/Dockerfile
+    image: mis-internal-api:prod
     env_file:
       - ../files/internal-api.env
     environment:
@@ -167,15 +220,18 @@ services:
       MONITOR_FAILURE_THRESHOLD: 2
       MONITOR_STARTUP_GRACE_MS: 90000
     command: ["npm", "run", "monitor"]
+    depends_on:
+      internal-api:
+        condition: service_started
     restart: unless-stopped
     networks:
       - internal-net
       - external-net
       - keycloak-admin-net
-
+ 
   # ---------------------------------------------------------
-  # API GATEWAY
-  # Domain (Dokploy > Domains): API_DOMAIN dan AUTH_DOMAIN -> port 4000
+  # API GATEWAY  (masih mode dev: bind mount dipertahankan sementara)
+  # Domain di Dokploy: API_DOMAIN dan AUTH_DOMAIN -> port 4000
   # ---------------------------------------------------------
   api-gateway:
     build:
@@ -208,13 +264,15 @@ services:
       - auth-net
       - external-net
       - internal-net
+    volumes:
+      - ./gateway:/workspace/gateway
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - gateway-node-modules:/workspace/node_modules
     restart: unless-stopped
-
+ 
   # ---------------------------------------------------------
-  # FRONTEND - Next.js
-  # Domain (Dokploy > Domains): APP_DOMAIN -> port 3000
-  # NEXT_PUBLIC_* juga dikirim sebagai build arg (ditanam saat build).
-  # Dockerfile frontend perlu: ARG NEXT_PUBLIC_... + ENV NEXT_PUBLIC_...
+  # FRONTEND - Next.js (produksi: tanpa volume)
+  # Domain di Dokploy: APP_DOMAIN -> port 3000
   # ---------------------------------------------------------
   frontend:
     build:
@@ -226,10 +284,7 @@ services:
         NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
         NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
     environment:
-      NEXT_PUBLIC_API_BASE_URL: https://${API_DOMAIN}
-      NEXT_PUBLIC_KEYCLOAK_URL: https://${AUTH_DOMAIN}
-      NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
-      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      NODE_ENV: production
     expose:
       - "3000"
     depends_on:
@@ -240,18 +295,14 @@ services:
       - dokploy-network
       - edge-net
     restart: unless-stopped
-
-
+ 
+ 
 volumes:
   student-db-data:
   internal-postgres-data:
   keycloak-postgres-data:
-  frontend-node-modules:
-  frontend-next:
   gateway-node-modules:
-  student-api-node-modules:
-  internal-api-node-modules:
-
+ 
 networks:
   dokploy-network:
     external: true
