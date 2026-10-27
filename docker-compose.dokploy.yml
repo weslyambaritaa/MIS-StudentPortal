@@ -208,10 +208,6 @@ services:
       - auth-net
       - external-net
       - internal-net
-    volumes:
-      - ./gateway:/workspace/gateway
-      - ./packages/shared-types:/workspace/packages/shared-types
-      - gateway-node-modules:/workspace/node_modules
     restart: unless-stopped
 
   # ---------------------------------------------------------
@@ -243,11 +239,6 @@ services:
     networks:
       - dokploy-network
       - edge-net
-    volumes:
-      - ./app/fe:/workspace/app/fe
-      - ./packages/shared-types:/workspace/packages/shared-types
-      - frontend-node-modules:/workspace/node_modules
-      - frontend-next:/workspace/app/fe/.next
     restart: unless-stopped
 
 

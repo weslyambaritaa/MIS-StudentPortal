@@ -9,7 +9,9 @@ COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/config/package.json ./packages/config/package.json
 COPY packages/logger/package.json ./packages/logger/package.json
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+ENV NODE_ENV=production
 COPY . .
 WORKDIR /workspace/gateway
+RUN npm run build
 EXPOSE 4000
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]
