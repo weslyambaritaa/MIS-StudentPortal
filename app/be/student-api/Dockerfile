@@ -19,6 +19,7 @@ RUN npm run build --workspace packages/config --if-present
 RUN npm run build --workspace packages/logger --if-present
 WORKDIR /workspace/app/be/student-api
 RUN npm run build
+RUN test -s dist/server.js
  
 # ---------- 3. runtime ----------
 FROM node:24-alpine AS runner
