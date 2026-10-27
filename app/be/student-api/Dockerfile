@@ -26,6 +26,10 @@ FROM node:24-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /workspace
 COPY --from=build /workspace ./
+# Copy the compiled entry point explicitly into the runtime image so the
+# production start command cannot silently lose it during the workspace copy.
+COPY --from=build /workspace/app/be/student-api/dist ./app/be/student-api/dist
 WORKDIR /workspace/app/be/student-api
+RUN test -s dist/server.js
 EXPOSE 4001
 CMD ["npm", "run", "start"]
