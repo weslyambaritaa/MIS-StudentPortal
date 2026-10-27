@@ -13,5 +13,6 @@ ENV NODE_ENV=production
 COPY . .
 WORKDIR /workspace/gateway
 RUN npm run build
+RUN test -s dist/server.js
 EXPOSE 4000
 CMD ["npm", "run", "start"]
