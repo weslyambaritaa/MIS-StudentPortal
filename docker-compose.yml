@@ -250,6 +250,9 @@ services:
 
     container_name: mis-api-gateway
 
+    # Local development runs the TypeScript watcher; the image default is production.
+    command: ["npm", "run", "dev"]
+
     environment:
       PORT: 4000
 
