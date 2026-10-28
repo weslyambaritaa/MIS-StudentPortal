@@ -6,6 +6,13 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "@mis/internal-frontend#build": {
+      "dependsOn": [
+        "@mis/shared-types#build",
+        "@mis/config#build",
+        "@mis/auth#build",
+        "@mis/api-client#build",
+        "@mis/ui#build"
+      ],
       "env": [
         "NEXT_PUBLIC_API_BASE_URL",
         "NEXT_PUBLIC_KEYCLOAK_URL",
@@ -14,6 +21,12 @@
       ]
     },
     "@mis/student-frontend#build": {
+      "dependsOn": [
+        "@mis/shared-types#build",
+        "@mis/auth#build",
+        "@mis/api-client#build",
+        "@mis/ui#build"
+      ],
       "env": [
         "NEXT_PUBLIC_API_BASE_URL",
         "NEXT_PUBLIC_KEYCLOAK_URL",

@@ -25,7 +25,7 @@ function toQuery(filters: Filters, page: number) {
 function summary(entry: AuditEntry) {
   const fields = [...new Set([...Object.keys(parse(entry.data_before)), ...Object.keys(parse(entry.data_after))])];
   const changeText = fields.length ? fields.join(", ") : entry.process_name ?? entry.action;
-  return entry.ip_address ? `${changeText} Ã‚Â· IP ${entry.ip_address}` : changeText;
+  return entry.ip_address ? `${changeText} · IP ${entry.ip_address}` : changeText;
 }
 
 function parse(value: string | null): Record<string, unknown> {
@@ -101,13 +101,13 @@ export default function AuditTrailPage() {
                 {result.items.map((entry) => (
                   <tr key={entry.id} className="border-t border-rose-50 text-zinc-700">
                     <td className="whitespace-nowrap px-3 py-3">{new Date(entry.created_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td className="px-3 py-3"><span className="font-medium">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "System"}</span><span className={`ml-2 inline-flex rounded-full border px-3 py-1 text-xs ${entry.actor_type === "SYSTEM" ? "border-amber-300 bg-amber-100 text-amber-700" : "border-blue-400 bg-blue-100 text-blue-700"}`}>{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "QPD" : "Ã¢â‚¬â€")}</span></td>
+                    <td className="px-3 py-3"><span className="font-medium">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "System"}</span><span className={`ml-2 inline-flex rounded-full border px-3 py-1 text-xs ${entry.actor_type === "SYSTEM" ? "border-amber-300 bg-amber-100 text-amber-700" : "border-blue-400 bg-blue-100 text-blue-700"}`}>{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "QPD" : "—")}</span></td>
                     <td className="px-3 py-3 font-medium">{entry.action}</td>
                     <td className="px-3 py-3">{entry.object_type}{entry.object_id ? ` / ${entry.object_id}` : ""}</td>
                     <td className="max-w-80 px-3 py-3"><button type="button" className="text-left text-rose-700 underline-offset-2 hover:underline" onClick={() => setSelected(entry)}>{summary(entry)}</button></td>
                   </tr>
                 ))}
-                {loading && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">Memuat aktivitasÃ¢â‚¬Â¦</td></tr>}
+                {loading && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">Memuat aktivitas…</td></tr>}
               </tbody>
             </table>
           </div>

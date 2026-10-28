@@ -3,13 +3,14 @@ import { Op, col, literal, type Transaction } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
-import { Account, Industry, Invoice, InvoiceDetail, Participant, PicAccountAssignment, PicProfile, Quotation, QuotationOrder, RequestForm, SalesAccountAssignment, StudentMasterProfile, Training } from "../../database/models";
+import { Account, Industry, Invoice, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, SalesAccountAssignment, StudentMasterProfile, Training } from "../../database/models";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
 import { keycloakAccountProvisioner } from "./keycloak-account-provisioner";
 import { accountTypeForIndustry, assertAccountDeletable, assertAccountTypeChangeAllowed } from "./account-policy";
+import { studentPicClient, type PicRecord } from "../../integrations/student-api/student-api.client";
 
 export const accountsRouter = Router();
 
@@ -57,11 +58,12 @@ accountsRouter.get("/", authorizeActiveRole(ROLES.SALES), authorizeCapability("A
     { model: Industry, as: "industry", attributes: ["industry_code", "name"], required: false },
   ], distinct: true, order: [["name", "ASC"], ["account_code", "ASC"]], limit: pageSize, offset: (page - 1) * pageSize });
   const ids = rows.map((row) => row.id);
-  const [students, picAssignments, trainings] = ids.length ? await Promise.all([
-    StudentMasterProfile.findAll({ where: { account_id: { [Op.in]: ids }, portal_enabled: true }, attributes: ["account_id"], raw: true }),
-    PicAccountAssignment.findAll({ where: { account_id: { [Op.in]: ids }, ended_at: null }, include: [{ model: PicProfile, as: "picProfile", attributes: ["name"] }], raw: true, nest: true }),
-    Training.findAll({ where: { account_id: { [Op.in]: ids } }, attributes: ["account_id"], raw: true }),
-  ]) : [[], [], []];
+  const [students, picResponse, trainings] = await Promise.all([
+    ids.length ? StudentMasterProfile.findAll({ where: { account_id: { [Op.in]: ids }, portal_enabled: true }, attributes: ["account_id"], raw: true }) : Promise.resolve([] as Array<{ account_id: string }>),
+    ids.length ? studentPicClient.list(req.auth!, { accountIds: ids }) : Promise.resolve({ items: [] as PicRecord[] }),
+    ids.length ? Training.findAll({ where: { account_id: { [Op.in]: ids } }, attributes: ["account_id"], raw: true }) : Promise.resolve([] as Array<{ account_id: string }>),
+  ]);
+  const picAssignments = picResponse.items.flatMap((pic) => pic.assignments.filter((assignment) => !assignment.ended_at).map((assignment) => ({ account_id: assignment.account_id, name: pic.name })));
   const personalSubjects = rows.map((row) => row.personal_student_subject).filter((subject): subject is string => Boolean(subject));
   const linkedProfiles = personalSubjects.length ? await StudentMasterProfile.findAll({ where: { keycloak_subject: { [Op.in]: personalSubjects } }, attributes: ["account_id", "keycloak_subject", "portal_enabled"], raw: true }) : [];
   const items = rows.map((model) => {
@@ -71,7 +73,8 @@ accountsRouter.get("/", authorizeActiveRole(ROLES.SALES), authorizeCapability("A
     const personalExtra = model.account_type === "PERSONAL" && model.personal_student_subject && !activeForAccount && !inactiveForSubject ? 1 : 0;
     const industry = model.get("industry") as Industry | null;
     const assignment = model.get("salesAssignments") as SalesAccountAssignment[];
-    return { ...item, industry_code: industry?.industry_code ?? null, industry_name: industry?.name ?? null, sales_subject: assignment[0]?.sales_subject, student_count: students.filter((student) => student.account_id === model.id).length + personalExtra, pic_count: picAssignments.filter((pic) => pic.account_id === model.id).length, training_count: trainings.filter((training) => training.account_id === model.id).length, pics: picAssignments.filter((pic) => pic.account_id === model.id).map((pic) => (pic as any).picProfile?.name).filter(Boolean) };
+    const accountPics = picAssignments.filter((pic) => pic.account_id === model.id);
+    return { ...item, industry_code: industry?.industry_code ?? null, industry_name: industry?.name ?? null, sales_subject: assignment[0]?.sales_subject, student_count: students.filter((student) => student.account_id === model.id).length + personalExtra, pic_count: accountPics.length, training_count: trainings.filter((training) => training.account_id === model.id).length, pics: accountPics.map((pic) => pic.name).filter(Boolean) };
   });
   return res.json({ items, page, pageSize, total: count });
 }));
@@ -115,9 +118,9 @@ accountsRouter.get("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapability
     { model: Industry, as: "industry", attributes: ["industry_code", "name"], required: false },
   ] });
   if (!item) return res.status(404).json({ message: "Account not found" });
-  const picRows = await PicAccountAssignment.findAll({ where: { account_id: item.id, ended_at: null }, include: [{ model: PicProfile, as: "picProfile", attributes: ["keycloak_subject", "name", "email", "status"], required: true }] });
+  const picRows = await studentPicClient.list(req.auth!, { accountId: item.id });
   const industry = item.get("industry") as Industry | null; const assignment = (item.get("salesAssignments") as SalesAccountAssignment[])[0];
-  return res.json({ item: { ...item.toJSON(), industry_code: industry?.industry_code ?? null, industry_name: industry?.name ?? null, sales_subject: assignment.sales_subject }, pics: picRows.map((row) => { const pic = row.get("picProfile") as PicProfile; return { subject: pic.keycloak_subject, name: pic.name, email: pic.email, status: pic.status }; }) });
+  return res.json({ item: { ...item.toJSON(), industry_code: industry?.industry_code ?? null, industry_name: industry?.name ?? null, sales_subject: assignment.sales_subject }, pics: picRows.items.filter((pic) => pic.assignments.some((row) => !row.ended_at)).map((pic) => ({ subject: pic.keycloak_subject, name: pic.name, email: pic.email, status: pic.status })) });
 }));
 
 accountsRouter.post("/", authorizeActiveRole(ROLES.SALES), authorizeCapability("ACCOUNT", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
@@ -226,10 +229,12 @@ accountsRouter.delete("/:id", authorizeActiveRole(ROLES.SALES), authorizeCapabil
     }
     if (invoiceIds.length) await InvoiceDetail.destroy({ where: { invoice_id: { [Op.in]: invoiceIds } }, transaction });
     await Invoice.destroy({ where: { account_id: account.id }, transaction });
-    await PicAccountAssignment.destroy({ where: { account_id: account.id }, transaction });
     await SalesAccountAssignment.destroy({ where: { account_id: account.id }, transaction });
     await account.destroy({ transaction });
     await transaction.commit();
+    await studentPicClient.endAccountAssignments(req.auth!, account.id).catch((error: unknown) => {
+      console.error("Account was deleted, but its PIC assignments could not be closed in Student API; retry the cleanup.", error);
+    });
     return res.status(204).end();
   } catch (error) {
     await transaction.rollback();

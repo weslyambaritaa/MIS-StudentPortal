@@ -10,7 +10,7 @@ type Training = { id: string; name: string; course_name?: string; status: string
 const initials = (name: string | null) => (name ?? "T").split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase();
 const date = (value: string | null | undefined) => value
   ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(new Date(value))
-  : "Ã¢â‚¬â€";
+  : "—";
 const daysUntil = (certificate: TrainerValue["certifications"][number]) => {
   if (typeof certificate.days_until_expiry === "number" && Number.isFinite(certificate.days_until_expiry)) return certificate.days_until_expiry;
   const rawDate = certificate.expires_at ?? certificate.expiresAt;
@@ -55,13 +55,13 @@ export function TrainerDetailsDialog({ trainer, trainings, loading, onClose, onE
               const soon = days !== null && days >= 0 && days <= 60;
               const style = expired ? "border-red-500 bg-red-500/10 text-red-600" : soon ? "border-orange-500 bg-orange-500/10 text-orange-600" : "border-blue-500 bg-blue-500/10 text-blue-600";
               const marker = expired ? "Kedaluwarsa" : soon ? `${days} hari lagi` : "";
-              return <span key={certificate.id ?? `${certificate.name}-${index}`} title={`${certificate.name} Ã‚Â· ${expired ? "Kedaluwarsa" : `Berakhir ${date(certificate.expires_at ?? certificate.expiresAt)}`}`} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${style}`}>{certificate.name}{marker && <span className="font-semibold">Ã‚Â· {marker}</span>}</span>;
+              return <span key={certificate.id ?? `${certificate.name}-${index}`} title={`${certificate.name} · ${expired ? "Kedaluwarsa" : `Berakhir ${date(certificate.expires_at ?? certificate.expiresAt)}`}`} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${style}`}>{certificate.name}{marker && <span className="font-semibold">· {marker}</span>}</span>;
             })}
           </div> : <p className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-500">No certification records.</p>}
         </section>
         <section>
           <h3 className="mb-3 text-base font-medium text-rose-600">Active Training</h3>
-          {loading ? <p className="rounded-xl bg-neutral-50 p-3 text-sm text-zinc-500">Loading trainingsÃ¢â‚¬Â¦</p> : trainings.length ? <ul className="space-y-1 rounded-xl border border-rose-50 bg-neutral-50">{trainings.map((training) => <li key={training.id} className="flex items-center gap-3 p-3">
+          {loading ? <p className="rounded-xl bg-neutral-50 p-3 text-sm text-zinc-500">Loading trainings…</p> : trainings.length ? <ul className="space-y-1 rounded-xl border border-rose-50 bg-neutral-50">{trainings.map((training) => <li key={training.id} className="flex items-center gap-3 p-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-400 to-orange-600 text-white"><BookOpen size={19} /></div>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-gray-600">{training.name}</p><p className="truncate text-sm text-zinc-600">{training.course_name || training.status}</p></div>
           </li>)}</ul> : <p className="rounded-xl bg-neutral-50 p-3 text-sm text-zinc-500">No active training assignments.</p>}

@@ -157,10 +157,10 @@ export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: Api
         <div className="grid grid-cols-[1.1fr_1fr_1.1fr_1fr_1.3fr] gap-3 bg-neutral-100 p-3 text-xs font-semibold text-gray-600"><span>NAME</span><span>ACCOUNT</span><span>EMAIL</span><span>ROLE</span><span>{isResult ? "RESULT" : "VALIDATION"}</span></div>
         <div className="max-h-[45vh] overflow-y-auto">
           {displayedItems.map((item) => <div key={`${item.rowNumber}-${item.email}`} className="grid grid-cols-[1.1fr_1fr_1.1fr_1fr_1.3fr] gap-3 border-t border-rose-50 p-3 text-sm text-zinc-700">
-            <span className="min-w-0 break-words">{item.name || "Ã¢â‚¬â€"}<span className="block text-xs text-zinc-400">Row {item.rowNumber}</span></span>
-            <span className="min-w-0 break-words">{item.accountName || "Ã¢â‚¬â€"}</span>
-            <span className="min-w-0 break-all">{item.email || "Ã¢â‚¬â€"}</span>
-            <span className="min-w-0 break-words">{item.companyRole || "Ã¢â‚¬â€"}</span>
+            <span className="min-w-0 break-words">{item.name || "—"}<span className="block text-xs text-zinc-400">Row {item.rowNumber}</span></span>
+            <span className="min-w-0 break-words">{item.accountName || "—"}</span>
+            <span className="min-w-0 break-all">{item.email || "—"}</span>
+            <span className="min-w-0 break-words">{item.companyRole || "—"}</span>
             {isResult ? <span className={item.status === "CREATED" ? "text-green-700" : "text-red-600"}>{item.status === "CREATED" ? "Created; activation email sent" : item.errors.join(" ")}</span> : <span className={item.errors.length ? "text-red-600" : "text-green-700"}>{item.errors.length ? item.errors.join(" ") : "Ready to import"}</span>}
           </div>)}
         </div>
@@ -173,10 +173,10 @@ export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: Api
     <footer className="flex justify-end gap-3">
       {isResult ? <Button type="button" onClick={onClose}>Close</Button> : isPreview ? <>
         <Button type="button" variant="ghost" onClick={() => { setPreview(null); setPage(1); }} disabled={busy}>Back</Button>
-        <Button type="button" onClick={() => void commitImport()} disabled={busy || !preview?.validCount}>{busy ? "Importing and sending emailÃ¢â‚¬Â¦" : "Upload Batch"}</Button>
+        <Button type="button" onClick={() => void commitImport()} disabled={busy || !preview?.validCount}>{busy ? "Importing and sending email…" : "Upload Batch"}</Button>
       </> : <>
         <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button type="button" onClick={() => void loadPreview()} disabled={busy || !rows.length}>{busy ? "ReadingÃ¢â‚¬Â¦" : "Continue"}</Button>
+        <Button type="button" onClick={() => void loadPreview()} disabled={busy || !rows.length}>{busy ? "Reading…" : "Continue"}</Button>
       </>}
     </footer>
   </Modal>;

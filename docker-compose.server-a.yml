@@ -1,0 +1,86 @@
+services:
+  student-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${STUDENT_DB_NAME:?Set STUDENT_DB_NAME}
+      POSTGRES_USER: ${STUDENT_DB_USER:?Set STUDENT_DB_USER}
+      POSTGRES_PASSWORD: ${STUDENT_DB_PASSWORD:?Set STUDENT_DB_PASSWORD}
+    volumes:
+      - student-db-data:/var/lib/postgresql
+    networks:
+      - student-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate-student:
+    image: ${STUDENT_API_IMAGE:-mis-student-api:prod}
+    build: &student-api-build
+      context: .
+      dockerfile: app/be/student-api/Dockerfile
+    profiles: ["migration"]
+    environment: &student-api-environment
+      NODE_ENV: production
+      PORT: 4001
+      DB_HOST: student-db
+      DB_PORT: 5432
+      DB_NAME: ${STUDENT_DB_NAME:?Set STUDENT_DB_NAME}
+      DB_USER: ${STUDENT_DB_USER:?Set STUDENT_DB_USER}
+      DB_PASSWORD: ${STUDENT_DB_PASSWORD:?Set STUDENT_DB_PASSWORD}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?Set shared GATEWAY_SHARED_SECRET}
+      SERVICE_SHARED_SECRET: ${SERVICE_SHARED_SECRET:?Set shared SERVICE_SHARED_SECRET}
+      INTERNAL_API_URL: ${INTERNAL_API_PRIVATE_URL:?Set Internal API private URL on Server B}
+    command: ["npm", "run", "migrate"]
+    depends_on:
+      student-db:
+        condition: service_healthy
+    networks:
+      - student-data
+    restart: "no"
+
+  student-api:
+    image: ${STUDENT_API_IMAGE:-mis-student-api:prod}
+    build: *student-api-build
+    environment: *student-api-environment
+    expose:
+      - "4001"
+    ports:
+      - "${STUDENT_API_BIND_IP:?Set Server A private interface IP}:${STUDENT_API_PORT:-4001}:4001"
+    depends_on:
+      student-db:
+        condition: service_healthy
+    networks:
+      - student-data
+    restart: unless-stopped
+
+  student-frontend:
+    image: ${STUDENT_FRONTEND_IMAGE:-mis-student-frontend:prod}
+    build:
+      context: .
+      dockerfile: app/student-fe/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_SCHEME:-https}://${API_DOMAIN:?Set API_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_URL: ${PUBLIC_SCHEME:-https}://${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: student-portal-frontend
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+    ports:
+      - "127.0.0.1:${STUDENT_FRONTEND_LOCAL_PORT:-3101}:3000"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+volumes:
+  student-db-data:
+
+networks:
+  student-data:
+  dokploy-network:
+    external: true
+    name: ${DOKPLOY_NETWORK_NAME:-dokploy-network}

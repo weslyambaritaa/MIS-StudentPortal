@@ -49,9 +49,11 @@
       "attributes": {"pkce.code.challenge.method": "S256"},
       "redirectUris": [
         "https://mis.executrain.co.id/api/auth/callback/keycloak",
-        "https://mis.executrain.co.id/dashboard"
+        "https://mis.executrain.co.id/dashboard",
+        "http://localhost:3100/api/auth/callback/keycloak",
+        "http://localhost:3100/dashboard"
       ],
-      "webOrigins": ["https://mis.executrain.co.id"],
+      "webOrigins": ["https://mis.executrain.co.id", "http://localhost:3100"],
       "fullScopeAllowed": true,
       "protocolMappers": [
         {
@@ -78,9 +80,11 @@
       "attributes": {"pkce.code.challenge.method": "S256"},
       "redirectUris": [
         "http://localhost:3001/dashboard",
-        "http://localhost:3001/*"
+        "http://localhost:3001/*",
+        "http://localhost:3101/dashboard",
+        "http://localhost:3101/*"
       ],
-      "webOrigins": ["http://localhost:3001"],
+      "webOrigins": ["http://localhost:3001", "http://localhost:3101"],
       "fullScopeAllowed": true,
       "protocolMappers": [
         {

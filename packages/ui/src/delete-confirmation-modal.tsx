@@ -36,7 +36,7 @@ export function DeleteConfirmationModal({
       <div className="my-4 h-px bg-zinc-950/20" />
 
       <p className="text-sm text-zinc-950/60">
-        {description ?? `The following content ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ${itemName}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â will be deleted permanently, with its child...`}
+        {description ?? `The following content “${itemName}” will be deleted permanently, with its child...`}
       </p>
 
       <div className="mt-6 flex items-center gap-3">

@@ -43,9 +43,9 @@ export default function AccountsPage() {
   const columns: DataTableColumn<AccountRow>[] = [
     { key: "code", header: "Code", render: (row) => row.account_code },
     { key: "name", header: "Account Name", render: (row) => <button className="text-left font-medium text-rose-600 hover:underline" onClick={() => void openDetails(row)}>{row.name}</button> },
-    { key: "industry", header: "Industry", render: (row) => row.industry_name ?? "Ã¢â‚¬â€" },
+    { key: "industry", header: "Industry", render: (row) => row.industry_name ?? "—" },
     { key: "students", header: "Student", render: (row) => row.student_count },
-    { key: "pic", header: "PIC", render: (row) => row.pics.length ? <span title={row.pics.join(", ")}>{row.pics[0]}{row.pics.length > 1 ? ` + ${row.pics.length - 1}` : ""}</span> : <span className="text-zinc-400">Ã¢â‚¬â€</span> },
+    { key: "pic", header: "PIC", render: (row) => row.pics.length ? <span title={row.pics.join(", ")}>{row.pics[0]}{row.pics.length > 1 ? ` + ${row.pics.length - 1}` : ""}</span> : <span className="text-zinc-400">—</span> },
     { key: "status", header: "Status", render: (row) => <Badge variant={row.status === "ACTIVE" ? "success" : "danger"} showDot>{row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge> },
     { key: "action", header: "Action", render: (row) => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17} />} size="sm" onClick={() => void openDetails(row)} /><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17} />} size="sm" onClick={() => setEditor(row)} /><IconButton label={row.training_count ? `Cannot delete ${row.name}: has Training` : `Delete ${row.name}`} icon={<Trash2 size={17} />} variant="danger" size="sm" disabled={row.training_count > 0} onClick={() => setDeleting(row)} /></div> },
   ];
@@ -58,11 +58,11 @@ export default function AccountsPage() {
       <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 md:w-44">Status<span className="relative block h-9"><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600" /></span></label>
     </div>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {loading ? <div className="py-10 text-center text-zinc-500">Loading AccountsÃ¢â‚¬Â¦</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id} caption="Accounts assigned to current Sales user" emptyMessage="No Accounts found." />}
+    {loading ? <div className="py-10 text-center text-zinc-500">Loading Accounts…</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id} caption="Accounts assigned to current Sales user" emptyMessage="No Accounts found." />}
     <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage} /></div>
     </section></div>
     {editor !== undefined && <AccountDialog value={editor ?? null} industries={industries} salesUsers={salesUsers} currentSubject={currentSubject} busy={busy} error={dialogError} onClose={() => { setEditor(undefined); setDialogError(null); }} onSubmit={save} />}
     {selected && <AccountDetailsDialog account={selected} pics={pics} students={students} loadingStudents={detailsLoading} canDelete={selected.training_count === 0} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDelete={() => { if (!selected.training_count) setDeleting(selected); }} />}
-    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Account Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted along with non-Training references. Account with Training history cannot be deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
+    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Account “${deleting?.name ?? ""}” will be permanently deleted along with non-Training references. Account with Training history cannot be deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
   </AppShell>;
 }

@@ -31,11 +31,12 @@ test("role guards accept only business roles and classify service boundaries", (
   assert.equal(isBusinessRole("management"), true);
   assert.equal(isRole("super_admin"), false);
   assert.equal(isRole(undefined), false);
-  assert.equal(isExternalRole("trainer"), true);
+  assert.equal(isExternalRole("trainer"), false);
   assert.equal(isExternalRole("sales"), false);
   assert.equal(isInternalRole("finance"), true);
+  assert.equal(isInternalRole("trainer"), true);
   assert.equal(isInternalRole("student"), false);
 
-  assert.deepEqual(EXTERNAL_ROLES, ["student", "pic", "trainer"]);
-  assert.deepEqual(INTERNAL_ROLES, ["sales", "admin", "finance", "management"]);
+  assert.deepEqual(EXTERNAL_ROLES, ["student", "pic"]);
+  assert.deepEqual(INTERNAL_ROLES, ["trainer", "sales", "admin", "finance", "management"]);
 });

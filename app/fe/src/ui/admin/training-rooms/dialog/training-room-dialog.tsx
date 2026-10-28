@@ -67,7 +67,7 @@ export function TrainingRoomDialog({ value, busy, onClose, onSubmit }: {
         </section>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !ready}>{busy ? "SavingÃ¢â‚¬Â¦" : value.id ? "Save Changes" : "Add Training Room"}</Button>
+          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !ready}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Training Room"}</Button>
         </footer>
       </form>
     </div>

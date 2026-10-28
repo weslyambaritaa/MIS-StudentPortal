@@ -15,7 +15,7 @@ type TrainingRoom = TrainingRoomFormValue & { id: string; room_code: string; cre
 type TrainingRoomList = { items: TrainingRoom[]; page: number; pageSize: number; total: number };
 
 function facilitiesLabel(facilities: TrainingRoom["facilities"]) {
-  return facilities.length ? facilities.map((facility) => `${facility.name} (${facility.amount})`).join(", ") : "Ã¢â‚¬â€";
+  return facilities.length ? facilities.map((facility) => `${facility.name} (${facility.amount})`).join(", ") : "—";
 }
 
 export default function TrainingRoomsPage() {
@@ -107,7 +107,7 @@ export default function TrainingRoomsPage() {
                   <td className="px-3 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${room.status === "ACTIVE" ? "bg-green-500/15 text-green-700" : "bg-zinc-200 text-zinc-600"}`}>{room.status === "ACTIVE" ? "Active" : "Inactive"}</span></td>
                   <td className="px-3 py-2"><div className="flex items-center gap-1"><IconButton label={`Edit ${room.name}`} icon={<Pencil size={17} />} size="sm" onClick={() => setEditor(room)} /><IconButton label={`Delete ${room.name}`} icon={<Trash2 size={17} />} variant="danger" size="sm" onClick={() => { setError(null); setDeleting(room); }} /></div></td>
                 </tr>)}
-                {loading && <tr><td colSpan={6} className="px-3 py-10 text-center text-zinc-500">Loading Training RoomsÃ¢â‚¬Â¦</td></tr>}
+                {loading && <tr><td colSpan={6} className="px-3 py-10 text-center text-zinc-500">Loading Training Rooms…</td></tr>}
               </tbody>
             </table>
           </div>
@@ -115,7 +115,7 @@ export default function TrainingRoomsPage() {
         </section>
       </div>
       {editor && <TrainingRoomDialog value={editor} busy={busy} onClose={() => setEditor(null)} onSubmit={save} />}
-      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Training Room Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted. Rooms with bookings cannot be deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
+      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Training Room “${deleting?.name ?? ""}” will be permanently deleted. Rooms with bookings cannot be deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
     </AppShell>
   );
 }

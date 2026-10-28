@@ -25,8 +25,8 @@ export const BUSINESS_ROLES = [
 /** Deterministic default order; never infer business priority from JWT claim ordering. */
 export const BUSINESS_ROLE_ORDER = BUSINESS_ROLES;
 
-export const EXTERNAL_ROLES = [ROLES.STUDENT, ROLES.PIC, ROLES.TRAINER] as const;
-export const INTERNAL_ROLES = [ROLES.SALES, ROLES.ADMIN, ROLES.FINANCE, ROLES.MANAGEMENT] as const;
+export const EXTERNAL_ROLES = [ROLES.STUDENT, ROLES.PIC] as const;
+export const INTERNAL_ROLES = [ROLES.TRAINER, ROLES.SALES, ROLES.ADMIN, ROLES.FINANCE, ROLES.MANAGEMENT] as const;
 
 export type ExternalRole = (typeof EXTERNAL_ROLES)[number];
 export type InternalRole = (typeof INTERNAL_ROLES)[number];

@@ -1,0 +1,219 @@
+services:
+  internal-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${INTERNAL_DB_NAME:?Set INTERNAL_DB_NAME}
+      POSTGRES_USER: ${INTERNAL_DB_USER:?Set INTERNAL_DB_USER}
+      POSTGRES_PASSWORD: ${INTERNAL_DB_PASSWORD:?Set INTERNAL_DB_PASSWORD}
+    volumes:
+      - internal-db-data:/var/lib/postgresql
+    networks:
+      - internal-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  keycloak-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME:?Set KEYCLOAK_DB_NAME}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:?Set KEYCLOAK_DB_USER}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql
+    networks:
+      - keycloak-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-mis-keycloak-st01:26.7.3}
+    build:
+      context: .
+      dockerfile: keycloak/Dockerfile
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: ${KEYCLOAK_DB_NAME:?Set KEYCLOAK_DB_NAME}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?Set KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: ${PUBLIC_SCHEME:-https}://${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+      KC_HOSTNAME_ADMIN: ${PUBLIC_SCHEME:-https}://${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?Set Keycloak bootstrap admin username}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?Set Keycloak bootstrap admin password}
+    command: ["start", "--import-realm"]
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - keycloak-data
+      - gateway-keycloak
+    restart: unless-stopped
+
+  migrate-internal:
+    image: ${INTERNAL_API_IMAGE:-mis-internal-api:prod}
+    build: &internal-api-build
+      context: .
+      dockerfile: app/be/internal-api/Dockerfile
+    profiles: ["migration"]
+    environment: &internal-api-environment
+      NODE_ENV: production
+      PORT: 4002
+      DB_HOST: internal-db
+      DB_PORT: 5432
+      DB_NAME: ${INTERNAL_DB_NAME:?Set INTERNAL_DB_NAME}
+      DB_USER: ${INTERNAL_DB_USER:?Set INTERNAL_DB_USER}
+      DB_PASSWORD: ${INTERNAL_DB_PASSWORD:?Set INTERNAL_DB_PASSWORD}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?Set shared GATEWAY_SHARED_SECRET}
+      SERVICE_SHARED_SECRET: ${SERVICE_SHARED_SECRET:?Set shared SERVICE_SHARED_SECRET}
+      STUDENT_API_URL: ${STUDENT_API_PRIVATE_URL:?Set Student API private URL on Server A}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_REALM: mis-student-portal
+      KEYCLOAK_PROVISIONER_CLIENT_ID: ${KEYCLOAK_PROVISIONER_CLIENT_ID:-mis-account-provisioner}
+      KEYCLOAK_PROVISIONER_CLIENT_SECRET: ${KEYCLOAK_PROVISIONER_CLIENT_SECRET:-}
+      KEYCLOAK_PIC_ACTIVATION_CLIENT_ID: student-portal-frontend
+      KEYCLOAK_PIC_ACTIVATION_REDIRECT_URI: ${PUBLIC_SCHEME:-https}://${STUDENT_APP_DOMAIN:?Set STUDENT_APP_DOMAIN}/dashboard
+      KEYCLOAK_AUDIT_ENABLED: ${KEYCLOAK_AUDIT_ENABLED:-false}
+      KEYCLOAK_AUDIT_CLIENT_ID: ${KEYCLOAK_AUDIT_CLIENT_ID:-mis-audit-reader}
+      KEYCLOAK_AUDIT_CLIENT_SECRET: ${KEYCLOAK_AUDIT_CLIENT_SECRET:-}
+      KEYCLOAK_AUDIT_POLL_INTERVAL_MS: ${KEYCLOAK_AUDIT_POLL_INTERVAL_MS:-60000}
+      DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-ExecuTrain}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+    command: ["npm", "run", "migrate"]
+    depends_on:
+      internal-db:
+        condition: service_healthy
+    networks:
+      - internal-data
+    restart: "no"
+
+  internal-api:
+    image: ${INTERNAL_API_IMAGE:-mis-internal-api:prod}
+    build: *internal-api-build
+    environment: *internal-api-environment
+    expose:
+      - "4002"
+    ports:
+      - "${INTERNAL_API_BIND_IP:?Set Server B private interface IP}:${INTERNAL_API_PORT:-4002}:4002"
+    depends_on:
+      internal-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - internal-data
+      - gateway-internal
+      - gateway-keycloak
+    restart: unless-stopped
+
+  system-monitor:
+    image: ${INTERNAL_API_IMAGE:-mis-internal-api:prod}
+    build: *internal-api-build
+    environment:
+      <<: *internal-api-environment
+      MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
+      MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
+      MONITOR_STUDENT_HEALTH_URL: ${STUDENT_API_PRIVATE_URL:?Set Student API private URL on Server A}/health
+      MONITOR_KEYCLOAK_HEALTH_URL: http://keycloak:8080/realms/mis-student-portal
+      MONITOR_INTERVAL_MS: ${MONITOR_INTERVAL_MS:-30000}
+      MONITOR_FAILURE_THRESHOLD: ${MONITOR_FAILURE_THRESHOLD:-2}
+      MONITOR_STARTUP_GRACE_MS: ${MONITOR_STARTUP_GRACE_MS:-90000}
+    command: ["npm", "run", "monitor"]
+    depends_on:
+      internal-api:
+        condition: service_started
+    networks:
+      - internal-data
+      - gateway-internal
+      - gateway-keycloak
+    restart: unless-stopped
+
+  api-gateway:
+    image: ${GATEWAY_IMAGE:-mis-api-gateway:prod}
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: ${CORS_ORIGINS:?Set CORS_ORIGINS for both frontends}
+      STUDENT_API_URL: ${STUDENT_API_PRIVATE_URL:?Set Student API private URL on Server A}
+      INTERNAL_API_URL: http://internal-api:4002
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_HOST: ${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+      KEYCLOAK_ISSUER: ${PUBLIC_SCHEME:-https}://${AUTH_DOMAIN:?Set AUTH_DOMAIN}/realms/mis-student-portal
+      KEYCLOAK_JWKS_INTERNAL_URL: http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCES: ${KEYCLOAK_AUDIENCES:-mis-student-portal-frontend,student-portal-frontend}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?Set shared GATEWAY_SHARED_SECRET}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+    expose:
+      - "4000"
+    ports:
+      - "127.0.0.1:${GATEWAY_LOCAL_PORT:-4100}:4000"
+    depends_on:
+      internal-api:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    networks:
+      - dokploy-network
+      - gateway-internal
+      - gateway-keycloak
+    restart: unless-stopped
+
+  frontend:
+    image: ${INTERNAL_FRONTEND_IMAGE:-mis-internal-frontend:prod}
+    build:
+      context: .
+      dockerfile: app/fe/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_SCHEME:-https}://${API_DOMAIN:?Set API_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_URL: ${PUBLIC_SCHEME:-https}://${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+        NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: mis-student-portal-frontend
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+    ports:
+      - "127.0.0.1:${INTERNAL_FRONTEND_LOCAL_PORT:-3100}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+volumes:
+  internal-db-data:
+  keycloak-db-data:
+
+networks:
+  internal-data:
+  keycloak-data:
+  gateway-internal:
+  gateway-keycloak:
+  dokploy-network:
+    external: true
+    name: ${DOKPLOY_NETWORK_NAME:-dokploy-network}

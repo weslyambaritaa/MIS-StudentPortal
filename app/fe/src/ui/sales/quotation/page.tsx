@@ -443,7 +443,7 @@ export default function QuotationPage() {
             </p>
           )}
           {loading ? (
-            <div className="py-10 text-center text-zinc-500">Loading quotationsÃ¢â‚¬Â¦</div>
+            <div className="py-10 text-center text-zinc-500">Loading quotations…</div>
           ) : (
             <DataTable
               columns={columns}
@@ -552,7 +552,7 @@ export default function QuotationPage() {
                   <option value="">Pick an active PIC</option>
                   {pics.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} Ã‚Â· {p.email}
+                      {p.name} · {p.email}
                     </option>
                   ))}
                 </select>
@@ -729,7 +729,7 @@ export default function QuotationPage() {
       <DeleteConfirmationModal
         open={Boolean(deleting)}
         itemName={deleting?.quotation_code ?? ""}
-        description={`Quotation Ã¢â‚¬Å“${deleting?.quotation_code ?? ""}Ã¢â‚¬Â will be removed from the active list. Its sent PDF and audit history are retained.`}
+        description={`Quotation “${deleting?.quotation_code ?? ""}” will be removed from the active list. Its sent PDF and audit history are retained.`}
         onClose={() => setDeleting(null)}
         onConfirm={() => void remove()}
         loading={busy}

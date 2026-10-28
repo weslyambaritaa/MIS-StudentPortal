@@ -18,6 +18,8 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "build:student": "turbo run build --filter=@mis/student-frontend --filter=@mis/student-api",
+    "build:internal": "turbo run build --filter=@mis/internal-frontend --filter=@mis/internal-api --filter=@mis/gateway",
     "dev:internal": "npm run dev --workspace @mis/internal-frontend",
     "dev:student": "npm run dev --workspace @mis/student-frontend",
     "dev": "docker compose up --build",

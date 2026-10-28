@@ -47,7 +47,7 @@ export function IndustryDialog({
         </label>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy || !name.trim()}>{busy ? "SavingÃ¢â‚¬Â¦" : value?.id ? "Save Changes" : "Add Industry"}</Button>
+          <Button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : value?.id ? "Save Changes" : "Add Industry"}</Button>
         </footer>
       </form>
     </div>

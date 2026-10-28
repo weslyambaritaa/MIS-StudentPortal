@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Op } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
-import { sequelize } from "../../database/sequelize";
 import { env } from "../../config/env";
-import { Account, Industry, Participant, PicAccountAssignment, PicProfile, SalesAccountAssignment, Training } from "../../database/models";
+import { Account, Industry, Participant, SalesAccountAssignment, Training } from "../../database/models";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { asyncHandler } from "../../utils/async-handler";
@@ -13,6 +12,7 @@ import {
   KeycloakProvisioningError,
   keycloakAccountProvisioner,
 } from "../accounts/keycloak-account-provisioner";
+import { studentPicClient, type PicRecord } from "../../integrations/student-api/student-api.client";
 
 export const picManagementRouter = Router();
 const ACTIVATION_LIFESPAN_SECONDS = 24 * 60 * 60;
@@ -26,7 +26,7 @@ const nameParts = (name: string) => {
   const pieces = name.trim().split(/\s+/);
   return { firstName: pieces[0] ?? "", lastName: pieces.slice(1).join(" ") };
 };
-const publicProfile = (profile: PicProfile, account?: Record<string, unknown>) => ({
+const publicProfile = (profile: PicRecord, account?: Record<string, unknown>) => ({
   id: profile.id,
   name: profile.name,
   email: profile.email,
@@ -51,63 +51,28 @@ async function isSalesAccount(accountId: string, salesSubject: string, requireAc
   return { id: plain.id, name: plain.name, status: plain.status, industry_name: plain.industry?.name ?? null };
 }
 
-async function loadPic(profileId: string, salesSubject: string) {
-  const assignment = await PicAccountAssignment.findOne({
-    where: { ended_at: null },
-    include: [
-      { model: PicProfile, as: "picProfile", attributes: ["id", "name", "email", "status", "activation_expires_at"], where: { id: profileId }, required: true },
-      { model: Account, as: "account", attributes: ["id", "name", "status"], required: true, include: [
-        { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: salesSubject, ended_at: null }, required: true },
-        { model: Industry, as: "industry", attributes: ["name"], required: false },
-      ] },
-    ],
-  });
-  if (!assignment) return null;
-  const plain = assignment.get({ plain: true }) as unknown as { picProfile: PicProfile; account: Account & { industry?: Industry | null } };
+async function loadPic(profileId: string, actor: NonNullable<Parameters<typeof studentPicClient.update>[0]>) {
+  const profile = await studentPicClient.get(actor, profileId);
+  const activeAssignment = profile?.assignments.find((assignment) => !assignment.ended_at);
+  if (!profile || !activeAssignment) return null;
+  const account = await isSalesAccount(activeAssignment.account_id, actor.userId);
+  if (!account) return null;
   return {
-    id: plain.picProfile.id,
-    name: plain.picProfile.name,
-    email: plain.picProfile.email,
-    status: plain.picProfile.status,
-    activation_expires_at: plain.picProfile.activation_expires_at,
-    account_id: plain.account.id,
-    account_name: plain.account.name,
-    account_status: plain.account.status,
-    industry_name: plain.account.industry?.name ?? null,
+    ...profile,
+    account_id: account.id,
+    account_name: account.name,
+    account_status: account.status,
+    industry_name: account.industry_name,
   };
 }
 
-async function activateCompletedProfiles(profiles: PicProfile[]) {
+async function activateCompletedProfiles(profiles: PicRecord[], actor: NonNullable<Parameters<typeof studentPicClient.update>[0]>) {
   for (const profile of profiles) {
     if (profile.status !== "PENDING") continue;
     const identity = await keycloakAccountProvisioner.getIdentity(profile.keycloak_subject);
     if (identity.requiredActions.includes("UPDATE_PASSWORD")) continue;
-    const transaction = await sequelize.transaction();
-    try {
-      const locked = await PicProfile.findByPk(profile.id, {
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
-      if (locked?.status === "PENDING") {
-        await locked.update({ status: "ACTIVE", activation_expires_at: null }, { transaction });
-        await appendAuditTrail(
-          {
-            action: "UPDATE",
-            objectType: "PIC_PROFILE",
-            objectId: locked.id,
-            before: { status: "PENDING" },
-            after: { status: "ACTIVE" },
-            processName: "pic-activation-completed",
-          },
-          null,
-          { transaction }
-        );
-      }
-      await transaction.commit();
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+    await studentPicClient.update(actor, profile.id, { status: "ACTIVE", activationExpiresAt: null });
+    await appendAuditTrail({ action: "UPDATE", objectType: "PIC_PROFILE", objectId: profile.id, before: { status: "PENDING" }, after: { status: "ACTIVE" }, processName: "pic-activation-completed" }, null);
   }
 }
 
@@ -149,46 +114,32 @@ picManagementRouter.get(
       return res.status(400).json({ message: "Invalid Account filter" });
     if (!["ALL", "PENDING", "ACTIVE", "INACTIVE"].includes(String(status)))
       return res.status(400).json({ message: "Invalid status filter" });
-    const pattern = search ? `%${String(search).replace(/[\\%_]/g, "\\$&")}%` : undefined;
-    const { count: total, rows: profiles } = await PicProfile.findAndCountAll({
-      where: { ...(status !== "ALL" ? { status: String(status) } : {}), ...(pattern ? { [Op.or]: [{ name: { [Op.iLike]: pattern } }, { email: { [Op.iLike]: pattern } }] } : {}) },
-      include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: ["id"], where: { ended_at: null }, required: true,
-        include: [{ model: Account, as: "account", attributes: ["id", "name", "status"], where: accountId ? { id: accountId } : undefined, required: true,
-          include: [
-            { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true },
-            { model: Industry, as: "industry", attributes: ["name"], required: false },
-          ] },
-      ] }],
-      distinct: true,
-      // Active-assignment unique indexes guarantee one Account and Sales owner.
-      // Keep nested joins together; paginate PICs without a hasMany subquery.
-      subQuery: false,
-      order: [["name", "ASC"], ["id", "ASC"]],
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-    });
-    const rows = profiles.map((profile) => {
-      const row = profile.get({ plain: true }) as Record<string, unknown> & { accountAssignments: Array<{ account: Record<string, unknown> & { industry?: { name: string } | null } }> };
-      const account = row.accountAssignments[0]?.account;
-      return {
-        id: row.id, name: row.name, email: row.email, status: row.status, activation_expires_at: row.activation_expires_at,
-        account_id: account?.id ?? null, account_name: account?.name ?? null, account_status: account?.status ?? null, industry_name: account?.industry?.name ?? null,
-      };
-    });
-    const pending = await PicProfile.findAll({
-      where: { id: rows.filter((row) => row.status === "PENDING").map((row) => row.id as string) },
-    });
-    await activateCompletedProfiles(pending);
-    if (pending.length) {
-      for (const row of rows) {
-        const current = pending.find((profile) => profile.id === row.id);
-        if (current?.status === "PENDING") {
-          const updated = await PicProfile.findByPk(current.id);
-          if (updated) row.status = updated.status;
-        }
+    const accounts = await Account.findAll({ attributes: ["id", "name", "status", "industry_id"], include: [
+      { model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true },
+      { model: Industry, as: "industry", attributes: ["name"], required: false },
+    ] });
+    const ownedAccounts = accounts.map((model) => {
+      const row = model.get({ plain: true }) as Record<string, unknown> & { industry?: { name: string } | null };
+      return { id: String(row.id), name: String(row.name), status: String(row.status), industry_name: row.industry?.name ?? null };
+    }).filter((account) => !accountId || account.id === accountId);
+    if (accountId && !ownedAccounts.length) return res.status(404).json({ message: "Account not found" });
+    const profiles = await studentPicClient.list(req.auth!, { accountIds: ownedAccounts.map((account) => account.id), status: String(status), search: typeof search === "string" ? search : undefined });
+    const byAccount = new Map(ownedAccounts.map((account) => [account.id, account]));
+    const allRows = profiles.items.flatMap((profile) => profile.assignments.filter((assignment) => !assignment.ended_at).map((assignment) => {
+      const account = byAccount.get(assignment.account_id);
+      return { id: profile.id, name: profile.name, email: profile.email, status: profile.status, activation_expires_at: profile.activation_expires_at, account_id: account?.id ?? null, account_name: account?.name ?? null, account_status: account?.status ?? null, industry_name: account?.industry_name ?? null, keycloak_subject: profile.keycloak_subject };
+    }));
+    const pending = profiles.items.filter((profile) => profile.status === "PENDING");
+    await activateCompletedProfiles(pending, req.auth!);
+    for (const row of allRows) {
+      if (pending.some((profile) => profile.id === row.id)) {
+        const current = await studentPicClient.get(req.auth!, row.id);
+        if (current) row.status = current.status;
       }
     }
-    return res.json({ items: rows, page, pageSize, total });
+    const total = allRows.length;
+    const items = allRows.slice((page - 1) * pageSize, page * pageSize).map(({ keycloak_subject: _subject, ...item }) => item);
+    return res.json({ items, page, pageSize, total });
   })
 );
 
@@ -217,6 +168,7 @@ picManagementRouter.post(
       return res.status(409).json({ message: "An account with this email address already exists" });
     const { firstName, lastName } = nameParts(name);
     let identity: { userId: string } | null = null;
+    const profileId = randomUUID();
     try {
       const created = await keycloakAccountProvisioner.createAccount({
         username: normalizedEmail,
@@ -241,55 +193,20 @@ picManagementRouter.post(
         env.keycloakPicActivationRedirectUri
       );
       const expiresAt = new Date(Date.now() + ACTIVATION_LIFESPAN_SECONDS * 1000);
-      const transaction = await sequelize.transaction();
-      try {
-        const profile = await PicProfile.create(
-          {
-            id: randomUUID(),
-            keycloak_subject: created.userId,
-            name: name.trim(),
-            email: normalizedEmail,
-            status: "PENDING",
-            activation_expires_at: expiresAt,
-            position: "PIC",
-          },
-          { transaction }
-        );
-        await PicAccountAssignment.create(
-          {
-            id: randomUUID(),
-            pic_profile_id: profile.id,
-            account_id: accountId,
-            assigned_by_subject: req.auth!.userId,
-            ended_at: null,
-          },
-          { transaction }
-        );
-        await appendRequestAuditTrail(
-          req,
-          {
-            action: "CREATE",
-            objectType: "PIC_PROFILE",
-            objectId: profile.id,
-            after: {
-              name: profile.name,
-              email: profile.email,
-              status: profile.status,
-              account_id: accountId,
-              keycloak_subject: created.userId,
-            },
-            processName: "pic-create",
-          },
-          transaction
-        );
-        await transaction.commit();
-        return res.status(201).json({ item: publicProfile(profile, account) });
-      } catch (error) {
-        await transaction.rollback();
-        throw error;
-      }
+      const profile = await studentPicClient.create(req.auth!, {
+        id: profileId, keycloakSubject: created.userId, name: name.trim(), email: normalizedEmail,
+        status: "PENDING", activationExpiresAt: expiresAt.toISOString(), position: "PIC",
+        accountId, assignedBySubject: req.auth!.userId,
+      });
+      await appendRequestAuditTrail(req, {
+        action: "CREATE", objectType: "PIC_PROFILE", objectId: profile.item.id,
+        after: { name: profile.item.name, email: profile.item.email, status: profile.item.status, account_id: accountId, keycloak_subject: created.userId },
+        processName: "pic-create",
+      });
+      return res.status(201).json({ item: publicProfile(profile.item, account) });
     } catch (error) {
       if (identity) {
+        await studentPicClient.delete(req.auth!, profileId).catch(() => undefined);
         await keycloakAccountProvisioner
           .setBusinessRole(identity.userId, ROLES.PIC, false)
           .catch(() => undefined);
@@ -306,13 +223,14 @@ picManagementRouter.get(
   authorizeActiveRole(ROLES.SALES),
   authorizeCapability("PIC", ACCESS_ACTIONS.VIEW),
   asyncHandler(async (req, res) => {
-    const item = await loadPic(req.params.id, req.auth!.userId);
+    const item = await loadPic(req.params.id, req.auth!);
     if (!item) return res.status(404).json({ message: "PIC not found" });
-    const profile = await PicProfile.findByPk(req.params.id);
+    let profile = await studentPicClient.get(req.auth!, req.params.id);
     if (!profile) return res.status(404).json({ message: "PIC not found" });
     if (profile.status === "PENDING") {
-      await activateCompletedProfiles([profile]);
-      await profile.reload();
+      await activateCompletedProfiles([profile], req.auth!);
+      profile = await studentPicClient.get(req.auth!, req.params.id);
+      if (!profile) return res.status(404).json({ message: "PIC not found" });
     }
     const identity = await keycloakAccountProvisioner.getIdentity(profile.keycloak_subject);
     const participantRows = await Participant.findAll({
@@ -368,17 +286,18 @@ picManagementRouter.put(
       return res
         .status(400)
         .json({ message: "A valid PIC name and optional Active/Inactive status are required" });
-    const item = await loadPic(req.params.id, req.auth!.userId);
+    const item = await loadPic(req.params.id, req.auth!);
     if (!item) return res.status(404).json({ message: "PIC not found" });
-    const profile = await PicProfile.findByPk(req.params.id);
+    let profile = await studentPicClient.get(req.auth!, req.params.id);
     if (!profile) return res.status(404).json({ message: "PIC not found" });
     if (profile.status === "PENDING") {
-      await activateCompletedProfiles([profile]);
-      await profile.reload();
+      await activateCompletedProfiles([profile], req.auth!);
+      profile = await studentPicClient.get(req.auth!, req.params.id);
+      if (!profile) return res.status(404).json({ message: "PIC not found" });
     }
     if (profile.status === "PENDING" && status !== undefined)
       return res.status(409).json({ message: "Pending status is managed by the activation flow" });
-    const nextStatus = (status ?? profile.status) as PicProfile["status"];
+    const nextStatus = (status ?? profile.status) as PicRecord["status"];
     if (item.account_status !== "ACTIVE" && nextStatus === "ACTIVE" && profile.status !== "ACTIVE")
       return res
         .status(409)
@@ -412,27 +331,11 @@ picManagementRouter.put(
       }
       if (Object.keys(after).length === 0)
         return res.json({ item: { ...item, name: profile.name, status: profile.status } });
-      const transaction = await sequelize.transaction();
-      try {
-        await profile.update(after, { transaction });
-        await appendRequestAuditTrail(
-          req,
-          {
-            action: "UPDATE",
-            objectType: "PIC_PROFILE",
-            objectId: profile.id,
-            before,
-            after,
-            processName: "pic-update",
-          },
-          transaction
-        );
-        await transaction.commit();
-      } catch (error) {
-        await transaction.rollback();
-        throw error;
-      }
-      return res.json({ item: { ...item, name: profile.name, status: profile.status } });
+      const updatedProfile = (await studentPicClient.update(req.auth!, profile.id, { name: name.trim(), status: nextStatus })).item;
+      await appendRequestAuditTrail(req, {
+        action: "UPDATE", objectType: "PIC_PROFILE", objectId: profile.id, before, after, processName: "pic-update",
+      });
+      return res.json({ item: { ...item, name: updatedProfile.name, status: updatedProfile.status } });
     } catch (error) {
       if (nextStatus !== beforeStatus && nextStatus !== "PENDING")
         await keycloakAccountProvisioner
@@ -452,17 +355,18 @@ picManagementRouter.post(
   authorizeActiveRole(ROLES.SALES),
   authorizeCapability("PIC", ACCESS_ACTIONS.EDIT),
   asyncHandler(async (req, res) => {
-    const item = await loadPic(req.params.id, req.auth!.userId);
+    const item = await loadPic(req.params.id, req.auth!);
     if (!item) return res.status(404).json({ message: "PIC not found" });
-    const profile = await PicProfile.findByPk(req.params.id);
+    let profile = await studentPicClient.get(req.auth!, req.params.id);
     if (!profile) return res.status(404).json({ message: "PIC not found" });
     if (profile.status === "PENDING") {
-      await activateCompletedProfiles([profile]);
-      await profile.reload();
+      await activateCompletedProfiles([profile], req.auth!);
+      profile = await studentPicClient.get(req.auth!, req.params.id);
+      if (!profile) return res.status(404).json({ message: "PIC not found" });
     }
     if (profile.status !== "PENDING")
       return res.status(409).json({ message: "Only a pending PIC can receive an activation link" });
-    if (profile.activation_expires_at && profile.activation_expires_at.getTime() > Date.now())
+    if (profile.activation_expires_at && new Date(profile.activation_expires_at).getTime() > Date.now())
       return res.status(409).json({ message: "The current activation link is still valid" });
     await keycloakAccountProvisioner.setRequiredActions(profile.keycloak_subject, [
       "UPDATE_PASSWORD",
@@ -475,8 +379,8 @@ picManagementRouter.post(
       env.keycloakPicActivationRedirectUri
     );
     const expiresAt = new Date(Date.now() + ACTIVATION_LIFESPAN_SECONDS * 1000);
-    const before = { activation_expires_at: profile.activation_expires_at?.toISOString() ?? null };
-    await profile.update({ activation_expires_at: expiresAt });
+    const before = { activation_expires_at: profile.activation_expires_at ? new Date(profile.activation_expires_at).toISOString() : null };
+    await studentPicClient.update(req.auth!, profile.id, { activationExpiresAt: expiresAt.toISOString() });
     await appendRequestAuditTrail(req, {
       action: "UPDATE",
       objectType: "PIC_PROFILE",
@@ -494,9 +398,9 @@ picManagementRouter.delete(
   authorizeActiveRole(ROLES.SALES),
   authorizeCapability("PIC", ACCESS_ACTIONS.DELETE),
   asyncHandler(async (req, res) => {
-    const item = await loadPic(req.params.id, req.auth!.userId);
+    const item = await loadPic(req.params.id, req.auth!);
     if (!item) return res.status(404).json({ message: "PIC not found" });
-    const profile = await PicProfile.findByPk(req.params.id);
+    const profile = await studentPicClient.get(req.auth!, req.params.id);
     if (!profile) return res.status(404).json({ message: "PIC not found" });
     const businessRoles = await keycloakAccountProvisioner.getBusinessRoles(
       profile.keycloak_subject
@@ -513,33 +417,12 @@ picManagementRouter.delete(
     // Keycloak identity first; deleteAccount treats 404 as success, so the DB phase
     // can be retried safely if its transaction fails after the identity is removed.
     await keycloakAccountProvisioner.deleteAccount(profile.keycloak_subject);
-    const transaction = await sequelize.transaction();
-    try {
-      await appendRequestAuditTrail(
-        req,
-        {
-          action: "DELETE",
-          objectType: "PIC_PROFILE",
-          objectId: profile.id,
-          before: {
-            name: profile.name,
-            email: profile.email,
-            status: profile.status,
-            account_id: item.account_id,
-            keycloak_subject: profile.keycloak_subject,
-            keycloak_account_deleted: true,
-          },
-          processName: "pic-delete",
-        },
-        transaction
-      );
-      await PicAccountAssignment.destroy({ where: { pic_profile_id: profile.id }, transaction });
-      await profile.destroy({ transaction });
-      await transaction.commit();
-      return res.status(204).end();
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+    await appendRequestAuditTrail(req, {
+      action: "DELETE", objectType: "PIC_PROFILE", objectId: profile.id,
+      before: { name: profile.name, email: profile.email, status: profile.status, account_id: item.account_id, keycloak_subject: profile.keycloak_subject, keycloak_account_deleted: true },
+      processName: "pic-delete",
+    });
+    await studentPicClient.delete(req.auth!, profile.id);
+    return res.status(204).end();
   })
 );

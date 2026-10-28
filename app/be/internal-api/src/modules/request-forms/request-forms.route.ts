@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { Op, type Transaction } from "sequelize";
 import { Router } from "express";
-import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
+import { ACCESS_ACTIONS, ROLES, type ActiveRoleAuthContext } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, PicAccountAssignment, PicProfile, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerProfile } from "../../database/models";
+import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerProfile } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -14,6 +14,7 @@ import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
 import Joi from "joi";
 import { validateBody } from "../../utils/joi-validation";
 import { trainingDates } from "./training-dates";
+import { studentPicClient } from "../../integrations/student-api/student-api.client";
 
 export const requestFormsRouter = Router();
 export const requestFormReviewRouter = Router();
@@ -101,20 +102,19 @@ async function deriveTrainingTitle(courses: CourseInput[]) {
   return title;
 }
 
-async function validateAccountAndPic(accountId: string, picId: string, salesSubject: string) {
+async function validateAccountAndPic(accountId: string, picId: string, salesSubject: string, actor: ActiveRoleAuthContext) {
   const account = await Account.findOne({ where: { id: accountId, status: "ACTIVE", account_type: "CORPORATE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] });
-  const pic = await PicProfile.findOne({ where: { id: picId, status: "ACTIVE" }, include: [{ model: PicAccountAssignment, as: "accountAssignments", where: { account_id: accountId, ended_at: null }, required: true }] });
-  if (!account || !pic) throw new AppError(400, "Choose an active Account assigned to you and an active PIC belonging to that Account");
+  const pic = await studentPicClient.get(actor, picId);
+  if (!account || !pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === accountId && !assignment.ended_at)) throw new AppError(400, "Choose an active Account assigned to you and an active PIC belonging to that Account");
 }
 
-async function approvedQuotation(quotationId: string, salesSubject: string) {
+async function approvedQuotation(quotationId: string, salesSubject: string, actor: ActiveRoleAuthContext) {
   const quote = await Quotation.findOne({ where: { id: quotationId, created_by_subject: salesSubject, status: "APPROVED", deleted_at: null }, include: [
     { model: Account, as: "account", where: { status: "ACTIVE", account_type: "CORPORATE" }, required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] },
-    { model: PicProfile, as: "pic", where: { status: "ACTIVE" }, required: true },
   ] });
   if (!quote) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
-  const picAssignment = await PicAccountAssignment.findOne({ where: { account_id: quote.account_id, pic_profile_id: quote.pic_profile_id, ended_at: null } });
-  if (!picAssignment) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
+  const pic = quote.pic_profile_id ? await studentPicClient.get(actor, quote.pic_profile_id) : null;
+  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === quote.account_id && !assignment.ended_at)) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
   const lines = await QuotationOrder.findAll({ where: { quotation_id: quotationId }, include: [{ model: Course, as: "course", attributes: ["name", "duration_minutes"], required: true }] });
   if (!lines.length) throw new AppError(409, "The approved Quotation has no Course details");
   return { quote, lines: lines.map((line) => ({ course_id: line.course_id, amount_student: line.amount_student, class_type: line.class_type, course_name: (line.get("course") as Course).name, duration_minutes: (line.get("course") as Course).duration_minutes })) };
@@ -125,18 +125,19 @@ async function validateCourses(courses: CourseInput[], allowInactive = false) {
   if (rows.length !== courses.length) throw new AppError(400, "One or more Courses are inactive or unavailable");
 }
 
-async function readForm(id: string, subject?: string) {
+async function readForm(id: string, actor: ActiveRoleAuthContext, subject?: string) {
   const form = await RequestForm.findOne({ where: { id, ...(subject ? { created_by_subject: subject } : {}) }, include: [
     { model: Account, as: "account", required: false, include: [{ model: Industry, as: "industry", required: false }] },
-    { model: PicProfile, as: "pic", required: false },
     { model: Quotation, as: "quotation", required: false },
     { model: RequestFormCourse, as: "courses", required: false, include: [{ model: Course, as: "course", required: true }, { model: RequestFormSession, as: "sessions", required: false }] },
     { model: RequestFormAttachment, as: "attachments", required: false },
   ] });
   if (!form) throw new AppError(404, "Request Form not found");
-  const [training] = await Promise.all([Training.findOne({ where: { request_form_id: id }, attributes: ["id"], order: [["created_at", "DESC"]], raw: true })]);
+  const [training, pic] = await Promise.all([
+    Training.findOne({ where: { request_form_id: id }, attributes: ["id"], order: [["created_at", "DESC"]], raw: true }),
+    form.pic_profile_id ? studentPicClient.get(actor, form.pic_profile_id) : Promise.resolve(null),
+  ]);
   const account = form.get("account") as Account | null;
-  const pic = form.get("pic") as PicProfile | null;
   const quotation = form.get("quotation") as Quotation | null;
   const accountIndustry = account?.get("industry") as Industry | null;
   const item = { ...form.toJSON(), account_name: account?.name ?? null, industry_name: accountIndustry?.name ?? null, pic_name: pic?.name ?? null, pic_email: pic?.email ?? null, quotation_code: quotation?.quotation_code ?? null, quotation_class_type: quotation?.class_type ?? null, training_id: training?.id ?? null };
@@ -229,22 +230,25 @@ requestFormsRouter.get("/options", authorizeCapability("REQUEST_FORM", ACCESS_AC
     Course.findAll({ where: { status: "ACTIVE" }, attributes: ["id", "name", "duration_minutes"], order: [["name", "ASC"]], raw: true }),
     Quotation.findAll({ where: { created_by_subject: req.auth!.userId, status: "APPROVED", deleted_at: null }, include: [
       { model: Account, as: "account", where: { status: "ACTIVE", account_type: "CORPORATE" }, attributes: ["name"], required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] },
-      { model: PicProfile, as: "pic", where: { status: "ACTIVE" }, attributes: ["name"], required: true },
     ], order: [["updated_at", "DESC"]] }),
   ]);
   const allowedTypes = formType === "REGISTRATION" ? ["PUBLIC", "ONLINE_PUBLIC"] : ["PRIVATE", "INHOUSE", "ONLINE_PRIVATE"];
-  return res.json({ accounts, courses, quotations: allQuotations.filter((quotation) => allowedTypes.includes(quotation.class_type)).map((quotation) => ({ id: quotation.id, quotation_code: quotation.quotation_code, class_type: quotation.class_type, account_name: (quotation.get("account") as Account).name, pic_name: (quotation.get("pic") as PicProfile).name })) });
+  const quotations = allQuotations.filter((quotation) => allowedTypes.includes(quotation.class_type));
+  const pics = quotations.length ? (await studentPicClient.list(req.auth!, { profileIds: [...new Set(quotations.map((quotation) => quotation.pic_profile_id).filter((id): id is string => Boolean(id)))], status: "ACTIVE" })).items : [];
+  return res.json({ accounts, courses, quotations: quotations.map((quotation) => ({ id: quotation.id, quotation_code: quotation.quotation_code, class_type: quotation.class_type, account_name: (quotation.get("account") as Account).name, pic_name: pics.find((pic) => pic.id === quotation.pic_profile_id)?.name ?? null })) });
 }));
 
 requestFormsRouter.get("/accounts/:accountId/pics", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
   const account = await Account.findOne({ where: { id: req.params.accountId, status: "ACTIVE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] });
   if (!account) throw new AppError(404, "Account not found");
-  const items = await PicProfile.findAll({ where: { status: "ACTIVE" }, attributes: ["id", "name", "email"], include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: [], where: { account_id: req.params.accountId, ended_at: null }, required: true }], order: [["name", "ASC"]], raw: true });
+  const items = (await studentPicClient.list(req.auth!, { accountId: req.params.accountId, status: "ACTIVE" })).items
+    .filter((pic) => pic.assignments.some((assignment) => !assignment.ended_at))
+    .map(({ id, name, email }) => ({ id, name, email }));
   return res.json({ items });
 }));
 
 requestFormsRouter.get("/quotations/:quotationId/preview", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
-  const { quote, lines } = await approvedQuotation(req.params.quotationId, req.auth!.userId);
+  const { quote, lines } = await approvedQuotation(req.params.quotationId, req.auth!.userId, req.auth!);
   const formType = req.query.formType ?? "REQUEST";
   const compatible = formType === "REGISTRATION"
     ? ["PUBLIC", "ONLINE_PUBLIC"].includes(quote.class_type)
@@ -277,7 +281,6 @@ requestFormsRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.V
   ] });
   const include: any[] = [
     { model: Account, as: "account", attributes: ["name"], required: true },
-    { model: PicProfile, as: "pic", attributes: ["name"], required: true },
     { model: Quotation, as: "quotation", attributes: ["quotation_code"], required: false },
     { model: RequestFormCourse, as: "courses", required: false, include: [{ model: Course, as: "course", attributes: ["name"], required: false }, { model: RequestFormSession, as: "sessions", attributes: ["requested_date"], required: false }] },
     { model: RequestFormAttachment, as: "attachments", attributes: ["id"], required: false },
@@ -285,22 +288,23 @@ requestFormsRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.V
   const { rows, count } = await RequestForm.findAndCountAll({ where, include, distinct: true, order: [["updated_at", "DESC"]], limit: pageSize, offset: (page - 1) * pageSize });
   const ids = rows.map((row) => row.id);
   const trainings = ids.length ? await Training.findAll({ where: { request_form_id: { [Op.in]: ids } }, attributes: ["id", "request_form_id"], order: [["created_at", "DESC"]], raw: true }) : [];
+  const picRows = rows.length ? (await studentPicClient.list(req.auth!, { profileIds: [...new Set(rows.map((row) => row.pic_profile_id).filter((id): id is string => Boolean(id)))], status: "ALL" })).items : [];
   const items = rows.map((row) => {
-    const account = row.get("account") as Account; const pic = row.get("pic") as PicProfile; const quotation = row.get("quotation") as Quotation | null;
+    const account = row.get("account") as Account; const pic = picRows.find((candidate) => candidate.id === row.pic_profile_id); const quotation = row.get("quotation") as Quotation | null;
     const courses = row.get("courses") as RequestFormCourse[]; const attachments = row.get("attachments") as RequestFormAttachment[];
     const names = courses.map((entry) => (entry.get("course") as Course | undefined)?.name).filter(Boolean);
     const dates = courses.flatMap((entry) => (entry.get("sessions") as RequestFormSession[] | undefined) ?? []).map((session) => String(session.requested_date).slice(0, 10));
-    return { id: row.id, request_form_number: row.request_form_number, form_type: row.get("form_type"), quotation_id: row.quotation_id, status: row.status, po_reference: row.po_reference, review_note: row.review_note, created_at: row.created_at, updated_at: row.updated_at, account_name: account.name, pic_name: pic.name, quotation_code: quotation?.quotation_code ?? null, training_id: trainings.find((training) => training.request_form_id === row.id)?.id ?? null, course_count: courses.length, attachment_count: attachments.length, requested_course: names.join(", "), delivery_type: courses.map((entry) => entry.delivery_type).sort()[0] ?? null, students: courses.reduce((sum, entry) => sum + Number(entry.amount_student), 0) || null, requested_dates: dates.join(",") || null };
+    return { id: row.id, request_form_number: row.request_form_number, form_type: row.get("form_type"), quotation_id: row.quotation_id, status: row.status, po_reference: row.po_reference, review_note: row.review_note, created_at: row.created_at, updated_at: row.updated_at, account_name: account.name, pic_name: pic?.name ?? null, quotation_code: quotation?.quotation_code ?? null, training_id: trainings.find((training) => training.request_form_id === row.id)?.id ?? null, course_count: courses.length, attachment_count: attachments.length, requested_course: names.join(", "), delivery_type: courses.map((entry) => entry.delivery_type).sort()[0] ?? null, students: courses.reduce((sum, entry) => sum + Number(entry.amount_student), 0) || null, requested_dates: dates.join(",") || null };
   });
   return res.json({ items, page, pageSize, total: count });
 }));
 
-requestFormsRouter.get("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => res.json(await readForm(req.params.id, req.auth!.userId))));
+requestFormsRouter.get("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => res.json(await readForm(req.params.id, req.auth!, req.auth!.userId))));
 
 requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
   const input = parseInput(req.body); let accountId = input.accountId; let picId = input.picId; let courseInputs = input.courses;
   if (input.quotationId) {
-    const { quote, lines } = await approvedQuotation(input.quotationId, req.auth!.userId);
+    const { quote, lines } = await approvedQuotation(input.quotationId, req.auth!.userId, req.auth!);
     const actualType = quote.class_type === "PUBLIC" || quote.class_type === "ONLINE_PUBLIC" ? "REGISTRATION" : "REQUEST";
     if (input.formType !== actualType) throw new AppError(400, "The selected Quotation belongs to a different form type");
     const deliveryType = quote.class_type as DeliveryType;
@@ -313,7 +317,7 @@ requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.
     });
     if (input.courses.some((course) => !lines.some((line) => line.course_id === course.courseId))) throw new AppError(400, "Request Form Courses must come from the selected Approved Quotation");
   } else {
-    await validateAccountAndPic(accountId, picId, req.auth!.userId);
+    await validateAccountAndPic(accountId, picId, req.auth!.userId, req.auth!);
     const allowed = input.formType === "REGISTRATION" ? ["PUBLIC", "ONLINE_PUBLIC"] : ["PRIVATE", "INHOUSE", "ONLINE_PRIVATE"];
     if (courseInputs.some((course) => !allowed.includes(course.deliveryType))) throw new AppError(400, "Course type does not match the selected Request/Registration Form menu");
   }
@@ -326,7 +330,7 @@ requestFormsRouter.post("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.
     await saveCourses(id, courseInputs, transaction);
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "REQUEST_FORM", objectId: id, after: { status: "DRAFT", quotation_id: input.quotationId, account_id: accountId, pic_profile_id: picId, course_count: courseInputs.length }, processName: "request-form-create" }, transaction);
   });
-  return res.status(201).json(await readForm(id, req.auth!.userId));
+  return res.status(201).json(await readForm(id, req.auth!, req.auth!.userId));
 }));
 
 requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
@@ -337,13 +341,13 @@ requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTION
   let accountId = input.accountId; let picId = input.picId; let courseInputs = input.courses;
   if (old.quotation_id) {
     if (input.quotationId !== old.quotation_id) throw new AppError(400, "The source Approved Quotation cannot be changed");
-    const { quote, lines } = await approvedQuotation(old.quotation_id, req.auth!.userId);
+    const { quote, lines } = await approvedQuotation(old.quotation_id, req.auth!.userId, req.auth!);
     if (input.courses.some((course) => !lines.some((row) => row.course_id === course.courseId))) throw new AppError(400, "Only Courses included in the source Approved Quotation can be selected");
     if (!old.account_id || !old.pic_profile_id) throw new AppError(409, "The Request Form has no linked Account or PIC");
     accountId = old.account_id; picId = old.pic_profile_id;
     courseInputs = input.courses.map((course) => { const original = lines.find((row) => row.course_id === course.courseId)!; return { ...course, amountStudent: Number(original.amount_student), deliveryType: quote.class_type as DeliveryType }; });
   } else {
-    await validateAccountAndPic(accountId, picId, req.auth!.userId);
+    await validateAccountAndPic(accountId, picId, req.auth!.userId, req.auth!);
     const allowed = input.formType === "REGISTRATION" ? ["PUBLIC", "ONLINE_PUBLIC"] : ["PRIVATE", "INHOUSE", "ONLINE_PRIVATE"];
     if (courseInputs.some((course) => !allowed.includes(course.deliveryType))) throw new AppError(400, "Course type does not match the selected Request/Registration Form menu");
   }
@@ -362,7 +366,7 @@ requestFormsRouter.put("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTION
     if (Object.keys(before).length) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "REQUEST_FORM", objectId: old.id, before, after, processName: "request-form-edit" }, transaction);
     await transaction.commit();
   } catch (error) { await transaction.rollback(); throw error; }
-  return res.json(await readForm(old.id, req.auth!.userId));
+  return res.json(await readForm(old.id, req.auth!, req.auth!.userId));
 }));
 
 requestFormsRouter.post("/:id/attachments", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
@@ -395,7 +399,7 @@ requestFormsRouter.get("/:id/attachments/:attachmentId", authorizeCapability("RE
 }));
 
 requestFormsRouter.post("/:id/submit", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const detail = await readForm(req.params.id, req.auth!.userId); const item = detail.item as RequestFormRow;
+  const detail = await readForm(req.params.id, req.auth!, req.auth!.userId); const item = detail.item as RequestFormRow;
   if (item.status !== "DRAFT" && item.status !== "REVISION") throw new AppError(409, "Only a Draft or returned Revision Request Form can be submitted");
   if (!detail.attachments.length) throw new AppError(400, "Upload at least one RF Attachment before submitting to Admin (QPD)");
   if (!detail.courses.length || detail.courses.some((course) => !(course.sessions as unknown[]).length)) throw new AppError(400, "Add at least one scheduled session for every Course before submitting");
@@ -446,20 +450,20 @@ requestFormReviewRouter.get("/trainings/:id/detail", authorizeCapability("REQUES
   const training = await Training.findByPk(req.params.id, { include: [
     { model: RequestForm, as: "requestForm", required: true },
     { model: Account, as: "account", required: true, include: [{ model: Industry, as: "industry", required: false }] },
-    { model: Course, as: "course", required: true }, { model: PicProfile, as: "pic", required: false },
+    { model: Course, as: "course", required: true },
     { model: TrainingSession, as: "sessions", required: false, include: [{ model: BookingRoom, as: "roomBookings", required: false, include: [{ model: Room, as: "room", required: false }] }] },
     { model: TrainingTrainerAssignment, as: "trainerAssignments", where: { ended_at: null }, required: false, include: [{ model: TrainerProfile, as: "trainerProfile", required: true }] },
   ] });
   if (!training) throw new AppError(404, "Training not found");
-  const form = await readForm(training.request_form_id);
+  const form = await readForm(training.request_form_id, req.auth!);
   const account = training.get("account") as Account; const industry = account.get("industry") as Industry | null;
-  const course = training.get("course") as Course; const pic = training.get("pic") as PicProfile | null;
+  const course = training.get("course") as Course;
   const trainerAssignment = (training.get("trainerAssignments") as TrainingTrainerAssignment[])[0];
   const trainer = trainerAssignment?.get("trainerProfile") as TrainerProfile | undefined;
   const sessionRows = training.get("sessions") as TrainingSession[];
   const booking = sessionRows.flatMap((session) => session.get("roomBookings") as BookingRoom[]).map((row) => row.get("room") as Room | null).find(Boolean);
   const sessions = sessionRows.sort((a, b) => a.session_number - b.session_number).map(({ id, session_number, starts_at, ends_at, class_location }) => ({ id, session_number, starts_at, ends_at, class_location }));
-  return res.json({ training: { ...training.toJSON(), training_dates: trainingDates(sessions.map((session) => session.starts_at)), course_name: course.name, account_name: account.name, industry_id: account.industry_id, industry_name: industry?.name ?? null, pic_name: pic?.name ?? null, pic_email: pic?.email ?? null, trainer_name: trainer?.name ?? null, room_id: booking?.id ?? null, room_name: booking?.name ?? null, room_capacity: booking?.capacity ?? null }, form, sessions });
+  return res.json({ training: { ...training.toJSON(), training_dates: trainingDates(sessions.map((session) => session.starts_at)), course_name: course.name, account_name: account.name, industry_id: account.industry_id, industry_name: industry?.name ?? null, pic_name: form.item.pic_name, pic_email: form.item.pic_email, trainer_name: trainer?.name ?? null, room_id: booking?.id ?? null, room_name: booking?.name ?? null, room_capacity: booking?.capacity ?? null }, form, sessions });
 }));
 requestFormReviewRouter.get("/trainings/:id/participants", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const exists = await Training.findByPk(req.params.id, { attributes: ["id"] });
@@ -529,7 +533,6 @@ requestFormReviewRouter.get("/trainings", authorizeCapability("REQUEST_FORM", AC
   const { rows: trainings, count } = await Training.findAndCountAll({ where, include: [
     { model: RequestForm, as: "requestForm", attributes: ["request_form_number"], required: true },
     { model: Account, as: "account", attributes: ["name"], required: true }, { model: Course, as: "course", attributes: ["name"], required: true },
-    { model: PicProfile, as: "pic", attributes: ["name"], required: false },
     ...(sessionDate ? [{ model: TrainingSession, as: "sessions", attributes: ["id"], where: dateRange, required: true }] : []),
   ], distinct: true, order: [["created_at", "DESC"]], limit: pageSize, offset: (page - 1) * pageSize });
   const ids = trainings.map((training) => training.id);
@@ -537,8 +540,9 @@ requestFormReviewRouter.get("/trainings", authorizeCapability("REQUEST_FORM", AC
     TrainingSession.findAll({ where: { training_id: { [Op.in]: ids } }, attributes: ["id", "training_id", "starts_at"], include: [{ model: BookingRoom, as: "roomBookings", attributes: ["room_id"], include: [{ model: Room, as: "room", attributes: ["name"], required: false }], required: false }] }),
     TrainingTrainerAssignment.findAll({ where: { training_id: { [Op.in]: ids }, ended_at: null }, include: [{ model: TrainerProfile, as: "trainerProfile", attributes: ["name"], required: true }], order: [["assigned_at", "DESC"]] }),
   ]) : [[], []];
+  const picRows = trainings.length ? (await studentPicClient.list(req.auth!, { profileIds: [...new Set(trainings.map((training) => training.pic_profile_id).filter((id): id is string => Boolean(id)))], status: "ALL" })).items : [];
   const items = trainings.map((training) => {
-    const requestForm = training.get("requestForm") as RequestForm; const account = training.get("account") as Account; const course = training.get("course") as Course; const pic = training.get("pic") as PicProfile | null;
+    const requestForm = training.get("requestForm") as RequestForm; const account = training.get("account") as Account; const course = training.get("course") as Course; const pic = picRows.find((candidate) => candidate.id === training.pic_profile_id);
     const ownSessions = sessions.filter((session) => session.training_id === training.id);
     const assignment = assignments.find((row) => row.training_id === training.id);
     const roomBooking = ownSessions.flatMap((session) => session.get("roomBookings") as BookingRoom[]).find(Boolean);
@@ -559,7 +563,7 @@ requestFormReviewRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTI
   if (accountId !== "ALL") { if (!isUuid(accountId)) throw new AppError(400, "Invalid Account filter"); where.account_id = accountId; }
   if (search) Object.assign(where, { [Op.or]: [{ "$account.name$": { [Op.iLike]: escapeLike(search) } }, { "$quotation.quotation_code$": { [Op.iLike]: escapeLike(search) } }, { "$courses.course.name$": { [Op.iLike]: escapeLike(search) } }] });
   const { rows, count } = await RequestForm.findAndCountAll({ where, include: [
-    { model: Account, as: "account", attributes: ["id", "name"], required: true }, { model: PicProfile, as: "pic", attributes: ["name"], required: true },
+    { model: Account, as: "account", attributes: ["id", "name"], required: true },
     { model: Quotation, as: "quotation", attributes: ["quotation_code"], required: false },
     { model: RequestFormCourse, as: "courses", required: false, include: [{ model: Course, as: "course", attributes: ["name"], required: false }, { model: RequestFormSession, as: "sessions", attributes: ["requested_date"], required: false }] },
   ], distinct: true, order: [["updated_at", "ASC"]], limit: pageSize, offset: (page - 1) * pageSize });
@@ -570,17 +574,18 @@ requestFormReviewRouter.get("/", authorizeCapability("REQUEST_FORM", ACCESS_ACTI
   ]);
   const accountIds = [...new Set(accountRefs.map((row) => row.account_id).filter((id): id is string => Boolean(id)))];
   const accounts = accountIds.length ? await Account.findAll({ where: { id: { [Op.in]: accountIds } }, attributes: ["id", "name"], order: [["name", "ASC"]], raw: true }) : [];
+  const picRows = rows.length ? (await studentPicClient.list(req.auth!, { profileIds: [...new Set(rows.map((row) => row.pic_profile_id).filter((id): id is string => Boolean(id)))], status: "ALL" })).items : [];
   const items = rows.map((row) => {
-    const account = row.get("account") as Account; const pic = row.get("pic") as PicProfile; const quotation = row.get("quotation") as Quotation | null;
+    const account = row.get("account") as Account; const pic = picRows.find((candidate) => candidate.id === row.pic_profile_id); const quotation = row.get("quotation") as Quotation | null;
     const courses = row.get("courses") as RequestFormCourse[]; const firstCourse = courses[0]; const course = firstCourse?.get("course") as Course | undefined;
     const dates = courses.flatMap((entry) => entry.get("sessions") as RequestFormSession[]).map((session) => String(session.requested_date).slice(0, 10));
-    return { id: row.id, request_form_number: row.request_form_number, form_type: row.form_type, status: row.status, po_reference: row.po_reference, review_note: row.review_note, created_at: row.created_at, updated_at: row.updated_at, account_id: account.id, account_name: account.name, pic_name: pic.name, quotation_code: quotation?.quotation_code ?? null, training_id: trainings.find((training) => training.request_form_id === row.id)?.id ?? null, course_count: courses.length, requested_course: course?.name ?? null, delivery_type: firstCourse?.delivery_type ?? null, students: firstCourse?.amount_student ?? null, requested_dates: dates.join(",") || null };
+    return { id: row.id, request_form_number: row.request_form_number, form_type: row.form_type, status: row.status, po_reference: row.po_reference, review_note: row.review_note, created_at: row.created_at, updated_at: row.updated_at, account_id: account.id, account_name: account.name, pic_name: pic?.name ?? null, quotation_code: quotation?.quotation_code ?? null, training_id: trainings.find((training) => training.request_form_id === row.id)?.id ?? null, course_count: courses.length, requested_course: course?.name ?? null, delivery_type: firstCourse?.delivery_type ?? null, students: firstCourse?.amount_student ?? null, requested_dates: dates.join(",") || null };
   });
   return res.json({ items, accounts, page, pageSize, total: count });
 }));
-requestFormReviewRouter.get("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => res.json(await readForm(req.params.id))));
+requestFormReviewRouter.get("/:id", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => res.json(await readForm(req.params.id, req.auth!))));
 requestFormReviewRouter.get("/:id/approval-options", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
-  const form = await readForm(req.params.id);
+  const form = await readForm(req.params.id, req.auth!);
   if (form.item.status !== "WAITING") throw new AppError(409, "Only a Waiting Request Form can be approved");
   if (form.courses.length !== 1) throw new AppError(409, "Approval requires exactly one Course in the Request Form");
   const dates = (form.courses[0].sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
@@ -600,7 +605,7 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const endTime = req.body?.endTime;
   const validTime = (value: unknown): value is string => typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!isUuid(trainerId) || !Number.isFinite(baseFee) || baseFee < 0 || (roomId !== null && !isUuid(roomId)) || !validTime(startTime) || !validTime(endTime) || endTime <= startTime) throw new AppError(400, "Choose a Trainer, valid session times, enter a valid Base Fee, and choose a Room when required");
-  const form = await readForm(req.params.id);
+  const form = await readForm(req.params.id, req.auth!);
   if (form.item.status !== "WAITING") throw new AppError(404, "Waiting Request Form not found");
   if (form.courses.length !== 1) throw new AppError(409, "Approval requires exactly one Course in the Request Form");
   const course = form.courses[0];

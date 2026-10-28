@@ -1,8 +1,6 @@
 export { Account } from "./account.model";
 export { AccountIndustryHistory } from "./account-industry-history.model";
 export { Participant } from "./participant.model";
-export { PicAccountAssignment } from "./pic-account-assignment.model";
-export { PicProfile } from "./pic-profile.model";
 export { StudentMasterProfile } from "./student-master-profile.model";
 export { InAppNotification } from "./in-app-notification.model";
 export { SalesAccountAssignment } from "./sales-account-assignment.model";

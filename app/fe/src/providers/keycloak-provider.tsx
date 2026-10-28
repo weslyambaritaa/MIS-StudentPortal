@@ -162,8 +162,9 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     const syncTrainerLogin = async () => {
       try {
         await keycloak.updateToken(30);
-        if (!keycloak.token || cancelled) return;
-        await apiRequest("/api/v1/external/trainers/portal-login", keycloak.token, ROLES.TRAINER, { method: "POST" });
+        const refreshedRoles = getAvailableBusinessRoles(keycloak.realmAccess?.roles ?? []);
+        if (!keycloak.token || cancelled || !refreshedRoles.includes(ROLES.TRAINER)) return;
+        await apiRequest("/api/v1/internal/trainers/portal-login", keycloak.token, ROLES.TRAINER, { method: "POST" });
       } catch (error) {
         console.error("Could not record successful Trainer portal login", error);
       }

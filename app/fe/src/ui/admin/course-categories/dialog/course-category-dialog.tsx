@@ -36,7 +36,7 @@ export function CourseCategoryDialog({ value, busy, onClose, onSubmit }: {
         </label>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !name.trim()}>{busy ? "SavingÃ¢â‚¬Â¦" : value.id ? "Save Changes" : "Add Category"}</Button>
+          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !name.trim()}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Category"}</Button>
         </footer>
       </form>
     </div>

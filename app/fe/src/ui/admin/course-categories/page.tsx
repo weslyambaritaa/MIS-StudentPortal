@@ -112,7 +112,7 @@ export default function CourseCategoryPage() {
                   }} /></div></td>
                   </tr>;
                 })}
-                {loading && <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-500">Loading Course CategoriesÃ¢â‚¬Â¦</td></tr>}
+                {loading && <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-500">Loading Course Categories…</td></tr>}
               </tbody>
             </table>
           </div>
@@ -120,7 +120,7 @@ export default function CourseCategoryPage() {
         </section>
       </div>
       {editor && <CourseCategoryDialog value={editor} busy={busy} onClose={() => setEditor(null)} onSubmit={save} />}
-      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course Category Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
+      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course Category “${deleting?.name ?? ""}” will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
     </AppShell>
   );
 }

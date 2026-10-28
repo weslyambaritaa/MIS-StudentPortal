@@ -106,11 +106,11 @@ export default function AccessLogsPage() {
       <form onSubmit={submitFilters} className="mt-6 grid gap-3 rounded-3xl border border-rose-50 bg-white p-5 md:grid-cols-3 xl:grid-cols-6">
         <label className="text-sm text-gray-600">Penyimpanan
           <select value={filters.storage} onChange={(event) => setFilters({ ...filters, storage: event.target.value as Filters["storage"] })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800">
-            <option value="active">Aktif (Ã¢â€°Â¤ 12 bulan)</option><option value="archive">Arsip (&gt; 12 bulan)</option>
+            <option value="active">Aktif (≤ 12 bulan)</option><option value="archive">Arsip (&gt; 12 bulan)</option>
           </select>
         </label>
         <label className="text-sm text-gray-600">Jenis kejadian
-          <input value={filters.eventType} onChange={(event) => setFilters({ ...filters, eventType: event.target.value })} maxLength={100} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" placeholder="LOGIN, UPDATEÃ¢â‚¬Â¦" />
+          <input value={filters.eventType} onChange={(event) => setFilters({ ...filters, eventType: event.target.value })} maxLength={100} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" placeholder="LOGIN, UPDATE…" />
         </label>
         <label className="text-sm text-gray-600">Subjek pelaku
           <input value={filters.actorSubject} onChange={(event) => setFilters({ ...filters, actorSubject: event.target.value })} maxLength={255} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" placeholder="Keycloak subject" />
@@ -134,7 +134,7 @@ export default function AccessLogsPage() {
       {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <section className="mt-5 overflow-x-auto rounded-3xl border border-rose-50 bg-white">
         <div className="flex items-center justify-between px-5 py-4 text-sm text-zinc-600">
-          <span>{loading ? "MemuatÃ¢â‚¬Â¦" : `${result.total} kejadian`}</span>
+          <span>{loading ? "Memuat…" : `${result.total} kejadian`}</span>
           <span>{appliedFilters.storage === "active" ? "Database aktif" : "Tabel arsip"}</span>
         </div>
         <table className="w-full min-w-[950px] border-collapse text-left text-sm">
@@ -146,9 +146,9 @@ export default function AccessLogsPage() {
             {result.items.map((row) => (
               <tr key={row.id} className="border-t border-rose-50 text-zinc-700">
                 <td className="whitespace-nowrap px-4 py-3">{new Date(row.occurred_at).toLocaleString("id-ID")}</td>
-                <td className="max-w-48 truncate px-4 py-3" title={row.actor_subject ?? "-"}>{row.actor_subject ?? "-"}<span className="block text-xs text-zinc-400">{row.actor_type}{row.active_role ? ` Ã‚Â· ${row.active_role}` : ""}</span></td>
+                <td className="max-w-48 truncate px-4 py-3" title={row.actor_subject ?? "-"}>{row.actor_subject ?? "-"}<span className="block text-xs text-zinc-400">{row.actor_type}{row.active_role ? ` · ${row.active_role}` : ""}</span></td>
                 <td className="px-4 py-3 font-medium">{row.event_type}</td>
-                <td className="max-w-48 truncate px-4 py-3">{row.object_type ?? "-"}{row.object_id ? ` Ã‚Â· ${row.object_id}` : ""}</td>
+                <td className="max-w-48 truncate px-4 py-3">{row.object_type ?? "-"}{row.object_id ? ` · ${row.object_id}` : ""}</td>
                 <td className="px-4 py-3">{row.ip_address ?? "-"}</td>
                 <td className="px-4 py-3">{row.source_system}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${row.outcome === "SUCCESS" ? "bg-green-100 text-green-700" : row.outcome === "FAILURE" ? "bg-red-100 text-red-700" : "bg-neutral-100 text-zinc-600"}`}>{row.outcome}</span></td>

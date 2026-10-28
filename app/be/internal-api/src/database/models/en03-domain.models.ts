@@ -4,7 +4,6 @@ import { Account } from "./account.model";
 import { Participant } from "./participant.model";
 import { Training } from "./training.model";
 import { TrainingSession } from "./training-session.model";
-import { PicProfile } from "./pic-profile.model";
 
 const timestamps = { timestamps: true, createdAt: "created_at", updatedAt: "updated_at" };
 const id = { type: DataTypes.UUID, primaryKey: true, allowNull: false, defaultValue: DataTypes.UUIDV4 };
@@ -140,7 +139,6 @@ Syllabus.hasMany(Training, { foreignKey: "syllabus_id", as: "trainings" }); Trai
 Course.hasMany(Training, { foreignKey: "course_id", as: "trainings" }); Training.belongsTo(Course, { foreignKey: "course_id", as: "course" });
 Course.hasMany(QuotationOrder, { foreignKey: "course_id", as: "quotationOrders" }); QuotationOrder.belongsTo(Course, { foreignKey: "course_id", as: "course" });
 Account.hasMany(Quotation, { foreignKey: "account_id", as: "quotations" }); Quotation.belongsTo(Account, { foreignKey: "account_id", as: "account" });
-Quotation.belongsTo(PicProfile, { foreignKey: "pic_profile_id", as: "pic" });
 Quotation.hasMany(QuotationOrder, { foreignKey: "quotation_id", as: "orders" }); QuotationOrder.belongsTo(Quotation, { foreignKey: "quotation_id", as: "quotation" });
 Quotation.hasMany(QuotationDocument, { foreignKey: "quotation_id", as: "documents" }); QuotationDocument.belongsTo(Quotation, { foreignKey: "quotation_id", as: "quotation" });
 Quotation.hasMany(RequestForm, { foreignKey: "quotation_id", as: "requestForms" }); RequestForm.belongsTo(Quotation, { foreignKey: "quotation_id", as: "quotation" });
@@ -149,7 +147,6 @@ RequestFormCourse.belongsTo(Course, { foreignKey: "course_id", as: "course" });
 RequestFormCourse.hasMany(RequestFormSession, { foreignKey: "request_form_course_id", as: "sessions" }); RequestFormSession.belongsTo(RequestFormCourse, { foreignKey: "request_form_course_id", as: "requestFormCourse" });
 RequestForm.hasMany(RequestFormAttachment, { foreignKey: "request_form_id", as: "attachments" }); RequestFormAttachment.belongsTo(RequestForm, { foreignKey: "request_form_id", as: "requestForm" });
 RequestForm.belongsTo(Account, { foreignKey: "account_id", as: "account" });
-RequestForm.belongsTo(PicProfile, { foreignKey: "pic_profile_id", as: "pic" });
 RequestForm.hasMany(Training, { foreignKey: "request_form_id", as: "trainings" }); Training.belongsTo(RequestForm, { foreignKey: "request_form_id", as: "requestForm" });
 Participant.hasMany(Attendance, { foreignKey: "participant_id", as: "attendanceRecords" }); Attendance.belongsTo(Participant, { foreignKey: "participant_id", as: "participant" });
 TrainingSession.hasMany(Attendance, { foreignKey: "session_id", as: "attendanceRecords" }); Attendance.belongsTo(TrainingSession, { foreignKey: "session_id", as: "session" });
