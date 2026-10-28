@@ -2,9 +2,9 @@
 
 import { Undo2, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
-import { Modal } from "@/components/ui/modal";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
+import { Modal } from "@mis/ui/modal";
 
 type WithdrawConfirmationProps = {
   open: boolean;

@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type CourseCategoryFormValue = { id?: string; category_code?: string; name: string };
 
@@ -36,7 +36,7 @@ export function CourseCategoryDialog({ value, busy, onClose, onSubmit }: {
         </label>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !name.trim()}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Category"}</Button>
+          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !name.trim()}>{busy ? "SavingÃ¢â‚¬Â¦" : value.id ? "Save Changes" : "Add Category"}</Button>
         </footer>
       </form>
     </div>

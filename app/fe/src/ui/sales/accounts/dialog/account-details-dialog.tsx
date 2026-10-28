@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Building2, ChevronDown, ChevronRight, Pencil, Trash2, UserRound, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 import type { AccountValue } from "./account-dialog";
 
 export type AccountStudent = { subject: string; name: string; ongoingTrainings: string[] };

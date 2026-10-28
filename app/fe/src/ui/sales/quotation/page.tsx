@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Modal } from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Modal } from "@mis/ui/modal";
+import { Pagination } from "@mis/ui/pagination";
+import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import {
   QuotationDetailsDialog,
@@ -443,7 +443,7 @@ export default function QuotationPage() {
             </p>
           )}
           {loading ? (
-            <div className="py-10 text-center text-zinc-500">Loading quotations…</div>
+            <div className="py-10 text-center text-zinc-500">Loading quotationsÃ¢â‚¬Â¦</div>
           ) : (
             <DataTable
               columns={columns}
@@ -552,7 +552,7 @@ export default function QuotationPage() {
                   <option value="">Pick an active PIC</option>
                   {pics.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} · {p.email}
+                      {p.name} Ã‚Â· {p.email}
                     </option>
                   ))}
                 </select>
@@ -729,7 +729,7 @@ export default function QuotationPage() {
       <DeleteConfirmationModal
         open={Boolean(deleting)}
         itemName={deleting?.quotation_code ?? ""}
-        description={`Quotation “${deleting?.quotation_code ?? ""}” will be removed from the active list. Its sent PDF and audit history are retained.`}
+        description={`Quotation Ã¢â‚¬Å“${deleting?.quotation_code ?? ""}Ã¢â‚¬Â will be removed from the active list. Its sent PDF and audit history are retained.`}
         onClose={() => setDeleting(null)}
         onConfirm={() => void remove()}
         loading={busy}

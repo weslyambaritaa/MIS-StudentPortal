@@ -19,7 +19,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const token = authorization.slice("Bearer ".length);
     const { payload } = await jwtVerify(token, keycloakJwks, {
       issuer: env.keycloakIssuer,
-      audience: env.keycloakAudience,
+      audience: env.keycloakAudiences,
     });
 
     const typed = payload as KeycloakJwtPayload;

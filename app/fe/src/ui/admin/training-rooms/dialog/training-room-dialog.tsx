@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus, Trash2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type RoomFacility = { name: string; amount: string };
 export type TrainingRoomFormValue = { id?: string; room_code?: string; name: string; capacity: number | string; facilities: RoomFacility[]; status: "ACTIVE" | "INACTIVE" };
@@ -67,7 +67,7 @@ export function TrainingRoomDialog({ value, busy, onClose, onSubmit }: {
         </section>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !ready}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Training Room"}</Button>
+          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !ready}>{busy ? "SavingÃ¢â‚¬Â¦" : value.id ? "Save Changes" : "Add Training Room"}</Button>
         </footer>
       </form>
     </div>

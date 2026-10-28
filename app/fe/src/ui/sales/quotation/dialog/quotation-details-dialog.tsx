@@ -1,8 +1,8 @@
 "use client";
 
 import { BookOpen, ExternalLink, FilePenLine, HandCoins, Info, Pencil, Trash2, UserRound, Users, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type QuotationStatus =
   | "WAITING"

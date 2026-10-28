@@ -1,7 +1,8 @@
 @import "tailwindcss";
+@source "../../../../packages/ui/src";
 
-@theme {
-  --font-sans: "DM Sans", sans-serif;
+@theme inline {
+  --font-sans: var(--font-dm-sans);
 }
 
 /* =========================================================

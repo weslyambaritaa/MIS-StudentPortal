@@ -4,8 +4,8 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { LogoutConfirmationModal } from "@/components/ui/logout-confirmation-modal";
+import { Button } from "@mis/ui/button";
+import { LogoutConfirmationModal } from "@mis/ui/logout-confirmation-modal";
 import { useAuth } from "@/providers/keycloak-provider";
 
 export default function NoAccessPage() {

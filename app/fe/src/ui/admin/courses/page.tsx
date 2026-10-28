@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { CourseDialog, type CoursePayload, type CourseValue } from "./dialog/course-dialog";
 import { CourseDetailsDialog } from "./dialog/course-details-dialog";
 
@@ -89,7 +89,7 @@ export default function CoursesPage() {
     { key: "category", header: "CATEGORY", render: row => row.category_name },
     { key: "duration", header: "DURATION", render: row => `${row.duration_days ?? Math.max(1, Math.ceil(row.duration_minutes / 480))} Days` },
     { key: "level", header: "LEVEL", render: row => categoryLabel(row.level) },
-    { key: "syllabus", header: "SYLLABUS", render: row => row.latest_syllabus ? <span title={`${row.syllabus_version_count} version(s)`} className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-300/20 px-3 py-1 text-xs font-medium text-amber-700">{row.latest_syllabus.version}{row.syllabus_version_count > 1 ? ` +${row.syllabus_version_count - 1}` : ""}</span> : <span className="text-zinc-400">—</span> },
+    { key: "syllabus", header: "SYLLABUS", render: row => row.latest_syllabus ? <span title={`${row.syllabus_version_count} version(s)`} className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-300/20 px-3 py-1 text-xs font-medium text-amber-700">{row.latest_syllabus.version}{row.syllabus_version_count > 1 ? ` +${row.syllabus_version_count - 1}` : ""}</span> : <span className="text-zinc-400">Ã¢â‚¬â€</span> },
     { key: "status", header: "STATUS", render: row => <Badge variant={row.status === "ACTIVE" ? "success" : "danger"} showDot>{row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge> },
     { key: "actions", header: "ACTION", className: "whitespace-nowrap", render: row => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17}/>} size="sm" onClick={() => void openDetails(row)}/><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17}/>} size="sm" onClick={() => { setDialogError(null); setEditor(row); }}/><IconButton label={`Delete ${row.name}`} icon={<Trash2 size={17}/>} variant="danger" size="sm" onClick={() => setDeleting(row)}/></div> },
   ];
@@ -101,11 +101,11 @@ export default function CoursesPage() {
       <div className="flex flex-wrap gap-4"><label className="flex flex-col gap-[3px] text-sm text-gray-600">Category<select value={categoryId} onChange={event => { setPage(1); setCategoryId(event.target.value); }} className="h-9 w-44 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Category</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="flex flex-col gap-[3px] text-sm text-gray-600">Level<select value={level} onChange={event => { setPage(1); setLevel(event.target.value); }} className="h-9 w-44 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Level</option><option value="BEGINNER">Fundamental</option><option value="INTERMEDIATE">Intermediate</option><option value="ADVANCED">Advanced</option></select></label><label className="flex flex-col gap-[3px] text-sm text-gray-600">Status<select value={status} onChange={event => { setPage(1); setStatus(event.target.value); }} className="h-9 w-40 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label></div>
     </div>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {loading ? <div className="py-10 text-center text-zinc-500">Loading Courses…</div> : <DataTable columns={columns} rows={result.items} getRowKey={row => row.id} caption="Course list" emptyMessage="No Courses found."/>}
+    {loading ? <div className="py-10 text-center text-zinc-500">Loading CoursesÃ¢â‚¬Â¦</div> : <DataTable columns={columns} rows={result.items} getRowKey={row => row.id} caption="Course list" emptyMessage="No Courses found."/>}
     <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage}/></div>
     </section></div>
     {editor !== undefined && <CourseDialog value={editor} categories={categories} busy={busy} error={dialogError} onClose={() => setEditor(undefined)} onSubmit={save}/>}
     {selected && <CourseDetailsDialog course={selected} loading={detailsLoading} onClose={() => setSelected(null)}/>}
-    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course “${deleting?.name ?? ""}” will be permanently deleted. Courses used by a Quotation or Training cannot be deleted; deactivate those courses instead.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy}/>
+    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted. Courses used by a Quotation or Training cannot be deleted; deactivate those courses instead.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy}/>
   </AppShell>;
 }

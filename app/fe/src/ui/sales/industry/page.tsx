@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { IndustryDialog, type IndustryFormValue } from "./dialog/industry-dialog";
 
 type Industry = IndustryFormValue & { id: string; industry_code: string; amount_account: number | string; ever_used: boolean };
@@ -119,7 +119,7 @@ export default function IndustryPage() {
                   <td className="px-3 py-3"><Badge variant={industry.status === "ACTIVE" ? "success" : "danger"} showDot>{industry.status === "ACTIVE" ? "Active" : "Inactive"}</Badge></td>
                   <td className="px-3 py-2"><div className="flex items-center gap-1"><IconButton label={`Edit ${industry.name}`} icon={<Pencil size={17} />} size="sm" onClick={() => setEditor(industry)} /><IconButton label={industry.ever_used ? "Cannot delete: Industry has been used" : `Delete ${industry.name}`} icon={<Trash2 size={17} />} variant="danger" size="sm" disabled={industry.ever_used} onClick={() => setDeleting(industry)} /></div></td>
                 </tr>)}
-                {loading && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">Loading industries…</td></tr>}
+                {loading && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">Loading industriesÃ¢â‚¬Â¦</td></tr>}
               </tbody>
             </table>
           </div>
@@ -135,7 +135,7 @@ export default function IndustryPage() {
         </section>
       </div>
       {editor && <IndustryDialog value={editor} busy={busy} onClose={() => setEditor(null)} onSubmit={save} />}
-      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Industry “${deleting?.name ?? ""}” will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
+      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Industry Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
     </AppShell>
   );
 }

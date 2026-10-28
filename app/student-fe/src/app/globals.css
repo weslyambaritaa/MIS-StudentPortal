@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@source "../../../../packages/ui/src";
+
+@theme inline {
+  --font-sans: var(--font-dm-sans);
+}
+
+/* Shared ExecuTrain design tokens. */
+:root {
+  --color-primary: #de1641;
+  --color-primary-hover: #d91445;
+  --color-primary-active: #bf123c;
+  --color-primary-soft: #fde8ee;
+  --color-background: #f7f7f8;
+  --color-surface: #ffffff;
+  --color-text-primary: #171717;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --navbar-height: 64px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 72px;
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-dm-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  text-decoration: none;
+}

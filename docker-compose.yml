@@ -257,7 +257,7 @@ services:
       PORT: 4000
 
       # Frontend origin
-      CORS_ORIGIN: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001
 
       # Backend services
       STUDENT_API_URL: http://student-api:4001
@@ -278,7 +278,7 @@ services:
         http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
 
       # JWT audience validation
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_AUDIENCES: ${KEYCLOAK_AUDIENCES:-mis-student-portal-frontend,student-portal-frontend}
 
       # Gateway -> backend protection
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
@@ -325,6 +325,8 @@ services:
 
     container_name: mis-frontend
 
+    command: ["npm", "run", "dev"]
+
     environment:
       # API Gateway
       NEXT_PUBLIC_API_BASE_URL: http://api.localhost:4000
@@ -346,8 +348,34 @@ services:
     volumes:
       - ./app/fe:/workspace/app/fe
       - ./packages/shared-types:/workspace/packages/shared-types
-      - frontend-node-modules:/workspace/node_modules
-      - frontend-next:/workspace/app/fe/.next
+      - ./packages/config:/workspace/packages/config
+      - ./packages/auth:/workspace/packages/auth
+      - ./packages/api-client:/workspace/packages/api-client
+      - ./packages/ui:/workspace/packages/ui
+
+  student-frontend:
+    build:
+      context: .
+      dockerfile: app/student-fe/Dockerfile
+    container_name: mis-student-frontend
+    command: ["npm", "run", "dev"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://api.localhost:4000
+      NEXT_PUBLIC_KEYCLOAK_URL: http://auth.localhost:4000
+      NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${STUDENT_KEYCLOAK_CLIENT_ID:-student-portal-frontend}
+    ports:
+      - "${STUDENT_FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - edge-net
+    volumes:
+      - ./app/student-fe:/workspace/app/student-fe
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - ./packages/auth:/workspace/packages/auth
+      - ./packages/api-client:/workspace/packages/api-client
+      - ./packages/ui:/workspace/packages/ui
 
 
 # =========================================================
@@ -358,8 +386,6 @@ volumes:
   internal-postgres-data:
   keycloak-postgres-data:
 
-  frontend-node-modules:
-  frontend-next:
 
   gateway-node-modules:
   student-api-node-modules:

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { ArrowRight, Building2, ChevronDown, Pencil, Trash2, UserRound, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 import type { PicValue } from "./pic-dialog";
 
 export type PicStudent = { subject: string; name: string; ongoingTrainings: string[] };
@@ -48,10 +48,10 @@ export function PicDetailsDialog({
             </div>
           </section>
           <section className="space-y-3">
-            <h3 className="font-medium text-rose-600">PIC’s Account</h3>
+            <h3 className="font-medium text-rose-600">PICÃ¢â‚¬â„¢s Account</h3>
             <div className="flex items-center gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3">
               <Building2 size={20} className="shrink-0 text-rose-600" />
-              <div className="min-w-0 flex-1"><p className="truncate font-medium text-gray-600">{item.account_name}</p><p className="truncate text-sm text-zinc-600">{item.industry_name ?? "—"}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate font-medium text-gray-600">{item.account_name}</p><p className="truncate text-sm text-zinc-600">{item.industry_name ?? "Ã¢â‚¬â€"}</p></div>
               <Badge variant={item.account_status === "ACTIVE" ? "success" : "danger"} showDot>{item.account_status === "ACTIVE" ? "Active" : "Inactive"}</Badge>
             </div>
           </section>
@@ -62,7 +62,7 @@ export function PicDetailsDialog({
                 <option value="ALL">Showing All Course</option>{courses.map((name) => <option key={name} value={name}>{name}</option>)}
               </select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
             </span></label>
-            {loading ? <p className="py-4 text-center text-sm text-zinc-500">Loading students…</p> : filteredStudents.length ? (
+            {loading ? <p className="py-4 text-center text-sm text-zinc-500">Loading studentsÃ¢â‚¬Â¦</p> : filteredStudents.length ? (
               <ul className="divide-y divide-rose-50">{visibleStudents.map((student, index) => (
                 <li key={student.subject} className="flex items-center gap-3 py-3">
                   <span className={`flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${["from-red-400 to-orange-600", "from-purple-400 to-fuchsia-600", "from-green-400 to-green-600", "from-indigo-400 to-indigo-700", "from-cyan-300 to-sky-500"][index % 5]} text-sm font-medium text-white`}>{student.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>

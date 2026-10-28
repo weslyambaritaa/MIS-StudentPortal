@@ -33,6 +33,7 @@ foreach ($key in $requiredMail) { if ([string]::IsNullOrWhiteSpace($mailEnv[$key
 $baseUrl = "http://localhost:$($rootEnv['KEYCLOAK_PORT'])"
 $realmUrl = "$baseUrl/admin/realms/mis-student-portal"
 $frontendClientId = 'mis-student-portal-frontend'
+$studentFrontendClientId = 'student-portal-frontend'
 
 try {
     $tokenReply = Invoke-RestMethod -Method Post `
@@ -48,15 +49,21 @@ try {
     $realm = Invoke-RestMethod -Method Get -Uri $realmUrl -Headers $headers
     $clientMatches = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients?clientId=$frontendClientId" -Headers $headers
     if (!$clientMatches -or $clientMatches.Count -ne 1) {
-        throw 'The frontend OIDC client could not be resolved in the MIS realm.'
+        throw 'The MIS frontend OIDC client could not be resolved in the MIS realm.'
     }
     $frontendClient = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients/$($clientMatches[0].id)" -Headers $headers
+    $studentClientMatches = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients?clientId=$studentFrontendClientId" -Headers $headers
+    if ($studentClientMatches -and $studentClientMatches.Count -gt 1) {
+        throw 'More than one Student Portal client was found in the MIS realm.'
+    }
 } catch {
     throw 'Could not read the MIS realm or frontend client from the local Keycloak Admin API. Check that Keycloak is running and the bootstrap admin credentials in .env are valid.'
 }
 
 $frontendClient.publicClient = $true
 $frontendClient.standardFlowEnabled = $true
+$frontendClient.redirectUris = @($frontendClient.redirectUris + @('http://localhost:3000/dashboard', 'http://localhost:3000/*') | Select-Object -Unique)
+$frontendClient.webOrigins = @($frontendClient.webOrigins + 'http://localhost:3000' | Select-Object -Unique)
 $clientAttributes = $frontendClient.attributes
 if ($null -eq $clientAttributes) {
     $clientAttributes = [pscustomobject]@{}
@@ -96,7 +103,7 @@ $realm.smtpServer = [pscustomobject]@{
 }
 
 if (!$Apply) {
-    Write-Output 'Ready to configure ST-01 and the browser frontend client (public client with PKCE S256). No settings were changed. Re-run with -Apply to apply.'
+    Write-Output 'Ready to configure ST-01, MIS Internal, and Student Portal browser clients (public clients with PKCE S256). No settings were changed. Re-run with -Apply to apply.'
     exit 0
 }
 
@@ -105,8 +112,66 @@ try {
     Invoke-RestMethod -Method Put -Uri $realmUrl -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
     $clientBody = $frontendClient | ConvertTo-Json -Depth 100 -Compress
     Invoke-RestMethod -Method Put -Uri "$realmUrl/clients/$($clientMatches[0].id)" -Headers $headers -ContentType 'application/json' -Body $clientBody | Out-Null
+
+    if (!$studentClientMatches) {
+        $studentClientDefinition = [pscustomobject]@{
+            clientId = $studentFrontendClientId
+            name = 'Student Portal Frontend'
+            enabled = $true
+            protocol = 'openid-connect'
+            publicClient = $true
+            standardFlowEnabled = $true
+            directAccessGrantsEnabled = $false
+            implicitFlowEnabled = $false
+            fullScopeAllowed = $true
+            attributes = @{ 'pkce.code.challenge.method' = 'S256' }
+            redirectUris = @('http://localhost:3001/dashboard', 'http://localhost:3001/*')
+            webOrigins = @('http://localhost:3001')
+            protocolMappers = @(@{
+                name = 'student-portal-audience'
+                protocol = 'openid-connect'
+                protocolMapper = 'oidc-audience-mapper'
+                consentRequired = $false
+                config = @{
+                    'included.client.audience' = $studentFrontendClientId
+                    'access.token.claim' = 'true'
+                    'id.token.claim' = 'false'
+                }
+            })
+        }
+        $studentClientBody = $studentClientDefinition | ConvertTo-Json -Depth 100 -Compress
+        Invoke-RestMethod -Method Post -Uri "$realmUrl/clients" -Headers $headers -ContentType 'application/json' -Body $studentClientBody | Out-Null
+        $studentClientMatches = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients?clientId=$studentFrontendClientId" -Headers $headers
+    }
+
+    if (!$studentClientMatches -or $studentClientMatches.Count -ne 1) {
+        throw 'Could not create or resolve the Student Portal OIDC client.'
+    }
+    $studentClient = Invoke-RestMethod -Method Get -Uri "$realmUrl/clients/$($studentClientMatches[0].id)" -Headers $headers
+    $studentClient.publicClient = $true
+    $studentClient.standardFlowEnabled = $true
+    $studentClient.directAccessGrantsEnabled = $false
+    $studentClient.fullScopeAllowed = $true
+    $studentClient.redirectUris = @($studentClient.redirectUris + @('http://localhost:3001/dashboard', 'http://localhost:3001/*') | Select-Object -Unique)
+    $studentClient.webOrigins = @($studentClient.webOrigins + 'http://localhost:3001' | Select-Object -Unique)
+    if ($null -eq $studentClient.attributes) { $studentClient | Add-Member -NotePropertyName attributes -NotePropertyValue ([pscustomobject]@{}) -Force }
+    $studentClient.attributes | Add-Member -NotePropertyName 'pkce.code.challenge.method' -NotePropertyValue 'S256' -Force
+    $studentAudienceMapper = @{
+        name = 'student-portal-audience'
+        protocol = 'openid-connect'
+        protocolMapper = 'oidc-audience-mapper'
+        consentRequired = $false
+        config = @{
+            'included.client.audience' = $studentFrontendClientId
+            'access.token.claim' = 'true'
+            'id.token.claim' = 'false'
+        }
+    }
+    $studentClient.protocolMappers = @($studentClient.protocolMappers | Where-Object { $_.name -ne 'student-portal-audience' }) + @($studentAudienceMapper)
+    $studentClientBody = $studentClient | ConvertTo-Json -Depth 100 -Compress
+    Invoke-RestMethod -Method Put -Uri "$realmUrl/clients/$($studentClientMatches[0].id)" -Headers $headers -ContentType 'application/json' -Body $studentClientBody | Out-Null
 } catch {
     throw 'Keycloak rejected the ST-01 or frontend-client update. No credentials or server response details were printed.'
 }
 
-Write-Output 'ST-01 realm settings saved. The frontend client is public with PKCE S256. Reset link lifetime: 15 minutes; login accepts username or email; accounts lock for 1 minute after 10 consecutive failures. SMTP configured from keycloak/.env.'
+Write-Output 'ST-01 realm settings saved. MIS Internal and Student Portal clients are public and use PKCE S256; local redirect addresses were added. Reset link lifetime: 15 minutes; login accepts username or email; accounts lock for 1 minute after 10 consecutive failures. SMTP configured from keycloak/.env.'

@@ -2,16 +2,24 @@
   "name": "mis-student-portal",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.9.8",
   "workspaces": [
     "app/fe",
+    "app/student-fe",
     "app/be/student-api",
     "app/be/internal-api",
     "gateway",
     "packages/shared-types",
     "packages/config",
-    "packages/logger"
+    "packages/logger",
+    "packages/ui",
+    "packages/auth",
+    "packages/api-client"
   ],
   "scripts": {
+    "build": "turbo run build",
+    "dev:internal": "npm run dev --workspace @mis/internal-frontend",
+    "dev:student": "npm run dev --workspace @mis/student-frontend",
     "dev": "docker compose up --build",
     "down": "docker compose down",
     "logs": "docker compose logs -f",
@@ -22,6 +30,9 @@
     "seed:student": "docker compose exec student-api npm run seed",
     "seed:internal": "docker compose exec internal-api npm run seed",
     "seed": "npm run seed:internal && npm run seed:student",
-    "build:shared": "npm run build --workspace packages/shared-types && npm run build --workspace packages/config && npm run build --workspace packages/logger"
+    "build:shared": "turbo run build --filter=@mis/shared-types --filter=@mis/config --filter=@mis/logger --filter=@mis/ui --filter=@mis/auth --filter=@mis/api-client"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10"
   }
 }

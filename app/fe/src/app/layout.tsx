@@ -4,7 +4,7 @@ import "./globals.css";
 
 import { KeycloakAuthProvider } from "@/providers/keycloak-provider";
 import { ActiveRoleRouteGuard } from "@/components/auth/active-role-route-guard";
-import { ToastProvider } from "@/components/ui/toast";
+import { ToastProvider } from "@mis/ui/toast";
 
 export const metadata: Metadata = {
   title: "MIS Student Portal",

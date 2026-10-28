@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Button } from "@mis/ui/button";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { CourseCategoryDialog, type CourseCategoryFormValue } from "./dialog/course-category-dialog";
 
 type CourseCategory = CourseCategoryFormValue & { id: string; category_code: string; amount_courses: number | string };
@@ -112,7 +112,7 @@ export default function CourseCategoryPage() {
                   }} /></div></td>
                   </tr>;
                 })}
-                {loading && <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-500">Loading Course Categories…</td></tr>}
+                {loading && <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-500">Loading Course CategoriesÃ¢â‚¬Â¦</td></tr>}
               </tbody>
             </table>
           </div>
@@ -120,7 +120,7 @@ export default function CourseCategoryPage() {
         </section>
       </div>
       {editor && <CourseCategoryDialog value={editor} busy={busy} onClose={() => setEditor(null)} onSubmit={save} />}
-      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course Category “${deleting?.name ?? ""}” will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
+      <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Course Category Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â will be permanently deleted.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy} />
     </AppShell>
   );
 }

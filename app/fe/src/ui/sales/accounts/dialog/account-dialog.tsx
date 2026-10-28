@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type AccountOption = { id: string; industry_code: string; name: string; status: "ACTIVE" | "INACTIVE" };
 export type SalesOption = { subject: string; name: string; email: string | null };

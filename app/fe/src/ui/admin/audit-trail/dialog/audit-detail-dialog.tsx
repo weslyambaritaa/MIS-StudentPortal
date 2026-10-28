@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { IconButton } from "@/components/ui/icon-button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type AuditDetail = {
   created_at: string;
@@ -30,7 +30,7 @@ function parseSnapshot(snapshot: string | null): Record<string, unknown> {
 }
 
 function printable(value: unknown) {
-  if (value === undefined || value === null || value === "") return "—";
+  if (value === undefined || value === null || value === "") return "Ã¢â‚¬â€";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -52,16 +52,16 @@ export function AuditDetailDialog({ entry, onClose }: { entry: AuditDetail; onCl
         <header className="flex items-start justify-between gap-4">
           <div>
             <h2 id="audit-detail-title" className="text-2xl font-medium text-gray-600">Detail Audit Trail</h2>
-            <p className="mt-1 text-sm text-zinc-500">{entry.action} · {entry.object_type}{entry.object_id ? ` · ${entry.object_id}` : ""}</p>
+            <p className="mt-1 text-sm text-zinc-500">{entry.action} Ã‚Â· {entry.object_type}{entry.object_id ? ` Ã‚Â· ${entry.object_id}` : ""}</p>
           </div>
           <IconButton label="Tutup detail" icon={<X size={18} />} onClick={onClose} />
         </header>
 
         <dl className="mt-5 grid gap-3 rounded-2xl bg-neutral-50 p-4 text-sm sm:grid-cols-2">
           <div><dt className="text-zinc-500">Waktu</dt><dd className="mt-0.5 font-medium text-zinc-800">{new Date(entry.created_at).toLocaleString("id-ID")}</dd></div>
-          <div><dt className="text-zinc-500">Pelaku</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "—"}</dd></div>
-          <div><dt className="text-zinc-500">Role</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "SYSTEM" : "—")}</dd></div>
-          <div><dt className="text-zinc-500">IP address</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.ip_address ?? "—"}</dd></div>
+          <div><dt className="text-zinc-500">Pelaku</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "Ã¢â‚¬â€"}</dd></div>
+          <div><dt className="text-zinc-500">Role</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "SYSTEM" : "Ã¢â‚¬â€")}</dd></div>
+          <div><dt className="text-zinc-500">IP address</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.ip_address ?? "Ã¢â‚¬â€"}</dd></div>
           {entry.process_name && <div><dt className="text-zinc-500">Nama proses</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.process_name}</dd></div>}
           <div><dt className="text-zinc-500">Sumber service</dt><dd className="mt-0.5 font-medium text-zinc-800">{entry.source_service}</dd></div>
         </dl>

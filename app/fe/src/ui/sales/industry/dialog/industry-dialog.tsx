@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type IndustryFormValue = { id?: string; industry_code?: string; name: string; status: "ACTIVE" | "INACTIVE" };
 
@@ -47,7 +47,7 @@ export function IndustryDialog({
         </label>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : value?.id ? "Save Changes" : "Add Industry"}</Button>
+          <Button type="submit" disabled={busy || !name.trim()}>{busy ? "SavingÃ¢â‚¬Â¦" : value?.id ? "Save Changes" : "Add Industry"}</Button>
         </footer>
       </form>
     </div>

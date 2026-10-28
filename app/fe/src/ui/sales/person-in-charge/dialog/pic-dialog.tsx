@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type PicValue = { id?: string; name: string; email: string; account_id: string; account_name: string; account_status?: "ACTIVE" | "INACTIVE"; industry_name: string | null; status: "PENDING" | "ACTIVE" | "INACTIVE"; activation_expires_at?: string | null };
 export type PicAccountOption = { id: string; account_code: string; name: string; industry_name: string | null; status?: "ACTIVE" | "INACTIVE" };
@@ -66,7 +66,7 @@ export function PicDialog({ value, accounts, busy, error, onClose, onSubmit }: {
         {value && <span className="mt-1 block text-xs text-zinc-500">PIC Account assignment cannot be moved.</span>}
       </div>
       {value && <label className="mb-6 block text-sm text-gray-600">Status{value.status === "PENDING" ? <input readOnly value="Pending" className="mt-1 h-9 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-slate-500" /> : <select value={status} onChange={(event) => setStatus(event.target.value as "ACTIVE" | "INACTIVE")} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>}{value.status === "PENDING" && <span className="mt-1 block text-xs text-zinc-500">Pending changes to Active after the PIC completes account activation.</span>}</label>}
-      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !name.trim() || (!value && (!email.trim() || !accountId))}>{busy ? "Saving…" : value ? "Save Changes" : "Add PIC"}</Button></footer>
+      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !name.trim() || (!value && (!email.trim() || !accountId))}>{busy ? "SavingÃ¢â‚¬Â¦" : value ? "Save Changes" : "Add PIC"}</Button></footer>
     </form>
   </div>;
 }

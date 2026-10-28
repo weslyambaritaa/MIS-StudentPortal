@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Eye, Mail, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { PicDetailsDialog, type PicStudent } from "./dialog/pic-details-dialog";
 import { PicDialog, type PicAccountOption, type PicValue } from "./dialog/pic-dialog";
 
@@ -103,11 +103,11 @@ export default function PersonInChargePage() {
         <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">Status<span className="relative block"><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Status</option><option value="PENDING">Pending</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"/></span></label></div>
     </div>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {loading ? <div className="py-10 text-center text-zinc-500">Loading PICs…</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id ?? row.email} caption="Person In Charge records assigned to current Sales user" emptyMessage="No PICs found."/>}
+    {loading ? <div className="py-10 text-center text-zinc-500">Loading PICsÃ¢â‚¬Â¦</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id ?? row.email} caption="Person In Charge records assigned to current Sales user" emptyMessage="No PICs found."/>}
     <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage}/></div>
     </section></div>
     {editor !== undefined && <PicDialog value={editor} accounts={accounts} busy={busy} error={dialogError} onClose={() => { setEditor(undefined); setDialogError(null); }} onSubmit={save}/>}
     {selected && <PicDetailsDialog item={selected} students={students} loading={detailsLoading} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDelete={() => setDeleting(selected)}/>}
-    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`PIC “${deleting?.name ?? ""}” and its Keycloak account will be permanently deleted. Accounts with another business role must be handled separately. The audit record will be retained.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy}/>
+    <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`PIC Ã¢â‚¬Å“${deleting?.name ?? ""}Ã¢â‚¬Â and its Keycloak account will be permanently deleted. Accounts with another business role must be handled separately. The audit record will be retained.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy}/>
   </AppShell>;
 }

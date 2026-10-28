@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { Info, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type TrainerCertification = { id?: string; name: string; expires_at?: string; expiresAt?: string; days_until_expiry?: number };
 export type TrainerValue = {
@@ -37,7 +37,7 @@ export function TrainerDialog({ value, busy, error, onClose, onSubmit }: {
         {certifications.map((item, index) => <div key={index} className="mb-3 grid grid-cols-1 gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3 sm:grid-cols-[1fr_150px]"><label className="text-sm text-gray-600">Certification Name<input value={item.name} maxLength={200} onChange={(event) => setCertifications((items) => items.map((current, i) => i === index ? { ...current, name: event.target.value } : current))} placeholder="Example: PMP" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-white px-3" /></label><label className="text-sm text-gray-600">Expiry Date<input type="date" required={Boolean(item.name)} value={item.expiresAt} onChange={(event) => setCertifications((items) => items.map((current, i) => i === index ? { ...current, expiresAt: event.target.value } : current))} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-white px-3" /></label><button type="button" onClick={() => setCertifications((items) => items.filter((_, i) => i !== index))} className="text-left text-xs text-rose-600 underline">Remove certificate</button></div>)}
       </section>
       {!value && <div className="mb-6 rounded-3xl border border-blue-500 bg-blue-500/10 p-3 text-sm"><div className="flex items-center gap-1 font-medium text-blue-600"><Info size={18} />With Portal Account</div><p className="mt-2 text-slate-600">An activation email will be sent to the Trainer. The link is valid for 24 hours and lets them set a password.</p></div>}
-      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !name.trim() || !specialization.trim() || (!value && (!email.trim() || !trainerCode.trim()))}>{busy ? "Saving…" : value ? "Save Trainer" : "Add Trainer"}</Button></footer>
+      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !name.trim() || !specialization.trim() || (!value && (!email.trim() || !trainerCode.trim()))}>{busy ? "SavingÃ¢â‚¬Â¦" : value ? "Save Trainer" : "Add Trainer"}</Button></footer>
     </form>
   </div>;
 }

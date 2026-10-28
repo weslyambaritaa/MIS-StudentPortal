@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { Button } from "@mis/ui/button";
+import { Pagination } from "@mis/ui/pagination";
+import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import { WithdrawConfirmation } from "./dialog/withdraw-confirmation";
 
@@ -87,7 +87,7 @@ function formatSessionDates(dates: string[]) {
     for (let index = 0; index < days.length;) {
       let end = index;
       while (end + 1 < days.length && days[end + 1] === days[end] + 1) end += 1;
-      chunks.push(end > index ? `${days[index]}–${days[end]}` : String(days[index]));
+      chunks.push(end > index ? `${days[index]}Ã¢â‚¬â€œ${days[end]}` : String(days[index]));
       index = end + 1;
     }
     const monthName = new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(year, month - 1, 1));
@@ -520,7 +520,7 @@ export default function RequestFormPage({
           </div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
           {loading ? (
-            <p className="p-8 text-center text-sm text-gray-500">Loading…</p>
+            <p className="p-8 text-center text-sm text-gray-500">LoadingÃ¢â‚¬Â¦</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-sm">
@@ -630,7 +630,7 @@ export default function RequestFormPage({
                 {editingId ? `Edit ${formName}` : `Create ${formName}`}
               </h2>
               <button className="flex size-8 items-center justify-center rounded-full text-gray-600 hover:bg-neutral-100" onClick={() => setEditor(false)} aria-label="Close">
-                ✕
+                Ã¢Å“â€¢
               </button>
             </div>
             {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
@@ -683,7 +683,7 @@ export default function RequestFormPage({
                     <option value="">Pick a Quotation Number</option>
                     {quotes.map((q) => (
                       <option key={q.id} value={q.id}>
-                        {q.quotation_code} — {q.account_name} / {q.pic_name}
+                        {q.quotation_code} Ã¢â‚¬â€ {q.account_name} / {q.pic_name}
                       </option>
                     ))}
                   </select>
@@ -749,7 +749,7 @@ export default function RequestFormPage({
                         <option value="">Pick a PIC</option>
                         {pics.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} — {p.email}
+                            {p.name} Ã¢â‚¬â€ {p.email}
                           </option>
                         ))}
                       </select>
@@ -759,7 +759,7 @@ export default function RequestFormPage({
                 {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><span className="text-sm font-medium text-gray-600">Course</span><label className="block text-sm text-gray-600">Requested Course *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Format *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"} onChange={(e) => updateCourseFormat(index, e.target.value as "ONLINE" | "OFFLINE")}><option value="OFFLINE">Offline</option><option value="ONLINE">Online</option></select></label></div><label className="block text-sm text-gray-600">Class Type *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateCourseDeliveryType(index, e.target.value)}>{deliveryOptions.filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>)}</section>}
               </div>
               <div className="space-y-4 overflow-y-auto pr-1">
-                <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">▣</span>{formName}</div>
+                <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">Ã¢â€“Â£</span>{formName}</div>
                 <label className="flex cursor-pointer flex-col gap-1 text-sm text-gray-600">
                   {mode === "REGISTRATION" ? "Registration Attachment *" : "RF Attachment *"}
                   <span className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center">
@@ -774,7 +774,7 @@ export default function RequestFormPage({
                 {lines.map((line, index) => (
                   <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">
                     {mode === "REGISTRATION" && !line.deliveryType.startsWith("ONLINE") && line.deliveryType !== "INHOUSE" && <fieldset className="space-y-2 text-sm"><legend className="text-gray-600">Training Location *</legend><div className="flex gap-5"><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "INTERNAL"} onChange={() => updateLine(index, { locationType: "INTERNAL", locationName: "", locationAddress: "" })} />Internal Training Room</label><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "CLIENT"} onChange={() => updateLine(index, { locationType: "CLIENT" })} />Client Location</label></div></fieldset>}
-                    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <label className="block text-sm text-gray-600">Location Training *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" maxLength={500} value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")} onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })} placeholder="Training location name and address" /></label>}
+                    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <label className="block text-sm text-gray-600">Location Training *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" maxLength={500} value={[line.locationName, line.locationAddress].filter(Boolean).join(" Ã‚Â· ")} onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })} placeholder="Training location name and address" /></label>}
                     {mode === "REGISTRATION" && line.locationType === "CLIENT" && <div className="grid gap-2 sm:grid-cols-2"><label className="block text-sm text-gray-600">Location Name *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationName} onChange={(e) => updateLine(index, { locationName: e.target.value })} placeholder="Client site / venue" /></label><label className="block text-sm text-gray-600">Location Address *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationAddress} onChange={(e) => updateLine(index, { locationAddress: e.target.value })} placeholder="Full address" /></label></div>}
                     {line.locationType === "ONLINE" && <p className="text-sm text-zinc-950/60">Online training does not require a physical location.</p>}
                     <label className="block text-sm text-gray-600">Requested Date *</label>
@@ -847,7 +847,7 @@ export default function RequestFormPage({
                         Notes #{index + 1}
                         <input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={note} placeholder="Add a note" onChange={(event) => setNotes((current) => current.map((value, noteIndex) => noteIndex === index ? event.target.value : value))} />
                       </label>
-                      <Button size="icon" variant="danger" aria-label={`Remove note ${index + 1}`} onClick={() => setNotes((current) => current.filter((_, noteIndex) => noteIndex !== index))}>×</Button>
+                      <Button size="icon" variant="danger" aria-label={`Remove note ${index + 1}`} onClick={() => setNotes((current) => current.filter((_, noteIndex) => noteIndex !== index))}>Ãƒâ€”</Button>
                     </div>
                   ))}
                 </section>
@@ -858,10 +858,10 @@ export default function RequestFormPage({
                 Cancel
               </Button>
               <Button variant="soft" disabled={busy} onClick={() => void save(false)}>
-                {busy ? "Saving…" : "Save Draft"}
+                {busy ? "SavingÃ¢â‚¬Â¦" : "Save Draft"}
               </Button>
               <Button disabled={busy} onClick={() => void save(true)}>
-                {busy ? "Submitting…" : "Submit to Admin (QPD)"}
+                {busy ? "SubmittingÃ¢â‚¬Â¦" : "Submit to Admin (QPD)"}
               </Button>
             </div>
           </div>
@@ -870,8 +870,8 @@ export default function RequestFormPage({
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelected(null)}>
           <div className="max-h-[92vh] w-full max-w-[902px] overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-6 flex items-start justify-between"><h2 className="text-2xl font-medium text-gray-600">{formName} Details</h2><button className="flex size-8 items-center justify-center rounded-full text-xl text-gray-600 hover:bg-neutral-100" aria-label="Close" onClick={() => setSelected(null)}>✕</button></div>
-            <div className="mb-4 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-gray-600">Request Form #: <span className="font-medium">{selected.item.request_form_number}</span>{selected.item.training_id && <> <span className="mx-2 text-zinc-400">·</span> Training ID: <span className="font-medium">{selected.item.training_id}</span></>}</div>
+            <div className="mb-6 flex items-start justify-between"><h2 className="text-2xl font-medium text-gray-600">{formName} Details</h2><button className="flex size-8 items-center justify-center rounded-full text-xl text-gray-600 hover:bg-neutral-100" aria-label="Close" onClick={() => setSelected(null)}>Ã¢Å“â€¢</button></div>
+            <div className="mb-4 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-gray-600">Request Form #: <span className="font-medium">{selected.item.request_form_number}</span>{selected.item.training_id && <> <span className="mx-2 text-zinc-400">Ã‚Â·</span> Training ID: <span className="font-medium">{selected.item.training_id}</span></>}</div>
             {selected.item.review_note && <p className="mb-4 rounded-xl border border-red-500 bg-red-50 p-3 text-sm text-red-600">Revision note: {selected.item.review_note}</p>}
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="space-y-4 rounded-3xl border border-gray-200 p-4">
@@ -884,8 +884,8 @@ export default function RequestFormPage({
               <section className="space-y-5 rounded-3xl border border-gray-200 bg-white p-4">
                 <div className="flex items-center justify-between"><h3 className="text-base font-medium text-slate-900">{formName}</h3><span className={`rounded-full border px-3 py-1 text-xs font-medium ${selected.item.status === "WAITING" ? "border-orange-400 bg-orange-400/20 text-orange-500" : selected.item.status === "REVISION" ? "border-red-500 bg-red-500/10 text-red-500" : selected.item.status === "APPROVED" ? "border-green-500 bg-green-500/20 text-green-600" : "border-gray-300 bg-gray-100 text-gray-600"}`}>{statusLabel(selected.item.status)}</span></div>
                 <div className="text-sm text-gray-600">Training Title <span className="font-medium">{selected.item.training_title || "-"}</span></div>
-                <div className="space-y-2"><h4 className="text-sm text-gray-600">{mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"}</h4>{selected.attachments.length ? selected.attachments.map((a) => <a className="flex items-center justify-between gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3" href={a.download_url} target="_blank" rel="noreferrer" key={a.id}><span className="truncate font-medium text-gray-600">{a.file_name}<small className="block font-medium text-rose-600">{(a.file_size / 1024 / 1024).toFixed(1)} MB</small></span><span className="rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 px-3 py-2 text-white">↗</span></a>) : <p className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">No attachment uploaded</p>}</div>
-                <div className="space-y-3"><h4 className="text-base font-medium text-rose-600">Detail Course</h4>{selected.courses.map((course) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={String(course.id)}><div className="flex justify-between gap-3"><div><p className="font-medium text-gray-600">{String(course.course_name)}</p><p className="text-sm font-medium text-rose-600">{String(course.language)} · {String(course.amount_student)} students</p></div><span className="text-right text-xs font-medium text-zinc-950/60">{formatSessionDates((course.sessions as Array<Record<string, string>>).map((session) => String(session.date).slice(0, 10)))}</span></div><p className="text-xs text-zinc-950/60">{String(course.delivery_type).replace("INHOUSE", "In-house")} · {String(course.service_type)}</p><p className="text-xs text-zinc-950/60">Location: {course.location_type === "CLIENT" ? [course.location_name, course.location_address].filter(Boolean).join(" · ") || "-" : course.location_type === "ONLINE" ? "Online" : "Internal Training Room"}</p>{Boolean(course.room_rental) && <p className="text-xs text-zinc-950/60">Room Rental: {String(course.room_pc ?? "")} {(course.room_services as string[]).join(", ")}</p>}{Boolean(course.special_instruction) && <p className="text-sm text-zinc-950/60">{String(course.special_instruction)}</p>}</div>)}</div>
+                <div className="space-y-2"><h4 className="text-sm text-gray-600">{mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"}</h4>{selected.attachments.length ? selected.attachments.map((a) => <a className="flex items-center justify-between gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3" href={a.download_url} target="_blank" rel="noreferrer" key={a.id}><span className="truncate font-medium text-gray-600">{a.file_name}<small className="block font-medium text-rose-600">{(a.file_size / 1024 / 1024).toFixed(1)} MB</small></span><span className="rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 px-3 py-2 text-white">Ã¢â€ â€”</span></a>) : <p className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">No attachment uploaded</p>}</div>
+                <div className="space-y-3"><h4 className="text-base font-medium text-rose-600">Detail Course</h4>{selected.courses.map((course) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={String(course.id)}><div className="flex justify-between gap-3"><div><p className="font-medium text-gray-600">{String(course.course_name)}</p><p className="text-sm font-medium text-rose-600">{String(course.language)} Ã‚Â· {String(course.amount_student)} students</p></div><span className="text-right text-xs font-medium text-zinc-950/60">{formatSessionDates((course.sessions as Array<Record<string, string>>).map((session) => String(session.date).slice(0, 10)))}</span></div><p className="text-xs text-zinc-950/60">{String(course.delivery_type).replace("INHOUSE", "In-house")} Ã‚Â· {String(course.service_type)}</p><p className="text-xs text-zinc-950/60">Location: {course.location_type === "CLIENT" ? [course.location_name, course.location_address].filter(Boolean).join(" Ã‚Â· ") || "-" : course.location_type === "ONLINE" ? "Online" : "Internal Training Room"}</p>{Boolean(course.room_rental) && <p className="text-xs text-zinc-950/60">Room Rental: {String(course.room_pc ?? "")} {(course.room_services as string[]).join(", ")}</p>}{Boolean(course.special_instruction) && <p className="text-sm text-zinc-950/60">{String(course.special_instruction)}</p>}</div>)}</div>
                 <div className="space-y-2"><h4 className="text-base font-medium text-rose-600">Special Instructions</h4><div className="whitespace-pre-line rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">{[...new Set(selected.courses.flatMap((c) => String(c.special_instruction ?? "").split("\n")).filter(Boolean))].join("\n") || "-"}</div></div>
               </section>
             </div>

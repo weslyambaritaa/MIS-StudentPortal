@@ -1,4 +1,5 @@
-import { BUSINESS_ROLES, ROLES, type BusinessRole } from "@mis/shared-types";
+import { ROLES, type BusinessRole } from "@mis/shared-types";
+import { MIS_PORTAL_ROLES, type MisPortalRole } from "@/config/portal-roles";
 
 export type NavigationIcon =
   | "dashboard"
@@ -97,27 +98,17 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
     label: "Dashboard",
     labelByRole: {
       [ROLES.TRAINER]: "Trainer Dashboard",
-      [ROLES.STUDENT]: "Student Dashboard",
-      [ROLES.PIC]: "PIC Dashboard",
     },
     icon: "dashboard",
-    roles: BUSINESS_ROLES,
+    roles: MIS_PORTAL_ROLES,
     route: "/dashboard",
     placementByRole: Object.fromEntries(
-      BUSINESS_ROLES.map((role) => [
+      MIS_PORTAL_ROLES.map((role) => [
         role,
         { kind: "dashboard", ...(role === ROLES.FINANCE ? { sectionTitle: "Monitoring" } : {}) },
       ]),
     ) as Partial<Record<BusinessRole, NavigationPlacement>>,
   },
-  {
-    key: "components-preview",
-    label: "Components Preview",
-    icon: "dashboard",
-    roles: BUSINESS_ROLES,
-    route: "/components-preview",
-  },
-
   // Sales
   { key: "quotation", label: "Quotation", icon: "file", roles: [ROLES.SALES], route: "/sales/quotation", placementByRole: { [ROLES.SALES]: { kind: "section", title: "Main Feature" } } },
   { key: "request-form", label: "Request Form", icon: "clipboard", roles: [ROLES.SALES], route: "/sales/request-form", placementByRole: { [ROLES.SALES]: { kind: "section", title: "Main Feature" } } },
@@ -190,20 +181,6 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
   comingSoon("monitor-class", "Monitor Class", "monitor", [ROLES.TRAINER], "My Class"),
   comingSoon("trainer-calendar", "Trainer Calendar", "calendar", [ROLES.TRAINER], "My Class"),
 
-  // Student
-  comingSoon("attendance", "Attendance", "complete", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("evaluation-form", "Evaluation Form", "clipboard", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("course-history", "Course History", "course", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("e-learning", "E-Learning", "monitor", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("remote-lab", "Remote Lab", "remote", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("my-profile", "My Profile", "profile", [ROLES.STUDENT], "Student Portal"),
-  comingSoon("pre-post-test", "Pre / Post Test", "clipboard", [ROLES.STUDENT], "Other"),
-  comingSoon("learning-path", "Learning Path", "path", [ROLES.STUDENT], "Other"),
-
-  // PIC
-  comingSoon("training-account", "Training Account", "account", [ROLES.PIC], "PIC Portal"),
-  comingSoon("training-report", "Training Report", "report", [ROLES.PIC], "PIC Portal"),
-  comingSoon("skill-matrix", "Skill Matrix", "matrix", [ROLES.PIC], "PIC Portal"),
 ];
 
 function toNavigationItem(entry: FeatureAccessEntry, role: BusinessRole): NavigationItem {
@@ -217,7 +194,7 @@ function toNavigationItem(entry: FeatureAccessEntry, role: BusinessRole): Naviga
   };
 }
 
-function buildRoleNavigation(role: BusinessRole): RoleNavigation {
+function buildRoleNavigation(role: MisPortalRole): RoleNavigation {
   const entries = FEATURE_ACCESS_MATRIX.filter((entry) => entry.roles.includes(role));
   const dashboardEntry = entries.find((entry) => entry.key === "dashboard");
   const dashboardPlacement = dashboardEntry?.placementByRole?.[role];
@@ -261,6 +238,6 @@ function buildRoleNavigation(role: BusinessRole): RoleNavigation {
 }
 
 /** Generated navigation and route registry, derived from FEATURE_ACCESS_MATRIX. */
-export const navigationByRole: Record<BusinessRole, RoleNavigation> = Object.fromEntries(
-  BUSINESS_ROLES.map((role) => [role, buildRoleNavigation(role)]),
-) as Record<BusinessRole, RoleNavigation>;
+export const navigationByRole: Record<MisPortalRole, RoleNavigation> = Object.fromEntries(
+  MIS_PORTAL_ROLES.map((role) => [role, buildRoleNavigation(role)]),
+) as Record<MisPortalRole, RoleNavigation>;

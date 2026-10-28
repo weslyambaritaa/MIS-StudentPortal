@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\keycloak\scripts\configure
 
 The account is temporarily locked for 1 minute after 10 consecutive failed login attempts. A successful login resets the failure count. The realm uses English as its supported and default login language. The script reads local credentials without printing them and updates the existing realm through the Admin API. `mis-student-portal.json` carries non-secret bootstrap settings for a newly imported realm; applying runtime settings to an already-existing realm requires the helper.
 
-The browser OIDC client `mis-student-portal-frontend` is public and uses PKCE with S256. It must not have a client secret because browser code cannot keep one confidential. After importing an existing realm, run the helper above with `-Apply` to update this client; realm import only applies on first creation. Backend service clients remain confidential and their secrets stay in local environment files or a deployment secret manager.
+The browser OIDC clients `mis-student-portal-frontend` and `student-portal-frontend` are public and use PKCE with S256. They share this realm and its users/roles, but each has its own redirect URI and web-origin allowlist. Neither may have a client secret because browser code cannot keep one confidential. After importing an existing realm, run the helper above with `-Apply` to create/configure both clients; realm import only applies on first creation. The helper currently adds localhost origins for local development. Add the Student Portal production redirect URI and origin after its domain is decided. Backend service clients remain confidential and their secrets stay in local environment files or a deployment secret manager.
 
 ## MIS account provisioning
 

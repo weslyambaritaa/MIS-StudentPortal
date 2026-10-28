@@ -1,0 +1,33 @@
+{
+  "name": "@mis/ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js" },
+    "./portal-shell": { "types": "./dist/portal-shell.d.ts", "import": "./dist/portal-shell.js", "default": "./dist/portal-shell.js" },
+    "./badge": { "types": "./dist/badge.d.ts", "import": "./dist/badge.js", "default": "./dist/badge.js" },
+    "./box": { "types": "./dist/box.d.ts", "import": "./dist/box.js", "default": "./dist/box.js" },
+    "./button": { "types": "./dist/button.d.ts", "import": "./dist/button.js", "default": "./dist/button.js" },
+    "./data-table": { "types": "./dist/data-table.d.ts", "import": "./dist/data-table.js", "default": "./dist/data-table.js" },
+    "./dashboard-welcome-panel": { "types": "./dist/dashboard-welcome-panel.d.ts", "import": "./dist/dashboard-welcome-panel.js", "default": "./dist/dashboard-welcome-panel.js" },
+    "./delete-confirmation-modal": { "types": "./dist/delete-confirmation-modal.d.ts", "import": "./dist/delete-confirmation-modal.js", "default": "./dist/delete-confirmation-modal.js" },
+    "./drop-box": { "types": "./dist/drop-box.d.ts", "import": "./dist/drop-box.js", "default": "./dist/drop-box.js" },
+    "./icon-button": { "types": "./dist/icon-button.d.ts", "import": "./dist/icon-button.js", "default": "./dist/icon-button.js" },
+    "./input": { "types": "./dist/input.d.ts", "import": "./dist/input.js", "default": "./dist/input.js" },
+    "./logout-confirmation-modal": { "types": "./dist/logout-confirmation-modal.d.ts", "import": "./dist/logout-confirmation-modal.js", "default": "./dist/logout-confirmation-modal.js" },
+    "./modal": { "types": "./dist/modal.d.ts", "import": "./dist/modal.js", "default": "./dist/modal.js" },
+    "./multiple-list": { "types": "./dist/multiple-list.d.ts", "import": "./dist/multiple-list.js", "default": "./dist/multiple-list.js" },
+    "./notifications-modal": { "types": "./dist/notifications-modal.d.ts", "import": "./dist/notifications-modal.js", "default": "./dist/notifications-modal.js" },
+    "./pagination": { "types": "./dist/pagination.d.ts", "import": "./dist/pagination.js", "default": "./dist/pagination.js" },
+    "./radio-group": { "types": "./dist/radio-group.d.ts", "import": "./dist/radio-group.js", "default": "./dist/radio-group.js" },
+    "./textarea": { "types": "./dist/textarea.d.ts", "import": "./dist/textarea.js", "default": "./dist/textarea.js" },
+    "./toast": { "types": "./dist/toast.d.ts", "import": "./dist/toast.js", "default": "./dist/toast.js" }
+  },
+  "scripts": { "build": "tsc" },
+  "peerDependencies": { "next": "^15.5.25", "react": "^19.1.0", "react-dom": "^19.1.0" },
+  "dependencies": { "lucide-react": "^1.47.0" },
+  "devDependencies": { "@types/react": "^19.1.0", "@types/react-dom": "^19.1.0", "typescript": "^5.9.0" }
+}

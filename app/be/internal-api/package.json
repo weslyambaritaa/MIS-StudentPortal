@@ -5,7 +5,6 @@
   "scripts": {
     "predev": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "dev": "tsx watch src/server.ts",
-    "prebuild": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "build": "tsc",
     "prestart": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "start": "node dist/server.js",
