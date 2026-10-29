@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Op, literal } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
@@ -41,7 +41,7 @@ function roomJson(room: Room) {
 }
 function codeFor(value: string | number | bigint) { return `TR-${String(value).padStart(2, "0")}`; }
 async function nextRoomCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
-  const row = await Room.findOne({ attributes: [[literal("nextval('room_code_seq')"), "value"]], raw: true, transaction }) as unknown as { value: number | string | bigint };
+  const [row] = await sequelize.query<{ value: number | string | bigint }>("SELECT nextval('room_code_seq') AS value", { type: QueryTypes.SELECT, transaction });
   return codeFor(row.value);
 }
 
