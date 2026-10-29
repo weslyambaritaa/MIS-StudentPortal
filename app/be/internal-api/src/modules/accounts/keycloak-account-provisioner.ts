@@ -68,7 +68,7 @@ type KeycloakUser = {
 };
 
 export class KeycloakProvisioningError extends AppError {
-  constructor(message: string, statusCode = 502) {
+  constructor(message: string, statusCode = 502, readonly upstreamStatusCode?: number) {
     super(statusCode, message);
     this.name = "KeycloakProvisioningError";
   }
@@ -367,7 +367,7 @@ export class KeycloakAccountProvisioner {
     const response = await this.fetchImpl(url, {
       method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(actions),
     });
-    if (!response.ok) throw new KeycloakProvisioningError("Unable to send the Keycloak account activation email");
+    if (!response.ok) throw new KeycloakProvisioningError("Unable to send the Keycloak account activation email", 502, response.status);
   }
 
   async setBusinessRole(userId: string, role: BusinessRole, enabled: boolean): Promise<void> {
