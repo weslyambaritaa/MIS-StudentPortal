@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
 import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useAuth } from "@/providers/keycloak-provider";
@@ -51,11 +53,41 @@ export default function AccountsPage() {
   ];
 
   return <AppShell title="Manage | Account"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Account</h1><p className="mt-1 text-sm text-zinc-600">Manage your assigned client Accounts and Personal Accounts.</p></div><Button leftIcon={<Plus size={18} />} onClick={() => { setDialogError(null); setEditor(null); }}>Add Account</Button></section>
+    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Account</h1><p className="mt-1 text-sm text-zinc-600">Manage your assigned client Accounts and Personal Accounts.</p></div><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add Account</AddButton></section>
     <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-      <label htmlFor="account-search" className="flex w-full flex-col gap-[3px] text-sm text-gray-600 md:w-60">Search Account<span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={20} className="shrink-0 text-slate-900/40" /><input id="account-search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search Account" className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-900/40" /></span></label>
-      <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 md:w-48">Industry<span className="relative block h-9"><select value={industryId} onChange={(event) => { setPage(1); setIndustryId(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Industry</option>{industries.map((industry) => <option key={industry.id} value={industry.id}>{industry.name}</option>)}</select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600" /></span></label>
-      <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 md:w-44">Status<span className="relative block h-9"><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600" /></span></label>
+      <Input
+        id="account-search"
+        label="Search Account"
+        leftIcon="search"
+        value={searchDraft}
+        onChange={(event) => setSearchDraft(event.target.value)}
+        placeholder="Search Account"
+        containerClassName="w-full md:w-60"
+      />
+      <Dropdown
+        label="Industry"
+        value={industryId}
+        onChange={(val) => {
+          setPage(1);
+          setIndustryId(val);
+        }}
+        options={[{ label: "All Industry", value: "ALL" }, ...industries.map((ind) => ({ label: ind.name, value: ind.id }))]}
+        containerClassName="w-full md:w-48"
+      />
+      <Dropdown
+        label="Status"
+        value={status}
+        onChange={(val) => {
+          setPage(1);
+          setStatus(val);
+        }}
+        options={[
+          { label: "All Status", value: "ALL" },
+          { label: "Active", value: "ACTIVE" },
+          { label: "Inactive", value: "INACTIVE" },
+        ]}
+        containerClassName="w-full md:w-44"
+      />
     </div>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {loading ? <div className="py-10 text-center text-zinc-500">Loading Accounts…</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id} caption="Accounts assigned to current Sales user" emptyMessage="No Accounts found." />}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
 
@@ -36,7 +36,7 @@ export function CourseCategoryDialog({ value, busy, onClose, onSubmit }: {
         </label>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !name.trim()}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Category"}</Button>
+          <Button type="submit" rightIcon="plus" disabled={busy || !name.trim()}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Category"}</Button>
         </footer>
       </form>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { FileUp, Info, Link2, Plus, X } from "lucide-react";
+import { FileUp, Info, Link2, X } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
 
@@ -80,7 +80,7 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
         {value?.latest_syllabus && <p className="mt-3 break-all text-xs text-zinc-500">Current latest: <a href={value.latest_syllabus.download_url ?? value.latest_syllabus.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">{value.latest_syllabus.version}</a>. Adding a syllabus will create a new version and keep older versions.</p>}
       </section>
       {!value && <div className="mb-6 flex gap-2 rounded-3xl border border-blue-500 bg-blue-500/10 p-3 text-sm text-blue-600"><Info size={18} className="shrink-0"/><span>A PDF is stored in Cloudinary. Previous syllabus versions remain available for Training to select.</span></div>}
-      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !courseCode.trim() || !name.trim() || !categoryId || !Number(durationDays)}>{busy ? "Saving…" : value ? "Save Course" : "Add Course"}<Plus size={16}/></Button></footer>
+      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" rightIcon="plus" disabled={busy || !courseCode.trim() || !name.trim() || !categoryId || !Number(durationDays)}>{busy ? "Saving…" : value ? "Save Course" : "Add Course"}</Button></footer>
     </form>
   </div>;
 }

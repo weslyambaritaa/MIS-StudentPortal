@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Eye, Mail, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, Mail, Pencil, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
 import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@mis/ui/toast";
@@ -96,11 +98,47 @@ export default function PersonInChargePage() {
   ];
 
   return <AppShell title="Manage | PIC List"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Person In Charge</h1><p className="mt-1 text-sm text-zinc-600">PIC monitors training for employees in an Account without attending the classes.</p></div><Button leftIcon={<Plus size={18}/>} onClick={() => { setDialogError(null); setEditor(null); }}>Add PIC</Button></section>
+    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Person In Charge</h1><p className="mt-1 text-sm text-zinc-600">PIC monitors training for employees in an Account without attending the classes.</p></div><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add PIC</AddButton></section>
     <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-      <label htmlFor="pic-search" className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:w-60">Search PIC Name<span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={20} className="shrink-0 text-slate-900/40"/><input id="pic-search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search PIC name or email" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-900/40"/></span></label>
-      <div className="flex flex-col gap-4 sm:flex-row"><label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">Account<span className="relative block"><select value={accountId} onChange={(event) => { setPage(1); setAccountId(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"/></span></label>
-        <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">Status<span className="relative block"><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Status</option><option value="PENDING">Pending</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"/></span></label></div>
+      <Input
+        id="pic-search"
+        label="Search PIC Name"
+        leftIcon="search"
+        value={searchDraft}
+        onChange={(event) => setSearchDraft(event.target.value)}
+        placeholder="Search PIC name or email"
+        containerClassName="w-full xl:w-60"
+      />
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <Dropdown
+          label="Account"
+          value={accountId}
+          onChange={(val) => {
+            setPage(1);
+            setAccountId(val);
+          }}
+          options={[
+            { label: "All Account", value: "ALL" },
+            ...accounts.map((account) => ({ label: account.name, value: account.id })),
+          ]}
+          containerClassName="w-full sm:w-44"
+        />
+        <Dropdown
+          label="Status"
+          value={status}
+          onChange={(val) => {
+            setPage(1);
+            setStatus(val);
+          }}
+          options={[
+            { label: "All Status", value: "ALL" },
+            { label: "Pending", value: "PENDING" },
+            { label: "Active", value: "ACTIVE" },
+            { label: "Inactive", value: "INACTIVE" },
+          ]}
+          containerClassName="w-full sm:w-44"
+        />
+      </div>
     </div>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {loading ? <div className="py-10 text-center text-zinc-500">Loading PICs…</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id ?? row.email} caption="Person In Charge records assigned to current Sales user" emptyMessage="No PICs found."/>}

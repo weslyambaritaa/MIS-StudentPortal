@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ChevronDown, Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, Eye, Pencil, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
 import { Modal } from "@mis/ui/modal";
 import { Pagination } from "@mis/ui/pagination";
 import { useToast } from "@mis/ui/toast";
@@ -354,7 +356,7 @@ export default function QuotationPage() {
     },
   ];
   const field =
-    "h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-rose-100";
+    "h-9 w-full rounded-full border border-zinc-950/60 bg-neutral-50 px-3 text-sm text-gray-700 outline-none transition-colors duration-150 hover:border-rose-600 focus:border-rose-600 focus:ring-2 focus:ring-rose-100";
   const label = "flex flex-col gap-[3px] text-sm text-gray-600";
 
   return (
@@ -368,73 +370,51 @@ export default function QuotationPage() {
               be approved, cancelled, or marked for revision.
             </p>
           </div>
-          <Button leftIcon={<Plus size={18} />} onClick={() => openEditor()}>
+          <AddButton onClick={() => openEditor()}>
             Add Quotation
-          </Button>
+          </AddButton>
         </section>
         <section className="rounded-3xl border border-rose-50 bg-white p-5">
           <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-            <label className={`${label} w-full xl:w-60`}>
-              Search Quotation
-              <span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3">
-                <Search size={18} className="text-slate-900/40" />
-                <input
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                  placeholder="Example: QTN-000001"
-                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-900/40"
-                />
-              </span>
-            </label>
+            <Input
+              label="Search Quotation"
+              leftIcon="search"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder="Example: QTN-000001"
+              containerClassName="w-full xl:w-60"
+            />
             <div className="flex gap-4">
-              <label className={`${label} w-44`}>
-                Course
-                <span className="relative">
-                  <select
-                    className={`${field} appearance-none pr-9`}
-                    value={courseFilter}
-                    onChange={(e) => {
-                      setPage(1);
-                      setCourseFilter(e.target.value);
-                    }}
-                  >
-                    <option value="ALL">All Course</option>
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"
-                  />
-                </span>
-              </label>
-              <label className={`${label} w-40`}>
-                Status
-                <span className="relative">
-                  <select
-                    className={`${field} appearance-none pr-9`}
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setPage(1);
-                      setStatusFilter(e.target.value);
-                    }}
-                  >
-                    <option value="ALL">All Status</option>
-                    <option value="WAITING">Waiting</option>
-                    <option value="APPROVED">Approved</option>
-                    <option value="CANCELLED">Cancelled</option>
-                    <option value="REVISION">Revision</option>
-                    <option value="SEND_FAILED">Send failed</option>
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"
-                  />
-                </span>
-              </label>
+              <Dropdown
+                label="Course"
+                value={courseFilter}
+                onChange={(val) => {
+                  setPage(1);
+                  setCourseFilter(val);
+                }}
+                options={[
+                  { label: "All Course", value: "ALL" },
+                  ...courses.map((c) => ({ label: c.name, value: c.id })),
+                ]}
+                containerClassName="w-44"
+              />
+              <Dropdown
+                label="Status"
+                value={statusFilter}
+                onChange={(val) => {
+                  setPage(1);
+                  setStatusFilter(val);
+                }}
+                options={[
+                  { label: "All Status", value: "ALL" },
+                  { label: "Waiting", value: "WAITING" },
+                  { label: "Approved", value: "APPROVED" },
+                  { label: "Cancelled", value: "CANCELLED" },
+                  { label: "Revision", value: "REVISION" },
+                  { label: "Send failed", value: "SEND_FAILED" },
+                ]}
+                containerClassName="w-40"
+              />
             </div>
           </div>
           {error && (
@@ -596,7 +576,7 @@ export default function QuotationPage() {
               <Button
                 size="sm"
                 type="button"
-                leftIcon={<Plus size={14} />}
+                leftIcon="plus"
                 className="h-8 shrink-0 px-2 text-xs"
                 onClick={() =>
                   setForm((v) => ({
@@ -705,7 +685,7 @@ export default function QuotationPage() {
               <Button
                 type="submit"
                 disabled={busy || !form.lines.length}
-                rightIcon={<Plus size={17} />}
+                rightIcon="plus"
               >
                 {busy ? "Sending..." : editor ? "Update Quotation" : "Add Quotation"}
               </Button>

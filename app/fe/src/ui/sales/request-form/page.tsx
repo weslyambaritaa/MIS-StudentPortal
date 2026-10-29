@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
+import { Input } from "@mis/ui/input";
+import { LordIcon } from "@mis/ui/lord-icon";
 import { Pagination } from "@mis/ui/pagination";
 import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
@@ -435,87 +438,66 @@ export default function RequestFormPage({
               {mode === "REGISTRATION" ? "Manage registration forms for public courses." : "Manage request forms for private and in-house courses."} Send completed forms to the admin (QPD).
             </p>
           </div>
-          <Button onClick={openNew} leftIcon={<Plus size={18} />}>
+          <AddButton onClick={openNew}>
             Add {formName}
-          </Button>
+          </AddButton>
         </section>
         <section className="flex flex-col gap-6 rounded-3xl border border-rose-50 bg-white p-5">
           <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-            <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:max-w-60">
-              Search Quotation Code
-              <span className="relative">
-                <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                />
-                <input
-                  className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 pl-9 pr-3 text-sm outline-none"
-                  placeholder="Example: QTN-0926-001"
-                  value={search}
-                  onChange={(e) => {
-                    setPage(1);
-                    setSearch(e.target.value);
-                  }}
-                />
-              </span>
-            </label>
+            <Input
+              label="Search Quotation Code"
+              leftIcon="search"
+              placeholder="Example: QTN-0926-001"
+              value={search}
+              onChange={(e) => {
+                setPage(1);
+                setSearch(e.target.value);
+              }}
+              containerClassName="w-full xl:max-w-60"
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {[
-                {
-                  label: "Class Type",
-                  value: deliveryType,
-                  set: setDeliveryType,
-                  options: [["ALL", "All Type"], ...deliveryOptions],
-                },
-                {
-                  label: "Company",
-                  value: accountFilter,
-                  set: setAccountFilter,
-                  options: [
-                    ["ALL", "All Company"],
-                    ...accounts.map((account) => [account.id, account.name]),
-                  ],
-                },
-                {
-                  label: "Status",
-                  value: status,
-                  set: setStatus,
-                  options: [
-                    ["ALL", "All Status"],
-                    ["DRAFT", "Draft"],
-                    ["WAITING", "Waiting"],
-                    ["REVISION", "Revision"],
-                    ["APPROVED", "Approved"],
-                  ],
-                },
-              ].map((filter) => (
-                <label
-                  key={filter.label}
-                  className="flex min-w-40 flex-col gap-[3px] text-sm text-gray-600"
-                >
-                  {filter.label}
-                  <span className="relative">
-                    <select
-                      className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm text-slate-900/60 outline-none"
-                      value={filter.value}
-                      onChange={(e) => {
-                        setPage(1);
-                        filter.set(e.target.value);
-                      }}
-                    >
-                      {filter.options.map(([value, text]) => (
-                        <option key={value} value={value}>
-                          {text}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"
-                    />
-                  </span>
-                </label>
-              ))}
+              <Dropdown
+                label="Class Type"
+                value={deliveryType}
+                onChange={(val) => {
+                  setPage(1);
+                  setDeliveryType(val);
+                }}
+                options={[
+                  { label: "All Type", value: "ALL" },
+                  ...deliveryOptions.map(([val, label]) => ({ label, value: val })),
+                ]}
+                containerClassName="min-w-40"
+              />
+              <Dropdown
+                label="Company"
+                value={accountFilter}
+                onChange={(val) => {
+                  setPage(1);
+                  setAccountFilter(val);
+                }}
+                options={[
+                  { label: "All Company", value: "ALL" },
+                  ...accounts.map((account) => ({ label: account.name, value: account.id })),
+                ]}
+                containerClassName="min-w-40"
+              />
+              <Dropdown
+                label="Status"
+                value={status}
+                onChange={(val) => {
+                  setPage(1);
+                  setStatus(val);
+                }}
+                options={[
+                  { label: "All Status", value: "ALL" },
+                  { label: "Draft", value: "DRAFT" },
+                  { label: "Waiting", value: "WAITING" },
+                  { label: "Revision", value: "REVISION" },
+                  { label: "Approved", value: "APPROVED" },
+                ]}
+                containerClassName="min-w-40"
+              />
             </div>
           </div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
@@ -763,7 +745,7 @@ export default function RequestFormPage({
                 <label className="flex cursor-pointer flex-col gap-1 text-sm text-gray-600">
                   {mode === "REGISTRATION" ? "Registration Attachment *" : "RF Attachment *"}
                   <span className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center">
-                    <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><Plus size={20} /></span>
+                    <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><LordIcon src="upload" size={20} colors="primary:#ffffff,secondary:#ffffff" /></span>
                     <span className="text-sm text-gray-600">Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></span>
                     <input className="sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(e) => void addFiles(e)} />
                   </span>
@@ -838,7 +820,7 @@ export default function RequestFormPage({
                 <section className="space-y-3 bg-white">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-medium text-rose-600">Special Instructions / Notes</h3>
-                    <Button size="sm" variant="primary" leftIcon={<Plus size={15} />} onClick={() => setNotes((current) => [...current, ""])}>Add Notes</Button>
+                    <AddButton size="sm" onClick={() => setNotes((current) => [...current, ""])}>Add Notes</AddButton>
                   </div>
                   <div className="h-px bg-zinc-950/20" />
                   {notes.map((note, index) => (

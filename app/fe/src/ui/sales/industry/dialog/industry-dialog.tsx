@@ -3,7 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { Button } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
 
 export type IndustryFormValue = { id?: string; industry_code?: string; name: string; status: "ACTIVE" | "INACTIVE" };
 
@@ -34,17 +36,30 @@ export function IndustryDialog({
           <h2 id="industry-dialog-title" className="text-2xl font-medium text-gray-600">{value?.id ? "Edit Industry" : "Add Industry"}</h2>
           <IconButton label="Close" icon={<X size={18} />} onClick={onClose} disabled={busy} />
         </header>
-        <label className="mb-4 block text-sm text-gray-600">Industry Code
-          <input value={value?.industry_code ?? "Generated automatically"} readOnly className="mt-1 h-9 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-slate-500" />
-        </label>
-        <label className="mb-4 block text-sm text-gray-600">Industry Name
-          <input autoFocus required maxLength={150} value={name} onChange={(event) => setName(event.target.value)} placeholder="Example: Automotive" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900" />
-        </label>
-        <label className="mb-6 block text-sm text-gray-600">Status
-          <select value={status} onChange={(event) => setStatus(event.target.value as "ACTIVE" | "INACTIVE")} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900">
-            <option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option>
-          </select>
-        </label>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-600">Industry Code</label>
+          <input value={value?.industry_code ?? "Generated automatically"} readOnly className="mt-1 h-9 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-sm text-slate-500 outline-none" />
+        </div>
+        <Input
+          label="Industry Name"
+          autoFocus
+          required
+          maxLength={150}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Example: Automotive"
+          containerClassName="mb-4"
+        />
+        <Dropdown
+          label="Status"
+          value={status}
+          onChange={(val) => setStatus(val as "ACTIVE" | "INACTIVE")}
+          options={[
+            { label: "Active", value: "ACTIVE" },
+            { label: "Inactive", value: "INACTIVE" },
+          ]}
+          containerClassName="mb-6"
+        />
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : value?.id ? "Save Changes" : "Add Industry"}</Button>

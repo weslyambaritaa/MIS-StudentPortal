@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { IconButton } from "@mis/ui/icon-button";
 import { Pagination } from "@mis/ui/pagination";
@@ -78,7 +78,7 @@ export default function CourseCategoryPage() {
       <div className="flex flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center">
           <div><h1 className="text-3xl font-medium text-gray-600">Course Category</h1><p className="mt-1 text-sm text-zinc-600">Manage category for courses here, one category can have multiple courses.</p></div>
-          <Button leftIcon={<Plus size={18} />} onClick={() => setEditor({ name: "" })}>Add Category</Button>
+          <AddButton onClick={() => setEditor({ name: "" })}>Add Category</AddButton>
         </section>
 
         <section className="rounded-3xl border border-rose-50 bg-white p-5">

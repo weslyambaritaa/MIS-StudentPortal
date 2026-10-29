@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Building2, ChevronDown, ChevronRight, Pencil, Trash2, UserRound, X } from "lucide-react";
 import { Badge } from "@mis/ui/badge";
 import { Button } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
 import type { AccountValue } from "./account-dialog";
 
@@ -100,16 +101,12 @@ export function AccountDetailsDialog({
 
           <section className="flex min-h-0 flex-col gap-3">
             <h3 className="text-base font-medium text-rose-600">Available Student</h3>
-            <label className="flex flex-col gap-[3px] text-sm text-gray-600">
-              Course
-              <span className="relative block">
-                <select value={selectedCourse} onChange={(event) => setSelectedCourse(event.target.value)} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-[#FFFAFB] px-3 pr-9 text-sm text-rose-600">
-                  <option value="ALL">Showing All Course</option>
-                  {courses.map((course) => <option key={course} value={course}>{course}</option>)}
-                </select>
-                <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              </span>
-            </label>
+            <Dropdown
+              label="Course"
+              value={selectedCourse}
+              onChange={(val) => setSelectedCourse(val)}
+              options={[{ label: "Showing All Course", value: "ALL" }, ...courses.map((course) => ({ label: course, value: course }))]}
+            />
             {loadingStudents ? <p className="py-3 text-center text-sm text-zinc-500">Loading students...</p> : visibleStudents.length ? (
               <div className="flex min-h-0 flex-col divide-y divide-rose-50">
                 {displayedStudents.map((student, index) => (

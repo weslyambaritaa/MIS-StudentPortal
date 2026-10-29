@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 import { Button } from "./button";
 import { IconButton } from "./icon-button";
@@ -36,7 +36,7 @@ export function MultipleList({
       <div className="flex items-center justify-between">
         <h3 className="text-base font-medium text-rose-600">{title}</h3>
 
-        <Button size="sm" leftIcon={<Plus size={16} />} onClick={onAdd}>
+        <Button size="sm" leftIcon="plus" onClick={onAdd}>
           Add List
         </Button>
       </div>
