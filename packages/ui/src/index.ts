@@ -16,3 +16,5 @@ export * from "./portal-shell";
 export * from "./radio-group";
 export * from "./textarea";
 export * from "./toast";
+export * from "./lord-icon";
+export * from "./under-construction";

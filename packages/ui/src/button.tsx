@@ -5,7 +5,7 @@ type ButtonVariant = "primary" | "soft" | "ghost" | "danger" | "navigation";
 type ButtonSize = "default" | "sm" | "icon";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  children: ReactNode;
+  children?: ReactNode;
 
   variant?: ButtonVariant;
 
@@ -92,12 +92,17 @@ export function Button({
     return ["bg-transparent", "text-gray-600", "hover:bg-gray-100"].join(" ");
   };
 
+  const iconHoverClass =
+    variant === "primary"
+      ? "group-hover:text-white group-hover:[--lord-icon-primary:#ffffff] group-hover:[--lord-icon-secondary:#ffffff]"
+      : "group-hover:text-[#DE1641] group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]";
+
   return (
     <button
       type={type}
       disabled={disabled}
       className={[
-        "inline-flex items-center justify-center gap-3",
+        "group inline-flex items-center justify-center gap-2.5",
 
         "rounded-[100px]",
 
@@ -132,15 +137,19 @@ export function Button({
       {...props}
     >
       {leftIcon && (
-        <span className={`flex shrink-0 items-center justify-center overflow-hidden text-current ${size === "sm" ? "size-4" : "size-5"}`}>
+        <span
+          className={`inline-flex shrink-0 items-center justify-center leading-none text-current transition-colors duration-150 ${iconHoverClass} ${size === "sm" ? "size-4" : "size-5"}`}
+        >
           {leftIcon}
         </span>
       )}
 
-      <span>{children}</span>
+      {children && <span className="leading-none">{children}</span>}
 
       {rightIcon && (
-        <span className={`flex shrink-0 items-center justify-center overflow-hidden text-current ${size === "sm" ? "size-4" : "size-5"}`}>
+        <span
+          className={`inline-flex shrink-0 items-center justify-center leading-none text-current transition-colors duration-150 ${iconHoverClass} ${size === "sm" ? "size-4" : "size-5"}`}
+        >
           {rightIcon}
         </span>
       )}

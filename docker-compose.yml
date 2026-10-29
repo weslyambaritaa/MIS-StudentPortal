@@ -142,6 +142,8 @@ services:
 
     container_name: mis-student-api
 
+    command: ["npm", "run", "dev"]
+
     environment:
       PORT: 4001
       NODE_ENV: development
@@ -180,6 +182,8 @@ services:
       - ./app/be/internal-api/.env
 
     container_name: mis-internal-api
+
+    command: ["npm", "run", "dev"]
 
     environment:
       PORT: 4002

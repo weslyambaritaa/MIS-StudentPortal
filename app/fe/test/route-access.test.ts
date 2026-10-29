@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { BUSINESS_ROLES, ROLES } from "@mis/shared-types";
-import { MIS_PORTAL_ROLES } from "../src/config/portal-roles";
+import { MIS_PORTAL_ROLES, type MisPortalRole } from "../src/config/portal-roles";
 
 import { FEATURE_ACCESS_MATRIX, navigationByRole } from "../src/config/navigation";
 import {
@@ -80,7 +80,7 @@ test("Trainer master route is available only in the Admin active-role context", 
   assert.equal(item?.disabled, undefined);
 });
 
-test("sidebar navigation lists future features without making them navigable", () => {
+test("sidebar navigation provides routes for all department features", () => {
   for (const role of MIS_PORTAL_ROLES) {
     const navigation = navigationByRole[role];
     const menuItems = [
@@ -90,17 +90,17 @@ test("sidebar navigation lists future features without making them navigable", (
     ];
 
     assert.equal(navigation.dashboard.href, "/dashboard");
-    const implementedKeys = new Set(FEATURE_ACCESS_MATRIX.filter((entry) => entry.route).map((entry) => entry.key));
-    for (const item of menuItems.filter((item) => !implementedKeys.has(item.key))) {
-      assert.equal(item.disabled, true, `${role}: ${item.label} should be disabled until its page exists`);
-      assert.equal(item.href, undefined, `${role}: ${item.label} must not point to a fake route`);
+    for (const item of menuItems) {
+      assert.ok(item.href, `${role}: ${item.label} should have a valid route`);
     }
   }
 });
 
 test("role sidebars use the menus read from the supplied designs", () => {
-  const menuLabels = (role: (typeof BUSINESS_ROLES)[number]) =>
-    navigationByRole[role].sections.flatMap((section) => section.items.map((item) => item.label));
+  const menuLabels = (role: MisPortalRole) =>
+    navigationByRole[role].sections.flatMap((section: { items: readonly { label: string }[] }) =>
+      section.items.map((item) => item.label)
+    );
 
   assert.deepEqual(menuLabels(ROLES.SALES), [
     "Quotation",

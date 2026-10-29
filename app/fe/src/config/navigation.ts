@@ -69,15 +69,20 @@ const comingSoon = (
   icon: NavigationIcon,
   roles: readonly BusinessRole[],
   section: string,
-): FeatureAccessEntry => ({
-  key,
-  label,
-  icon,
-  roles,
-  placementByRole: Object.fromEntries(roles.map((role) => [role, { kind: "section", title: section }])) as Partial<
-    Record<BusinessRole, NavigationPlacement>
-  >,
-});
+  route?: string,
+): FeatureAccessEntry => {
+  const rolePrefix = roles[0]?.toLowerCase() ?? "feature";
+  return {
+    key,
+    label,
+    icon,
+    roles,
+    route: route ?? `/${rolePrefix}/${key}`,
+    placementByRole: Object.fromEntries(roles.map((role) => [role, { kind: "section", title: section }])) as Partial<
+      Record<BusinessRole, NavigationPlacement>
+    >,
+  };
+};
 
 const feature = (
   key: string,
@@ -85,12 +90,14 @@ const feature = (
   icon: NavigationIcon,
   roles: readonly BusinessRole[],
   placementByRole: Partial<Record<BusinessRole, NavigationPlacement>>,
-): FeatureAccessEntry => ({ key, label, icon, roles, placementByRole });
+  route?: string,
+): FeatureAccessEntry => {
+  const rolePrefix = roles[0]?.toLowerCase() ?? "feature";
+  return { key, label, icon, roles, route: route ?? `/${rolePrefix}/${key}`, placementByRole };
+};
 
 /**
- * Role-to-feature access matrix. Add a route here only when its real page is
- * implemented; future sidebar entries intentionally have no route and remain
- * disabled in the UI.
+ * Role-to-feature access matrix.
  */
 export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
   {
@@ -166,11 +173,19 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
     route: "/admin/personal-account-links",
     placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } },
   },
+  {
+    key: "request-forms",
+    label: "Request Form Review",
+    icon: "clipboard",
+    roles: [ROLES.ADMIN],
+    route: "/admin/request-forms",
+    placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } },
+  },
 
   // Finance
   feature("due-date", "Due Date", "calendar", [ROLES.FINANCE], {
     [ROLES.FINANCE]: { kind: "dashboard-item" },
-  }),
+  }, "/finance/due-date"),
   comingSoon("invoice-list", "Invoice List", "file", [ROLES.FINANCE], "Invoice"),
   comingSoon("private-invoice", "Private Invoice", "file", [ROLES.FINANCE], "Invoice"),
   comingSoon("public-invoice", "Public Invoice", "file", [ROLES.FINANCE], "Invoice"),
@@ -184,13 +199,11 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
 ];
 
 function toNavigationItem(entry: FeatureAccessEntry, role: BusinessRole): NavigationItem {
-  const implemented = Boolean(entry.route);
   return {
     key: entry.key,
     label: entry.labelByRole?.[role] ?? entry.label,
     icon: entry.icon,
     ...(entry.route ? { href: entry.route } : {}),
-    ...(!implemented ? { disabled: true } : {}),
   };
 }
 
