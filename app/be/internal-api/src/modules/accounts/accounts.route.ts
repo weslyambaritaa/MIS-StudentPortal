@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Op, col, literal, type Transaction } from "sequelize";
+import { Op, QueryTypes, col, type Transaction } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
@@ -25,7 +25,7 @@ const displayName = (user: { firstName?: string; lastName?: string; username: st
   [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username;
 
 async function nextAccountCode(transaction: Transaction) {
-  const row = await Account.findOne({ attributes: [[literal("nextval('account_code_seq')"), "value"]], transaction, raw: true }) as unknown as { value: number | string | bigint };
+  const [row] = await sequelize.query<{ value: number | string | bigint }>("SELECT nextval('account_code_seq') AS value", { type: QueryTypes.SELECT, transaction });
   return `ACC-${String(row.value).padStart(6, "0")}`;
 }
 
