@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays } from "lucide-react";
 import { BUSINESS_ROLES, type BusinessRole } from "@mis/shared-types";
 import { AppShell } from "@/components/layout/app-shell";
 import { Pagination } from "@mis/ui/pagination";
@@ -85,23 +84,18 @@ export default function AuditTrailPage() {
                   {BUSINESS_ROLES.map((role: BusinessRole) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}
                 </select>
               </label>
-              <fieldset className="w-full sm:w-[360px]">
-                <legend className="mb-[3px] text-sm text-gray-600">Date Range</legend>
-                <div className="flex h-9 items-center gap-1 rounded-full border border-rose-600 bg-neutral-50 px-2 focus-within:ring-2 focus-within:ring-rose-200">
-                  <CalendarDays size={17} className="shrink-0 text-rose-600" aria-hidden="true" />
-                  <label className="sr-only" htmlFor="audit-from-date">From date</label>
-                  <input id="audit-from-date" type="date" value={filters.from} max={filters.to || undefined} onChange={(event) => {
-                    const from = event.target.value;
-                    updateFilter({ ...filters, from, to: filters.to && from && filters.to < from ? from : filters.to });
-                  }} className="min-w-0 flex-1 bg-transparent px-1 text-xs text-slate-900 outline-none" />
-                  <span className="text-xs text-zinc-500">to</span>
-                  <label className="sr-only" htmlFor="audit-to-date">To date</label>
-                  <input id="audit-to-date" type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => {
-                    const to = event.target.value;
-                    updateFilter({ ...filters, to, from: filters.from && to && filters.from > to ? to : filters.from });
-                  }} className="min-w-0 flex-1 bg-transparent px-1 text-xs text-slate-900 outline-none" />
-                </div>
-              </fieldset>
+              <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">From Date
+                <input id="audit-from-date" aria-label="From Date" type="date" value={filters.from} max={filters.to || undefined} onChange={(event) => {
+                  const from = event.target.value;
+                  updateFilter({ ...filters, from, to: filters.to && from && filters.to < from ? from : filters.to });
+                }} className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-rose-200" />
+              </label>
+              <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">To Date
+                <input id="audit-to-date" aria-label="To Date" type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => {
+                  const to = event.target.value;
+                  updateFilter({ ...filters, to, from: filters.from && to && filters.from > to ? to : filters.from });
+                }} className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-rose-200" />
+              </label>
             </div>
           </div>
 
