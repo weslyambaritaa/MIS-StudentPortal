@@ -367,7 +367,7 @@ export class KeycloakAccountProvisioner {
     const response = await this.fetchImpl(url, {
       method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(actions),
     });
-    if (!response.ok) throw new KeycloakProvisioningError("Unable to send the Keycloak PIC activation email");
+    if (!response.ok) throw new KeycloakProvisioningError("Unable to send the Keycloak account activation email");
   }
 
   async setBusinessRole(userId: string, role: BusinessRole, enabled: boolean): Promise<void> {

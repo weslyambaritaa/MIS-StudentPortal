@@ -117,8 +117,8 @@ const activateRequiredActionsEmail = (subject: string) =>
     subject,
     ["UPDATE_PASSWORD"],
     ACTIVATION_LIFESPAN_SECONDS,
-    env.keycloakPicActivationClientId,
-    env.keycloakPicActivationRedirectUri
+    env.keycloakTrainerActivationClientId,
+    env.keycloakTrainerActivationRedirectUri
   );
 
 trainersRouter.get(
