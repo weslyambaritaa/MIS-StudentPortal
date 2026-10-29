@@ -19,6 +19,8 @@ export const env = {
   keycloakProvisionerClientSecret: process.env.KEYCLOAK_PROVISIONER_CLIENT_SECRET,
   keycloakPicActivationClientId: process.env.KEYCLOAK_PIC_ACTIVATION_CLIENT_ID ?? "mis-student-portal-frontend",
   keycloakPicActivationRedirectUri: process.env.KEYCLOAK_PIC_ACTIVATION_REDIRECT_URI ?? "http://localhost:3000/dashboard",
+  keycloakTrainerActivationClientId: process.env.KEYCLOAK_TRAINER_ACTIVATION_CLIENT_ID ?? "mis-student-portal-frontend",
+  keycloakTrainerActivationRedirectUri: process.env.KEYCLOAK_TRAINER_ACTIVATION_REDIRECT_URI ?? "http://localhost:3100/dashboard",
   keycloakAuditEnabled: process.env.KEYCLOAK_AUDIT_ENABLED === "true",
   keycloakAuditClientId: process.env.KEYCLOAK_AUDIT_CLIENT_ID ?? "mis-audit-reader",
   keycloakAuditClientSecret: process.env.KEYCLOAK_AUDIT_CLIENT_SECRET,
