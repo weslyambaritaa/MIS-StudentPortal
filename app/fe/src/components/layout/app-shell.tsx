@@ -9,6 +9,7 @@ import {
   Users, type LucideIcon,
 } from "lucide-react";
 import { PortalShell, type PortalNavigation, type PortalNavigationItem } from "@mis/ui/portal-shell";
+import { LordIcon, type LordIconName } from "@mis/ui/lord-icon";
 import { ROLES } from "@mis/shared-types";
 import { navigationByRole, type NavigationIcon, type NavigationItem } from "@/config/navigation";
 import { getSelectableActiveRole } from "@/lib/auth/active-role";
@@ -42,19 +43,59 @@ const navigationIcons: Record<NavigationIcon, LucideIcon> = {
   matrix: ClipboardCheck,
 };
 
-function asPortalItem(item: NavigationItem): PortalNavigationItem {
+/**
+ * LordIcon mapping for Sales sidebar items.
+ * User requested placeholder icons for every button/link on the Sales sidebar.
+ */
+const salesLordIcons: Record<string, LordIconName> = {
+  dashboard: "bar-chart-vertical",
+  quotation: "pen-nib",
+  "request-form": "receipt",
+  "registration-form": "file-text",
+  industry: "briefcase",
+  account: "building",
+  "person-in-charge": "avatar-circle",
+};
+
+function asPortalItem(item: NavigationItem, isSales = false): PortalNavigationItem {
+  if (isSales || item.key in salesLordIcons) {
+    const iconName = salesLordIcons[item.key] ?? "briefcase";
+    return {
+      ...item,
+      icon: ({ active }) => (
+        <LordIcon
+          src={iconName}
+          size={20}
+          trigger="hover"
+          target="a,button"
+          colors={active ? "primary:#ffffff,secondary:#ffffff" : "primary:#4b5563,secondary:#9ca3af"}
+          className={active ? "" : "transition-colors duration-150 group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]"}
+        />
+      ),
+    };
+  }
+
   const Icon = navigationIcons[item.icon];
   return { ...item, icon: <Icon size={20} strokeWidth={1.7} /> };
 }
 
 function getNavigation(activeRole: ReturnType<typeof useAuth>["activeRole"], includeAccessLogs: boolean): PortalNavigation {
+  const isSales = activeRole === ROLES.SALES;
   const configured = activeRole ? navigationByRole[activeRole] : null;
-  const sections = (configured?.sections ?? []).map((section) => ({ title: section.title, items: section.items.map(asPortalItem) }));
-  if (includeAccessLogs) sections.push({ title: "Administration", items: [{ key: "access-logs", label: "Access Logs", icon: <History size={20} strokeWidth={1.7} />, href: "/admin/access-logs" }] });
+  const sections = (configured?.sections ?? []).map((section) => ({
+    title: section.title,
+    items: section.items.map((item) => asPortalItem(item, isSales)),
+  }));
+  if (includeAccessLogs) {
+    sections.push({
+      title: "Administration",
+      items: [{ key: "access-logs", label: "Access Logs", icon: <History size={20} strokeWidth={1.7} />, href: "/admin/access-logs" }],
+    });
+  }
   return {
-    ...(configured?.dashboard ? { dashboard: asPortalItem(configured.dashboard) } : {}),
+    ...(configured?.dashboard ? { dashboard: asPortalItem(configured.dashboard, isSales) } : {}),
     ...(configured?.dashboardSectionTitle ? { dashboardSectionTitle: configured.dashboardSectionTitle } : {}),
-    ...(configured?.dashboardSectionItems ? { dashboardSectionItems: configured.dashboardSectionItems.map(asPortalItem) } : {}),
+    ...(configured?.dashboardSectionItems ? { dashboardSectionItems: configured.dashboardSectionItems.map((item) => asPortalItem(item, isSales)) } : {}),
     sections,
   };
 }

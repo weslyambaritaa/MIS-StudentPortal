@@ -12,7 +12,7 @@ import { LogoutConfirmationModal } from "./logout-confirmation-modal";
 export type PortalNavigationItem = {
   key: string;
   label: string;
-  icon: ReactNode;
+  icon: ReactNode | ((context: { active: boolean; collapsed: boolean }) => ReactNode);
   href?: string;
   disabled?: boolean;
 };
@@ -50,16 +50,17 @@ function NavigationLink({ item, active, collapsed, onNavigate }: {
   onNavigate?: () => void;
 }) {
   const className = [
-    "flex items-center gap-3 rounded-[100px] px-3 py-2.5 text-base font-medium transition-all duration-150",
+    "group flex items-center gap-3 rounded-[100px] px-3 py-2.5 text-base font-medium transition-all duration-150",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-2",
     collapsed ? "size-10 justify-center px-0" : "w-full justify-start",
     active
       ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]"
       : "text-gray-600 hover:bg-rose-100 hover:text-rose-700",
   ].join(" ");
+  const iconNode = typeof item.icon === "function" ? item.icon({ active, collapsed }) : item.icon;
   const content = <>
-    <span className="flex size-5 shrink-0 items-center justify-center">{item.icon}</span>
-    {!collapsed && <span className="truncate font-sans">{item.label}</span>}
+    <span className={`flex size-5 shrink-0 items-center justify-center leading-none transition-colors duration-150 ${active ? "group-hover:[--lord-icon-primary:#ffffff]" : "group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]"}`}>{iconNode}</span>
+    {!collapsed && <span className="truncate font-sans leading-none">{item.label}</span>}
   </>;
 
   if (!item.href || item.disabled) {
@@ -92,17 +93,28 @@ function PortalSidebar({ navigation, activePath, userName, activeRole, collapsed
     ...(dashboardInSection && navigation.dashboard ? [navigation.dashboard, ...(navigation.dashboardSectionItems ?? [])] : []),
   ];
 
-  return <div className="flex h-full flex-col justify-between p-5">
-    <div className={collapsed ? "flex flex-col items-center gap-6" : "flex flex-col gap-6"}>
-      {topItems.length > 0 && renderSection(dashboardInSection ? navigation.dashboardSectionTitle : undefined, topItems)}
-      {navigation.sections.map((section, index) => renderSection(section.title ?? `section-${index}`, section.items))}
+  return (
+    <div className="flex h-full flex-col justify-between overflow-hidden p-5">
+      <div
+        className={`flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1 [scrollbar-width:thin] [scrollbar-color:#e5e7eb_transparent] ${
+          collapsed ? "flex flex-col items-center gap-6" : "flex flex-col gap-6"
+        }`}
+      >
+        {topItems.length > 0 && renderSection(dashboardInSection ? navigation.dashboardSectionTitle : undefined, topItems)}
+        {navigation.sections.map((section, index) => renderSection(section.title ?? `section-${index}`, section.items))}
+      </div>
+      <div className={`shrink-0 pt-4 border-t border-rose-50/80 ${collapsed ? "flex justify-center" : "flex items-center justify-end gap-3"}`}>
+        {!collapsed && <div className="h-10 w-[3px] rounded-[1px] bg-sky-500" />}
+        {!collapsed && (
+          <div className="min-w-0 flex-1 text-right">
+            <p className="truncate text-base font-medium text-sky-500">{userName}</p>
+            <p className="truncate text-sm text-zinc-950/60">{activeRole ?? "-"}</p>
+          </div>
+        )}
+        <IconButton label="User profile" variant="profile" icon={<User size={20} />} />
+      </div>
     </div>
-    <div className={collapsed ? "flex justify-center" : "flex items-center justify-end gap-3"}>
-      {!collapsed && <div className="h-10 w-[3px] rounded-[1px] bg-sky-500" />}
-      {!collapsed && <div className="min-w-0 flex-1 text-right"><p className="truncate text-base font-medium text-sky-500">{userName}</p><p className="truncate text-sm text-zinc-950/60">{activeRole ?? "-"}</p></div>}
-      <IconButton label="User profile" variant="profile" icon={<User size={20} />} />
-    </div>
-  </div>;
+  );
 }
 
 export function PortalShell({
@@ -143,7 +155,20 @@ export function PortalShell({
     </header>
 
     <div className="flex min-h-[calc(100vh-var(--navbar-height))] gap-4 p-3">
-      <aside className={["hidden shrink-0 rounded-3xl border border-rose-50 bg-white transition-[width] duration-200 md:block", sidebarCollapsed ? "w-20" : "w-[240px]"].join(" ")}><PortalSidebar navigation={navigation} activePath={pathname} userName={userName} activeRole={activeRole} collapsed={sidebarCollapsed} /></aside>
+      <aside
+        className={[
+          "sticky top-[calc(var(--navbar-height,68px)+0.75rem)] h-[calc(100vh-var(--navbar-height,68px)-1.5rem)] self-start hidden shrink-0 rounded-3xl border border-rose-50 bg-white transition-[width] duration-200 md:block",
+          sidebarCollapsed ? "w-20" : "w-[240px]",
+        ].join(" ")}
+      >
+        <PortalSidebar
+          navigation={navigation}
+          activePath={pathname}
+          userName={userName}
+          activeRole={activeRole}
+          collapsed={sidebarCollapsed}
+        />
+      </aside>
       {mobileSidebarOpen && <button type="button" aria-label="Close sidebar" className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={closeMobileSidebar} />}
       <aside className={["fixed bottom-3 left-3 top-3 z-50 w-[240px] rounded-3xl border border-rose-50 bg-white shadow-xl transition-transform duration-300 md:hidden", mobileSidebarOpen ? "translate-x-0" : "-translate-x-[120%]"].join(" ")}>
         <div className="absolute right-3 top-3 z-10"><IconButton label="Close menu" icon={<X size={19} />} onClick={closeMobileSidebar} /></div>
