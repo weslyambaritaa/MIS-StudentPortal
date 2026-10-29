@@ -1,12 +1,48 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { AppShell } from "@/components/layout/app-shell";
+import { UnderConstruction } from "@mis/ui/under-construction";
+import { FEATURE_ACCESS_MATRIX } from "@/config/navigation";
+import { routeMatches } from "@/lib/routing/route-access";
+
+function getFeatureInfo(pathname: string) {
+  const match = FEATURE_ACCESS_MATRIX.find(
+    (item) => item.route && routeMatches(pathname, item.route)
+  );
+
+  if (match) {
+    return {
+      title: match.label,
+    };
+  }
+
+  const segments = pathname.split("/").filter(Boolean);
+  const lastSegment = segments[segments.length - 1] ?? "Page";
+  const formatted = lastSegment
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+  return {
+    title: formatted,
+  };
+}
+
 export default function NotFound() {
+  const pathname = usePathname();
+  const { title } = getFeatureInfo(pathname);
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-12">
-      <section className="w-full max-w-lg rounded-3xl border border-rose-100 bg-white p-8 shadow-sm sm:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-rose-700">Error 404</p>
-        <h1 className="mt-3 text-2xl font-semibold text-slate-900">Page not found</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600">The page may have moved, or the address may be incorrect.</p>
-        <a className="mt-6 inline-flex rounded-full bg-rose-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2" href="/dashboard">Return to dashboard</a>
-      </section>
-    </main>
+    <AppShell title={title}>
+      <UnderConstruction
+        title={`${title} is Under Construction`}
+        description="We are currently deploying new features and optimizing our systems. Thank you for your patience while we set things up."
+        icon="toolbox"
+        iconColors="primary:#ebe6ef,secondary:#de1641,tertiary:#3a3347,quaternary:#b26836,quinary:#ffc738"
+        backLabel="Back to Dashboard"
+        backHref="/dashboard"
+      />
+    </AppShell>
   );
 }

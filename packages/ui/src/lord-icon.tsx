@@ -209,6 +209,11 @@ export const LORD_ICON_REGISTRY = {
   "image-mountain": "/lord-icons/system/system-outline-54-image-mountain.json",
   "eye": "/lord-icons/system/system-outline-69-eye.json",
   "pushpin": "/lord-icons/system/system-outline-754-pushpin.json",
+
+  // Flat Icons (Multi-color support: primary, secondary, tertiary, quaternary, quinary)
+  "toolbox": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
+  "flat-toolbox": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
+  "construction": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
 } as const;
 
 export type LordIconName = keyof typeof LORD_ICON_REGISTRY;
@@ -225,7 +230,7 @@ export type LordIconTrigger =
 
 export interface LordIconProps extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   /**
-   * Name of registered Lordicon (e.g. "briefcase", "receipt", "file", "home")
+   * Name of registered Lordicon (e.g. "briefcase", "receipt", "file", "home", "toolbox")
    * or direct path / URL to a Lottie JSON file.
    */
   src: LordIconName | (string & {});
@@ -236,15 +241,24 @@ export interface LordIconProps extends Omit<React.HTMLAttributes<HTMLElement>, "
   /** Trigger behavior. Default: "hover" */
   trigger?: LordIconTrigger;
 
-  /** Primary color (e.g. "#de1641", "#ffffff", "current") */
+  /** Primary color (e.g. "#de1641", "#ebe6ef", "#ffffff") */
   primaryColor?: string;
 
-  /** Secondary color (e.g. "#6b7280", "#ffffff") */
+  /** Secondary color (e.g. "#de1641", "#6b7280", "#ffffff") */
   secondaryColor?: string;
 
+  /** Tertiary color (e.g. "#3a3347") - used in multi-color flat icons */
+  tertiaryColor?: string;
+
+  /** Quaternary color (e.g. "#b26836") - used in multi-color flat icons */
+  quaternaryColor?: string;
+
+  /** Quinary color (e.g. "#ffc738") - used in multi-color flat icons */
+  quinaryColor?: string;
+
   /**
-   * Raw colors string in Lordicon format (e.g. "primary:#de1641,secondary:#6b7280").
-   * Overrides primaryColor and secondaryColor if provided.
+   * Raw colors string in Lordicon format (e.g. "primary:#ebe6ef,secondary:#de1641,tertiary:#3a3347,quaternary:#b26836,quinary:#ffc738").
+   * Overrides individual color props if provided.
    */
   colors?: string;
 
@@ -298,6 +312,9 @@ export const LordIcon = React.forwardRef<HTMLElement, LordIconProps>(function Lo
     trigger = "hover",
     primaryColor,
     secondaryColor,
+    tertiaryColor,
+    quaternaryColor,
+    quinaryColor,
     colors,
     currentColor,
     delay,
@@ -320,19 +337,21 @@ export const LordIcon = React.forwardRef<HTMLElement, LordIconProps>(function Lo
 
   // Compute colors parameter
   let computedColors = colors;
-  if (!computedColors && (primaryColor || secondaryColor)) {
+  if (
+    !computedColors &&
+    (primaryColor || secondaryColor || tertiaryColor || quaternaryColor || quinaryColor)
+  ) {
     const formatColor = (val: string) => {
       if (val.startsWith("#") || val === "currentColor" || val === "transparent") return val;
       if (/^[0-9a-fA-F]{3,8}$/.test(val)) return `#${val}`;
       return val;
     };
     const parts: string[] = [];
-    if (primaryColor) {
-      parts.push(`primary:${formatColor(primaryColor)}`);
-    }
-    if (secondaryColor) {
-      parts.push(`secondary:${formatColor(secondaryColor)}`);
-    }
+    if (primaryColor) parts.push(`primary:${formatColor(primaryColor)}`);
+    if (secondaryColor) parts.push(`secondary:${formatColor(secondaryColor)}`);
+    if (tertiaryColor) parts.push(`tertiary:${formatColor(tertiaryColor)}`);
+    if (quaternaryColor) parts.push(`quaternary:${formatColor(quaternaryColor)}`);
+    if (quinaryColor) parts.push(`quinary:${formatColor(quinaryColor)}`);
     computedColors = parts.join(",");
   }
 
