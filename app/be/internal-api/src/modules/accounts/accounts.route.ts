@@ -25,7 +25,11 @@ const displayName = (user: { firstName?: string; lastName?: string; username: st
   [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username;
 
 async function nextAccountCode(transaction: Transaction) {
-  const [row] = await sequelize.query<{ value: number | string | bigint }>("SELECT nextval('account_code_seq') AS value", { type: QueryTypes.SELECT, transaction });
+  const [row] = await sequelize.query<{ value: number | string | bigint }>(
+    "SELECT nextval('account_code_seq') AS value",
+    { type: QueryTypes.SELECT, transaction },
+  );
+  if (!row) throw new Error("Could not generate the next Account code");
   return `ACC-${String(row.value).padStart(6, "0")}`;
 }
 
