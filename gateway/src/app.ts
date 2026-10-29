@@ -3,6 +3,7 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
 import { apiErrorFormatter, createCentralAlertReporter, createHttp5xxMonitor, createLogger } from "@mis/logger";
+import { API_BOUNDARIES, API_PREFIX } from "@mis/config";
 
 import { corsMiddleware } from "./middlewares/cors.middleware";
 import { requestId } from "./middlewares/request-id.middleware";
@@ -12,12 +13,11 @@ import { authenticateUserProvisioner } from "./middlewares/authenticate-user-pro
 import { authorizeBoundary } from "./middlewares/authorize-boundary.middleware";
 
 import { EXTERNAL_ROLES, INTERNAL_ROLES } from "./auth/roles";
-import { ROLES } from "@mis/shared-types";
 
 import { realmProxy, resourcesProxy, adminProxy } from "./proxy/keycloak.proxy";
 
 import { externalProxy } from "./proxy/external.proxy";
-import { internalProxy, trainerPortalProxy } from "./proxy/internal.proxy";
+import { internalProxy } from "./proxy/internal.proxy";
 import { accountAdminProxy, accessLogsAdminProxy } from "./proxy/admin.proxy";
 
 import { routes } from "./routes";
@@ -79,20 +79,16 @@ app.use(routes);
  * =====================================================
  */
 
-app.use("/api/v1", apiRateLimit);
+app.use(API_PREFIX, apiRateLimit);
 app.use(createHttp5xxMonitor({ service: "api-gateway", logger, report: createCentralAlertReporter("api-gateway", env.internalApiUrl, env.gatewaySharedSecret) }));
 
 // Separate administrative identity route; it intentionally does not select or union a business activeRole.
-app.use("/api/v1/admin/accounts", authenticateUserProvisioner, accountAdminProxy);
-app.use("/api/v1/admin/access-logs", authenticateUserProvisioner, accessLogsAdminProxy);
+app.use(`${API_PREFIX}/admin/accounts`, authenticateUserProvisioner, accountAdminProxy);
+app.use(`${API_PREFIX}/admin/access-logs`, authenticateUserProvisioner, accessLogsAdminProxy);
 
-// Trainer profile data lives in the internal database, so route only this
-// trainer-owned login sync to the internal API while retaining external-role authorization.
-app.use("/api/v1/external/trainers", authenticate, authorizeBoundary([ROLES.TRAINER]), trainerPortalProxy);
+app.use(API_BOUNDARIES.EXTERNAL, authenticate, authorizeBoundary(EXTERNAL_ROLES), externalProxy);
 
-app.use("/api/v1/external", authenticate, authorizeBoundary(EXTERNAL_ROLES), externalProxy);
-
-app.use("/api/v1/internal", authenticate, authorizeBoundary(INTERNAL_ROLES), internalProxy);
+app.use(API_BOUNDARIES.INTERNAL, authenticate, authorizeBoundary(INTERNAL_ROLES), internalProxy);
 
 /*
  * =====================================================

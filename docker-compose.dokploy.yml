@@ -1,3 +1,5 @@
+# LEGACY single-server deployment. Use docker-compose.server-a.yml and
+# docker-compose.server-b.yml for the split two-server Dokploy setup.
 x-migrate-command: &migrate-command
   - sh
   - -c
@@ -29,6 +31,7 @@ services:
       - student-db-data:/var/lib/postgresql
     networks:
       - external-net
+      - pic-service-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -190,6 +193,7 @@ services:
       DB_USER: ${INTERNAL_DB_USER:-mis_internal}
       DB_PASSWORD: ${INTERNAL_DB_PASSWORD}
       DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+      STUDENT_API_URL: ${STUDENT_API_URL:-http://student-api:4001}
     expose:
       - "4002"
     depends_on:
@@ -200,6 +204,7 @@ services:
     networks:
       - internal-net
       - keycloak-admin-net
+      - pic-service-net
     restart: unless-stopped
  
   # ---------------------------------------------------------
@@ -215,6 +220,7 @@ services:
       MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
       MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
       MONITOR_STUDENT_HEALTH_URL: http://student-api:4001/health
+      STUDENT_API_URL: ${STUDENT_API_URL:-http://student-api:4001}
       MONITOR_KEYCLOAK_HEALTH_URL: http://keycloak:8080/realms/mis-student-portal
       MONITOR_INTERVAL_MS: 30000
       MONITOR_FAILURE_THRESHOLD: 2
@@ -239,14 +245,14 @@ services:
       dockerfile: gateway/Dockerfile
     environment:
       PORT: 4000
-      CORS_ORIGIN: https://${APP_DOMAIN}
+      CORS_ORIGIN: ${CORS_ORIGINS:-https://${APP_DOMAIN}}
       STUDENT_API_URL: http://student-api:4001
       INTERNAL_API_URL: http://internal-api:4002
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_HOST: ${AUTH_DOMAIN}
       KEYCLOAK_ISSUER: https://${AUTH_DOMAIN}/realms/mis-student-portal
       KEYCLOAK_JWKS_INTERNAL_URL: http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_AUDIENCES: ${KEYCLOAK_AUDIENCES:-${KEYCLOAK_CLIENT_ID},student-portal-frontend}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX: 100
@@ -305,3 +311,5 @@ networks:
   external-net:
   internal-net:
   keycloak-admin-net:
+  pic-service-net:
+    internal: true

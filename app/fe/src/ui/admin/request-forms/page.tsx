@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { BookOpen, Building2, CalendarDays, ChevronDown, ExternalLink, Eye, FileText, Mail, Search, UserRound, Users, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { Modal } from "@mis/ui/modal";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { normalizeCalendarDates } from "@/lib/normalize-calendar-dates";
 
 type Item = {

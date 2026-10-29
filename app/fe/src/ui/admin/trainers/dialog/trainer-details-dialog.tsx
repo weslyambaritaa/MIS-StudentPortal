@@ -1,9 +1,9 @@
 "use client";
 
 import { BadgeCheck, BookOpen, Mail, Pencil, Star, Trash2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 import type { TrainerValue } from "./trainer-dialog";
 
 type Training = { id: string; name: string; course_name?: string; status: string; assigned_at: string };

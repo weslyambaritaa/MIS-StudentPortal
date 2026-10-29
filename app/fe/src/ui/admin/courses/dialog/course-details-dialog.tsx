@@ -1,8 +1,8 @@
 "use client";
 
 import { BookOpen, ExternalLink, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { IconButton } from "@mis/ui/icon-button";
 import type { CourseValue } from "./course-dialog";
 
 export function CourseDetailsDialog({ course, loading, onClose }: { course: CourseValue; loading: boolean; onClose: () => void }) {

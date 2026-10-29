@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus, Trash2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type RoomFacility = { name: string; amount: string };
 export type TrainingRoomFormValue = { id?: string; room_code?: string; name: string; capacity: number | string; facilities: RoomFacility[]; status: "ACTIVE" | "INACTIVE" };

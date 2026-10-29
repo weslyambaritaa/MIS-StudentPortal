@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import { BUSINESS_ROLES, type BusinessRole } from "@mis/shared-types";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { Pagination } from "@/components/ui/pagination";
+import { Button } from "@mis/ui/button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { AuditDetailDialog, type AuditDetail } from "./dialog/audit-detail-dialog";
 

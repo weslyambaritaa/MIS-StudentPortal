@@ -1,9 +1,9 @@
 "use client";
 
 import { Building2, GraduationCap, Info, Mail, Pencil, Trash2, UserRound, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 import type { StudentValue } from "./student-dialog";
 
 type Training = { id: string; name: string; status: string; training_type: string };

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@mis/internal-frontend#build": {
+      "dependsOn": [
+        "@mis/shared-types#build",
+        "@mis/config#build",
+        "@mis/auth#build",
+        "@mis/api-client#build",
+        "@mis/ui#build"
+      ],
+      "env": [
+        "NEXT_PUBLIC_API_BASE_URL",
+        "NEXT_PUBLIC_KEYCLOAK_URL",
+        "NEXT_PUBLIC_KEYCLOAK_REALM",
+        "NEXT_PUBLIC_KEYCLOAK_CLIENT_ID"
+      ]
+    },
+    "@mis/student-frontend#build": {
+      "dependsOn": [
+        "@mis/shared-types#build",
+        "@mis/auth#build",
+        "@mis/api-client#build",
+        "@mis/ui#build"
+      ],
+      "env": [
+        "NEXT_PUBLIC_API_BASE_URL",
+        "NEXT_PUBLIC_KEYCLOAK_URL",
+        "NEXT_PUBLIC_KEYCLOAK_REALM",
+        "NEXT_PUBLIC_KEYCLOAK_CLIENT_ID"
+      ]
+    }
+  }
+}

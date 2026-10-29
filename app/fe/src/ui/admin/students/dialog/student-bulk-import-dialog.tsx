@@ -3,11 +3,11 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Info, Upload, X } from "lucide-react";
 import * as XLSX from "xlsx";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
-import { Modal } from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
+import { Modal } from "@mis/ui/modal";
+import { Pagination } from "@mis/ui/pagination";
+import { useToast } from "@mis/ui/toast";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_ROWS = 1000;

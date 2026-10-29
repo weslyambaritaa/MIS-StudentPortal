@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Download, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@mis/ui/button";
 import { useAdminApi } from "@/hooks/use-admin-api";
 
 type AccessLog = {

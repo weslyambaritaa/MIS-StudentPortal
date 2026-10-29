@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { IndustryDialog, type IndustryFormValue } from "./dialog/industry-dialog";
 
 type Industry = IndustryFormValue & { id: string; industry_code: string; amount_account: number | string; ever_used: boolean };

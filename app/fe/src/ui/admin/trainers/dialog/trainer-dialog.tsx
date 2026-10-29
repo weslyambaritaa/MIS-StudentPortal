@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { Info, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type TrainerCertification = { id?: string; name: string; expires_at?: string; expiresAt?: string; days_until_expiry?: number };
 export type TrainerValue = {

@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ChevronDown, Info, Search, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type StudentPortalStatus = "ACTIVE" | "INACTIVE" | "HAVENT_LOGIN";
 export type StudentValue = {

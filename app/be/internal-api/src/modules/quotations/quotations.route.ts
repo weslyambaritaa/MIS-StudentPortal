@@ -3,10 +3,10 @@ import { v2 as cloudinary } from "cloudinary";
 import nodemailer from "nodemailer";
 import { Op, type Transaction, type WhereOptions } from "sequelize";
 import { Router } from "express";
-import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
+import { ACCESS_ACTIONS, ROLES, type ActiveRoleAuthContext } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Account, Course, PicAccountAssignment, PicProfile, Quotation, QuotationDocument, QuotationOrder, SalesAccountAssignment } from "../../database/models";
+import { Account, Course, Quotation, QuotationDocument, QuotationOrder, SalesAccountAssignment } from "../../database/models";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { AppError } from "../../errors/app-error";
@@ -16,6 +16,7 @@ import { keycloakAccountProvisioner } from "../accounts/keycloak-account-provisi
 import { generateQuotationPdf, type QuotationPdfInput, type QuotationType } from "./quotation-document";
 import Joi from "joi";
 import { validateBody } from "../../utils/joi-validation";
+import { studentPicClient } from "../../integrations/student-api/student-api.client";
 
 export const quotationsRouter = Router();
 const TYPES: QuotationType[] = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE_PUBLIC", "ONLINE_PRIVATE"];
@@ -48,11 +49,12 @@ function parseInput(body: unknown): Input {
   if (new Set(lines.map((line) => line.courseId)).size !== lines.length) throw new AppError(400, "A course may only be added once to a quotation");
   return { quotationCode: raw.quotationCode.trim(), accountId: raw.accountId, picId: raw.picId, classType: raw.classType as QuotationType, lines };
 }
-async function assertScope(input: Omit<Input, "quotationCode">, salesSubject: string) {
+async function assertScope(input: Omit<Input, "quotationCode">, actor: ActiveRoleAuthContext) {
+  const salesSubject = actor.userId;
   const account = await Account.findOne({ where: { id: input.accountId, status: "ACTIVE", account_type: "CORPORATE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] });
   if (!account) throw new AppError(400, "Select an active corporate Account assigned to you");
-  const pic = await PicProfile.findOne({ where: { id: input.picId, status: "ACTIVE" }, include: [{ model: PicAccountAssignment, as: "accountAssignments", where: { account_id: input.accountId, ended_at: null }, required: true }] });
-  if (!pic) throw new AppError(400, "Select an active PIC assigned to this Account");
+  const pic = await studentPicClient.get(actor, input.picId);
+  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === input.accountId && !assignment.ended_at)) throw new AppError(400, "Select an active PIC assigned to this Account");
   const courses = await Course.findAll({ where: { status: "ACTIVE", id: { [Op.in]: input.lines.map((line) => line.courseId) } }, attributes: ["id", "name", "duration_minutes"], raw: true });
   if (courses.length !== input.lines.length) throw new AppError(400, "One or more selected courses are inactive or unavailable");
   return { account, pic, courses };
@@ -82,23 +84,25 @@ async function sendPdf(to: string, code: string, pdf: Buffer) {
   const transport = nodemailer.createTransport({ host: env.mailHost, port: env.mailPort, secure: env.mailPort === 465, auth: { user: env.mailUsername, pass: env.mailPassword }, requireTLS: env.mailEncryption === "tls" });
   await transport.sendMail({ from: { name: env.mailFromName, address: env.mailFromAddress }, to, subject: `Quotation ${code} from ExecuTrain`, text: `Dear client,\n\nPlease find attached quotation ${code}.\n\nRegards,\nExecuTrain`, attachments: [{ filename: `${code.replace(/\//g, "-")}.pdf`, content: pdf, contentType: "application/pdf" }] });
 }
-async function pdfData(quote: Quote, lines: LineInput[]) {
+async function pdfData(quote: Quote, lines: LineInput[], actor: ActiveRoleAuthContext) {
   if (!quote.created_by_subject) throw new AppError(409, "Quotation has no creator identity");
-  const details = await assertScope({ accountId: quote.account_id, picId: quote.pic_profile_id, classType: quote.class_type as QuotationType, lines }, quote.created_by_subject);
+  const details = await assertScope({ accountId: quote.account_id, picId: quote.pic_profile_id, classType: quote.class_type as QuotationType, lines }, actor);
   const identity = await keycloakAccountProvisioner.getIdentity(quote.created_by_subject);
   return generateQuotationPdf({ code: quote.quotation_code, accountName: details.account.name, picName: details.pic.name, picEmail: details.pic.email, salesName: [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.username, type: quote.class_type,
     lines: lines.map((line) => { const course = details.courses.find((item) => item.id === line.courseId)!; return { name: course.name, durationMinutes: Number(course.duration_minutes), amountStudent: line.amountStudent, pricePerPax: line.pricePerPax, location: line.location }; }) });
 }
-async function deliver(quoteId: string, salesSubject: string) {
+async function deliver(quoteId: string, actor: ActiveRoleAuthContext) {
+  const salesSubject = actor.userId;
   const quote = await Quotation.findOne({ where: { id: quoteId, created_by_subject: salesSubject, deleted_at: null }, include: [
     { model: Account, as: "account", required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] },
-    { model: PicProfile, as: "pic", required: true },
   ] });
   if (!quote) throw new AppError(404, "Quotation not found");
-  const picEmail = (quote.get("pic") as PicProfile).email;
+  const pic = await studentPicClient.get(actor, quote.pic_profile_id);
+  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === quote.account_id && !assignment.ended_at)) throw new AppError(409, "The selected PIC is no longer active for this Account");
+  const picEmail = pic.email;
   const lineRows = await QuotationOrder.findAll({ where: { quotation_id: quoteId }, attributes: ["course_id", "amount_student", "price", "location"], raw: true });
   const lines = lineRows.map((line) => ({ courseId: line.course_id, amountStudent: Number(line.amount_student), pricePerPax: Number(line.price), location: line.location ?? "" }));
-  const pdf = await pdfData(quote, lines);
+  const pdf = await pdfData(quote, lines, actor);
   const versions = await QuotationDocument.findAll({ where: { quotation_id: quoteId }, attributes: ["version"], order: [["version", "DESC"]], limit: 1, raw: true });
   const version = Number(versions[0]?.version ?? 0) + 1;
   const asset = await uploadPdf(pdf, `quotations/${quote.id}/v${version}`);
@@ -126,7 +130,8 @@ quotationsRouter.get("/options", authorizeCapability("QUOTATION", ACCESS_ACTIONS
 quotationsRouter.get("/accounts/:accountId/pics", authorizeCapability("QUOTATION", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
   const scope = await Account.findOne({ where: { id: req.params.accountId, status: "ACTIVE", account_type: "CORPORATE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] });
   if (!scope) throw new AppError(404, "Account not found");
-  const items = await PicProfile.findAll({ where: { status: "ACTIVE" }, attributes: ["id", "name", "email"], include: [{ model: PicAccountAssignment, as: "accountAssignments", attributes: [], where: { account_id: req.params.accountId, ended_at: null }, required: true }], order: [["name", "ASC"]], raw: true });
+  const profiles = await studentPicClient.list(req.auth!, { accountId: req.params.accountId, status: "ACTIVE" });
+  const items = profiles.items.filter((pic) => pic.assignments.some((assignment) => assignment.account_id === req.params.accountId && !assignment.ended_at)).map(({ id, name, email }) => ({ id, name, email }));
   return res.json({ items });
 }));
 quotationsRouter.get("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
@@ -139,15 +144,15 @@ quotationsRouter.get("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW),
     { "$account.name$": { [Op.iLike]: escapeLike(req.query.search.trim()) } },
   ] });
   if (typeof req.query.courseId === "string" && req.query.courseId !== "ALL") filters["$orders.course_id$"] = req.query.courseId;
-  const { rows, count } = await Quotation.findAndCountAll({ where: filters, attributes: ["id", "quotation_code", "class_type", "status", "sent_at", "created_at"], include: [
+  const { rows, count } = await Quotation.findAndCountAll({ where: filters, attributes: ["id", "quotation_code", "class_type", "status", "sent_at", "created_at", "pic_profile_id"], include: [
     { model: Account, as: "account", attributes: ["name"], required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] },
-    { model: PicProfile, as: "pic", attributes: ["name"], required: false },
     { model: QuotationOrder, as: "orders", attributes: ["course_id", "amount_student", "price"], required: typeof req.query.courseId === "string" && req.query.courseId !== "ALL" },
   ], distinct: true, order: [["created_at", "DESC"]], limit: pageSize, offset: (page - 1) * pageSize });
+  const pics = rows.length ? await studentPicClient.list(req.auth!, { accountIds: [...new Set(rows.map((row) => row.account_id))] }) : { items: [] };
   const items = rows.map((quote) => {
     const orders = quote.get("orders") as QuotationOrder[];
     const account = quote.get("account") as Account;
-    const pic = quote.get("pic") as PicProfile | null;
+    const pic = pics.items.find((profile) => profile.id === quote.pic_profile_id);
     return { id: quote.id, quotation_code: quote.quotation_code, class_type: quote.class_type, status: quote.status, sent_at: quote.sent_at, account_name: account.name, pic_name: pic?.name ?? null, course_count: orders.length, students: orders.reduce((sum, order) => sum + Number(order.amount_student), 0), amount: orders.reduce((sum, order) => sum + Number(order.amount_student) * Number(order.price), 0) };
   });
   return res.json({ items, page, pageSize, total: count });
@@ -155,15 +160,14 @@ quotationsRouter.get("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW),
 quotationsRouter.get("/:id", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const quote = await Quotation.findOne({ where: { id: req.params.id, created_by_subject: req.auth!.userId, deleted_at: null }, include: [
     { model: Account, as: "account", required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] },
-    { model: PicProfile, as: "pic", required: false },
   ] });
   if (!quote) throw new AppError(404, "Quotation not found");
-  const [orders, documents] = await Promise.all([
+  const [orders, documents, pic] = await Promise.all([
     QuotationOrder.findAll({ where: { quotation_id: quote.id }, include: [{ model: Course, as: "course", attributes: ["name", "duration_minutes"], required: true }] }),
     QuotationDocument.findAll({ where: { quotation_id: quote.id }, attributes: ["version", "recipient_email", "sent_at"], order: [["version", "DESC"]], raw: true }),
+    studentPicClient.get(req.auth!, quote.pic_profile_id),
   ]);
   const account = quote.get("account") as Account;
-  const pic = quote.get("pic") as PicProfile | null;
   const lines = orders.map((order) => ({ id: order.id, course_id: order.course_id, course_name: (order.get("course") as Course).name, duration_minutes: (order.get("course") as Course).duration_minutes, amount_student: order.amount_student, price: order.price, location: order.location }));
   return res.json({ item: { ...quote.toJSON(), account_name: account.name, pic_name: pic?.name ?? null, pic_email: pic?.email ?? null }, lines, documents });
 }));
@@ -176,7 +180,7 @@ quotationsRouter.get("/:id/documents/:version", authorizeCapability("QUOTATION",
   return res.json({ url, expiresInSeconds: 300 });
 }));
 quotationsRouter.post("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
-  const input = parseInput(req.body); await assertScope(input, req.auth!.userId);
+  const input = parseInput(req.body); await assertScope(input, req.auth!);
   const id = randomUUID(); const code = input.quotationCode;
   await sequelize.transaction(async (transaction) => {
     await assertAvailableCode(code, id, transaction);
@@ -185,11 +189,11 @@ quotationsRouter.post("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.CREAT
     await QuotationOrder.bulkCreate(input.lines.map((line) => ({ id: randomUUID(), quotation_id: id, course_id: line.courseId, class_type: input.classType.startsWith("ONLINE_") ? "ONLINE" : input.classType, amount_student: line.amountStudent, price: line.pricePerPax, location: line.location })), { transaction });
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "QUOTATION", objectId: id, after: { quotation_code: code, account_id: input.accountId, pic_profile_id: input.picId, class_type: input.classType, status: "SEND_FAILED" }, processName: "quotation-create" }, transaction);
   });
-  try { const delivery = await deliver(id, req.auth!.userId); return res.status(201).json({ item: { id, quotation_code: code, status: delivery.status, delivery_status: "SENT" }, message: "Quotation sent to PIC" }); }
+  try { const delivery = await deliver(id, req.auth!); return res.status(201).json({ item: { id, quotation_code: code, status: delivery.status, delivery_status: "SENT" }, message: "Quotation sent to PIC" }); }
   catch (error) { if (error instanceof AppError) return res.status(error.statusCode).json({ message: error.message, item: { id, quotation_code: code, status: "SEND_FAILED", delivery_status: "FAILED" } }); throw error; }
 }));
 quotationsRouter.put("/:id", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const input = parseInput(req.body); await assertScope(input, req.auth!.userId);
+  const input = parseInput(req.body); await assertScope(input, req.auth!);
   const old = await Quotation.findOne({ where: { id: req.params.id, created_by_subject: req.auth!.userId, deleted_at: null }, include: [{ model: Account, as: "account", required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] }] });
   if (!old) throw new AppError(404, "Quotation not found");
   await sequelize.transaction(async (transaction) => {
@@ -204,11 +208,11 @@ quotationsRouter.put("/:id", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDI
     await QuotationOrder.bulkCreate(input.lines.map((line) => ({ id: randomUUID(), quotation_id: req.params.id, course_id: line.courseId, class_type: input.classType.startsWith("ONLINE_") ? "ONLINE" : input.classType, amount_student: line.amountStudent, price: line.pricePerPax, location: line.location })), { transaction });
     if (JSON.stringify(before) !== JSON.stringify(after)) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "QUOTATION", objectId: req.params.id, before, after, processName: "quotation-edit-resend" }, transaction);
   });
-  const delivery = await deliver(req.params.id, req.auth!.userId);
+  const delivery = await deliver(req.params.id, req.auth!);
   return res.json({ item: { id: req.params.id, quotation_code: input.quotationCode, status: delivery.status, delivery_status: "SENT" }, message: "Updated quotation sent to PIC" });
 }));
 quotationsRouter.post("/:id/resend", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
-  const result = await deliver(req.params.id, req.auth!.userId); return res.json({ item: { id: req.params.id, ...result }, message: "Quotation resent" });
+  const result = await deliver(req.params.id, req.auth!); return res.json({ item: { id: req.params.id, ...result }, message: "Quotation resent" });
 }));
 quotationsRouter.patch("/:id/status", authorizeCapability("QUOTATION", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
   if (!(["APPROVED", "CANCELLED", "REVISION"] as const).includes(req.body?.status)) throw new AppError(400, "Status must be Approved, Cancelled, or Revision");

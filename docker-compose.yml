@@ -130,7 +130,7 @@ services:
   # =========================================================
   # STUDENT API
   # External users:
-  # student, pic, trainer
+  # student, pic
   # =========================================================
   student-api:
     build:
@@ -158,6 +158,7 @@ services:
 
     networks:
       - external-net
+      - pic-service-net
 
     volumes:
       - ./app/be/student-api:/workspace/app/be/student-api
@@ -168,7 +169,7 @@ services:
   # =========================================================
   # INTERNAL API
   # Internal users:
-  # sales, admin, finance, management
+  # trainer, sales, admin, finance, management
   # =========================================================
   internal-api:
     build:
@@ -189,6 +190,7 @@ services:
       DB_USER: ${INTERNAL_DB_USER:-mis_internal}
       DB_PASSWORD: ${INTERNAL_DB_PASSWORD}
       DEVELOPER_SUPPORT_EMAIL: ${DEVELOPER_SUPPORT_EMAIL:-}
+      STUDENT_API_URL: ${STUDENT_API_URL:-http://student-api:4001}
 
     expose:
       - "4002"
@@ -200,6 +202,7 @@ services:
     networks:
       - internal-net
       - keycloak-admin-net
+      - pic-service-net
 
     volumes:
       - ./app/be/internal-api:/workspace/app/be/internal-api
@@ -225,6 +228,7 @@ services:
       MONITOR_GATEWAY_HEALTH_URL: http://api-gateway:4000/health
       MONITOR_INTERNAL_HEALTH_URL: http://internal-api:4002/health
       MONITOR_STUDENT_HEALTH_URL: http://student-api:4001/health
+      STUDENT_API_URL: ${STUDENT_API_URL:-http://student-api:4001}
       MONITOR_KEYCLOAK_HEALTH_URL: http://keycloak:8080/realms/mis-student-portal
       MONITOR_INTERVAL_MS: 30000
       MONITOR_FAILURE_THRESHOLD: 2
@@ -257,7 +261,7 @@ services:
       PORT: 4000
 
       # Frontend origin
-      CORS_ORIGIN: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001
 
       # Backend services
       STUDENT_API_URL: http://student-api:4001
@@ -278,7 +282,7 @@ services:
         http://keycloak:8080/realms/mis-student-portal/protocol/openid-connect/certs
 
       # JWT audience validation
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_AUDIENCES: ${KEYCLOAK_AUDIENCES:-mis-student-portal-frontend,student-portal-frontend}
 
       # Gateway -> backend protection
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
@@ -325,6 +329,8 @@ services:
 
     container_name: mis-frontend
 
+    command: ["npm", "run", "dev"]
+
     environment:
       # API Gateway
       NEXT_PUBLIC_API_BASE_URL: http://api.localhost:4000
@@ -346,8 +352,34 @@ services:
     volumes:
       - ./app/fe:/workspace/app/fe
       - ./packages/shared-types:/workspace/packages/shared-types
-      - frontend-node-modules:/workspace/node_modules
-      - frontend-next:/workspace/app/fe/.next
+      - ./packages/config:/workspace/packages/config
+      - ./packages/auth:/workspace/packages/auth
+      - ./packages/api-client:/workspace/packages/api-client
+      - ./packages/ui:/workspace/packages/ui
+
+  student-frontend:
+    build:
+      context: .
+      dockerfile: app/student-fe/Dockerfile
+    container_name: mis-student-frontend
+    command: ["npm", "run", "dev"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://api.localhost:4000
+      NEXT_PUBLIC_KEYCLOAK_URL: http://auth.localhost:4000
+      NEXT_PUBLIC_KEYCLOAK_REALM: mis-student-portal
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${STUDENT_KEYCLOAK_CLIENT_ID:-student-portal-frontend}
+    ports:
+      - "${STUDENT_FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - edge-net
+    volumes:
+      - ./app/student-fe:/workspace/app/student-fe
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - ./packages/auth:/workspace/packages/auth
+      - ./packages/api-client:/workspace/packages/api-client
+      - ./packages/ui:/workspace/packages/ui
 
 
 # =========================================================
@@ -358,8 +390,6 @@ volumes:
   internal-postgres-data:
   keycloak-postgres-data:
 
-  frontend-node-modules:
-  frontend-next:
 
   gateway-node-modules:
   student-api-node-modules:
@@ -385,3 +415,7 @@ networks:
 
   # Internal API reaches Keycloak Admin API without joining the Keycloak DB network.
   keycloak-admin-net:
+
+  # Server-to-server PIC calls; isolated from the public gateway networks.
+  pic-service-net:
+    internal: true

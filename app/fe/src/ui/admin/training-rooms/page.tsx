@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Button } from "@mis/ui/button";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { TrainingRoomDialog, type TrainingRoomFormValue } from "./dialog/training-room-dialog";
 
 type TrainingRoom = TrainingRoomFormValue & { id: string; room_code: string; created_at: string; updated_at: string };

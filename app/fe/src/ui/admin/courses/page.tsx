@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Pagination } from "@/components/ui/pagination";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 import { CourseDialog, type CoursePayload, type CourseValue } from "./dialog/course-dialog";
 import { CourseDetailsDialog } from "./dialog/course-details-dialog";
 

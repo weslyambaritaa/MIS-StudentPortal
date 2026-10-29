@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type IndustryFormValue = { id?: string; industry_code?: string; name: string; status: "ACTIVE" | "INACTIVE" };
 

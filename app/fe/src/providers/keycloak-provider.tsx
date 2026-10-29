@@ -4,25 +4,25 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { usePathname, useRouter } from "next/navigation";
 
 import type KeycloakType from "keycloak-js";
-import { isKeycloakAdminRole, ROLES, type BusinessRole } from "@mis/shared-types";
-
-import keycloak, { initializeKeycloak } from "@/lib/auth/keycloak";
-import { apiRequest } from "@/lib/api/client";
+import { isKeycloakAdminRole, ROLES } from "@mis/shared-types";
 import {
-  ACTIVE_ROLE_STORAGE_KEY,
-  getAvailableBusinessRoles,
   getSelectableActiveRole,
   resolveActiveRole,
-} from "@/lib/auth/active-role";
+} from "@mis/auth";
+
+import { ACTIVE_ROLE_STORAGE_KEY, getAvailableBusinessRoles } from "@/lib/auth/active-role";
+import type { MisPortalRole } from "@/config/portal-roles";
+import keycloak, { initializeKeycloak } from "@/lib/auth/keycloak";
+import { apiRequest } from "@/lib/api/client";
 
 type AuthContextValue = {
   keycloak: KeycloakType;
-  availableRoles: BusinessRole[];
-  activeRole: BusinessRole | null;
-  setActiveRole: (role: BusinessRole) => void;
+  availableRoles: MisPortalRole[];
+  activeRole: MisPortalRole | null;
+  setActiveRole: (role: MisPortalRole) => void;
   hasAccessLogAdminRole: boolean;
   /** Temporary compatibility alias for existing pages during the UI migration. */
-  roles: BusinessRole[];
+  roles: MisPortalRole[];
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -31,12 +31,10 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [rolesReady, setRolesReady] = useState(false);
-  const [availableRoles, setAvailableRoles] = useState<BusinessRole[]>([]);
-  const [activeRole, setActiveRoleState] = useState<BusinessRole | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<MisPortalRole[]>([]);
+  const [activeRole, setActiveRoleState] = useState<MisPortalRole | null>(null);
   const [hasAccessLogAdminRole, setHasAccessLogAdminRole] = useState(false);
-  const activeRoleRef = useRef<BusinessRole | null>(null);
-  const studentLoginSyncedSubjectRef = useRef<string | null>(null);
-  const hasStudentRole = availableRoles.includes(ROLES.STUDENT);
+  const activeRoleRef = useRef<MisPortalRole | null>(null);
   const hasTrainerRole = availableRoles.includes(ROLES.TRAINER);
   const pathname = usePathname();
   const router = useRouter();
@@ -135,7 +133,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshAvailableRoles]);
 
-  const setActiveRole = useCallback((role: BusinessRole) => {
+  const setActiveRole = useCallback((role: MisPortalRole) => {
     const selectedRole = getSelectableActiveRole(availableRoles, role);
     if (!selectedRole) {
       throw new Error("Active role must be a business role assigned to this user");
@@ -157,36 +155,6 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   }, [authenticated, availableRoles, hasAccessLogAdminRole, pathname, rolesReady, router]);
 
   useEffect(() => {
-    if (!authenticated || !rolesReady || !hasStudentRole || !keycloak.token) return;
-    const subject = keycloak.tokenParsed?.sub;
-    if (!subject || studentLoginSyncedSubjectRef.current === subject) return;
-    let cancelled = false;
-
-    const recordStudentLogin = async () => {
-      try {
-        await keycloak.updateToken(30);
-        if (!keycloak.token || cancelled) return;
-        // Student is an external role. Use its API boundary explicitly so
-        // gateway authorization and the existing Student login-sync middleware run.
-        await apiRequest("/api/v1/external/me", keycloak.token, ROLES.STUDENT);
-        studentLoginSyncedSubjectRef.current = subject;
-      } catch (firstError) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1000));
-        if (cancelled || !keycloak.token) return;
-        try {
-          await apiRequest("/api/v1/external/me", keycloak.token, ROLES.STUDENT);
-          studentLoginSyncedSubjectRef.current = subject;
-        } catch (retryError) {
-          console.error("Could not record successful Student portal login", retryError ?? firstError);
-        }
-      }
-    };
-
-    void recordStudentLogin();
-    return () => { cancelled = true; };
-  }, [authenticated, hasStudentRole, rolesReady]);
-
-  useEffect(() => {
     if (!authenticated || !rolesReady || !hasTrainerRole || !keycloak.token) return;
     const subject = keycloak.tokenParsed?.sub;
     if (!subject) return;
@@ -194,8 +162,9 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     const syncTrainerLogin = async () => {
       try {
         await keycloak.updateToken(30);
-        if (!keycloak.token || cancelled) return;
-        await apiRequest("/api/v1/external/trainers/portal-login", keycloak.token, ROLES.TRAINER, { method: "POST" });
+        const refreshedRoles = getAvailableBusinessRoles(keycloak.realmAccess?.roles ?? []);
+        if (!keycloak.token || cancelled || !refreshedRoles.includes(ROLES.TRAINER)) return;
+        await apiRequest("/api/v1/internal/trainers/portal-login", keycloak.token, ROLES.TRAINER, { method: "POST" });
       } catch (error) {
         console.error("Could not record successful Trainer portal login", error);
       }

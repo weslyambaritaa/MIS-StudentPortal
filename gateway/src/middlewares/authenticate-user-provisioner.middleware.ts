@@ -32,7 +32,7 @@ export async function authenticateUserProvisioner(req: Request, res: Response, n
   try {
     const { payload } = await jwtVerify(authorization.slice("Bearer ".length), keycloakJwks, {
       issuer: env.keycloakIssuer,
-      audience: env.keycloakAudience,
+      audience: env.keycloakAudiences,
     });
     const typed = payload as KeycloakJwtPayload;
     const roles = typed.realm_access?.roles ?? [];

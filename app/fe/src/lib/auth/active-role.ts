@@ -1,32 +1,27 @@
 import {
-  BUSINESS_ROLE_ORDER,
-  isBusinessRole,
-  type BusinessRole,
-} from "@mis/shared-types";
+  getAvailableRoles,
+  getSelectableActiveRole as selectSharedActiveRole,
+  resolveActiveRole as resolveSharedActiveRole,
+} from "@mis/auth";
+import { MIS_PORTAL_ROLES, type MisPortalRole } from "@/config/portal-roles";
 
+/** MIS role preference is app-specific; shared auth code receives an allowed-role list. */
 export const ACTIVE_ROLE_STORAGE_KEY = "mis-active-role";
 
-/** Sort only recognized business roles; JWT claim ordering has no business meaning. */
-export function getAvailableBusinessRoles(tokenRoles: readonly string[] = []): BusinessRole[] {
-  const tokenRoleSet = new Set(tokenRoles.filter(isBusinessRole));
-  return BUSINESS_ROLE_ORDER.filter((role) => tokenRoleSet.has(role));
+export function getAvailableBusinessRoles(tokenRoles: readonly string[] = []): MisPortalRole[] {
+  return getAvailableRoles(MIS_PORTAL_ROLES, tokenRoles);
 }
 
 export function resolveActiveRole(
-  availableRoles: readonly BusinessRole[],
+  availableRoles: readonly MisPortalRole[],
   storedRole: unknown,
-): BusinessRole | null {
-  if (availableRoles.length === 0) return null;
-  if (availableRoles.length === 1) return availableRoles[0];
-  if (isBusinessRole(storedRole) && availableRoles.includes(storedRole)) return storedRole;
-  return BUSINESS_ROLE_ORDER.find((role) => availableRoles.includes(role)) ?? null;
+): MisPortalRole | null {
+  return resolveSharedActiveRole(availableRoles, storedRole);
 }
 
 export function getSelectableActiveRole(
-  availableRoles: readonly BusinessRole[],
+  availableRoles: readonly MisPortalRole[],
   requestedRole: unknown,
-): BusinessRole | null {
-  return isBusinessRole(requestedRole) && availableRoles.includes(requestedRole)
-    ? requestedRole
-    : null;
+): MisPortalRole | null {
+  return selectSharedActiveRole(availableRoles, requestedRole);
 }

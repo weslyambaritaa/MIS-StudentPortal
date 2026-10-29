@@ -5,12 +5,16 @@ FROM node:24-alpine AS deps
 WORKDIR /workspace
 COPY package*.json ./
 COPY app/fe/package.json ./app/fe/package.json
+COPY app/student-fe/package.json ./app/student-fe/package.json
 COPY app/be/student-api/package.json ./app/be/student-api/package.json
 COPY app/be/internal-api/package.json ./app/be/internal-api/package.json
 COPY gateway/package.json ./gateway/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/config/package.json ./packages/config/package.json
 COPY packages/logger/package.json ./packages/logger/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/api-client/package.json ./packages/api-client/package.json
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # ---------- 2. build ----------
@@ -30,6 +34,10 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
 
 # shared-types harus di-build lebih dulu (di dev dilakukan oleh "predev")
 RUN npm run build --workspace @mis/shared-types
+RUN npm run build --workspace @mis/config \
+    && npm run build --workspace @mis/auth \
+    && npm run build --workspace @mis/api-client \
+    && npm run build --workspace @mis/ui
 
 WORKDIR /workspace/app/fe
 RUN npx next build

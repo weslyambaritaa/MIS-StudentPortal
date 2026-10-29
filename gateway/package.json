@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "predev": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
+    "predev": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/config && npm run build --workspace @mis/logger",
     "dev": "tsx watch src/server.ts",
-    "prebuild": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
     "build": "tsc",
-    "prestart": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/logger",
+    "prestart": "npm run build --workspace @mis/shared-types && npm run build --workspace @mis/config && npm run build --workspace @mis/logger",
     "start": "node dist/server.js",
     "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
+    "@mis/config": "*",
     "@mis/logger": "*",
     "@mis/shared-types": "*",
     "cors": "^2.8.5",

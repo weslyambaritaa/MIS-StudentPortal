@@ -2,8 +2,8 @@
 
 import { CalendarDays, CircleAlert, CircleCheck, DoorOpen, ExternalLink } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import { Button } from "@mis/ui/button";
+import { Modal } from "@mis/ui/modal";
 
 /** Presentation states returned by the room availability check. */
 export type CheckRoomAvailabilityStatus = "idle" | "booked" | "available";
@@ -69,7 +69,7 @@ export function CheckRoomAvailabilityModal({
       className="max-h-[calc(100dvh-2rem)] max-w-[384px] overflow-y-auto"
     >
       <div className="flex flex-col items-center gap-6">
-        <h2 className="self-stretch font-['DM_Sans'] text-2xl font-medium text-rose-600">
+        <h2 className="self-stretch font-sans text-2xl font-medium text-rose-600">
           Check Room Availability
         </h2>
 
@@ -77,10 +77,10 @@ export function CheckRoomAvailabilityModal({
           <div className="flex w-full flex-col items-center gap-2.5 rounded-3xl border border-rose-50 bg-neutral-50 p-6">
             <CalendarDays aria-hidden="true" className="size-24 text-rose-600" strokeWidth={1.2} />
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-center font-['DM_Sans'] text-base font-medium text-rose-600">
+              <h3 className="text-center font-sans text-base font-medium text-rose-600">
                 Check Room Availability
               </h3>
-              <p className="text-center font-['DM_Sans'] text-sm text-zinc-950/60">
+              <p className="text-center font-sans text-sm text-zinc-950/60">
                 Pick a date &amp; room to check the room availability to start booking
               </p>
             </div>
@@ -91,10 +91,10 @@ export function CheckRoomAvailabilityModal({
           <div className="flex w-full flex-col items-center gap-2.5 rounded-3xl border border-red-500 bg-red-500/10 p-6">
             <CircleAlert aria-hidden="true" className="size-24 text-red-500" strokeWidth={1.2} />
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-center font-['DM_Sans'] text-base font-medium text-red-500">
+              <h3 className="text-center font-sans text-base font-medium text-red-500">
                 This Room is Booked
               </h3>
-              <p className="text-center font-['DM_Sans'] text-sm text-zinc-950/60">
+              <p className="text-center font-sans text-sm text-zinc-950/60">
                 <span className="font-medium">{selectedRoom?.name ?? "This"}</span> Room is booked
                 {conflict ? ` on ${conflict.dateLabel}, ${conflict.timeLabel}` : " for the selected time"}
                 {conflict && (
@@ -113,10 +113,10 @@ export function CheckRoomAvailabilityModal({
           <div className="flex w-full flex-col items-center gap-2.5 rounded-3xl border border-green-500 bg-green-500/10 p-6">
             <CircleCheck aria-hidden="true" className="size-24 text-green-500" strokeWidth={1.2} />
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-center font-['DM_Sans'] text-base font-medium text-green-600">
+              <h3 className="text-center font-sans text-base font-medium text-green-600">
                 This Room is Available
               </h3>
-              <p className="text-center font-['DM_Sans'] text-sm text-zinc-950/60">
+              <p className="text-center font-sans text-sm text-zinc-950/60">
                 <span className="font-medium">{selectedRoom?.name ?? "This"}</span> Room is available
                 {selectedDateLabel ? ` on ${selectedDateLabel}` : " for the selected date"}.
               </p>
@@ -133,7 +133,7 @@ export function CheckRoomAvailabilityModal({
         )}
 
         <div className="flex w-full flex-col gap-6">
-          <label className="flex flex-col gap-[3px] font-['DM_Sans'] text-sm text-gray-600">
+          <label className="flex flex-col gap-[3px] font-sans text-sm text-gray-600">
             <span>Pick a Date</span>
             <span className="relative block">
               <input
@@ -153,7 +153,7 @@ export function CheckRoomAvailabilityModal({
             </span>
           </label>
 
-          <label className="flex flex-col gap-[3px] font-['DM_Sans'] text-sm text-gray-600">
+          <label className="flex flex-col gap-[3px] font-sans text-sm text-gray-600">
             <span>Pick Room Name</span>
             <span className="relative block">
               <select

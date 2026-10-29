@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { IconButton } from "@/components/ui/icon-button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type AuditDetail = {
   created_at: string;

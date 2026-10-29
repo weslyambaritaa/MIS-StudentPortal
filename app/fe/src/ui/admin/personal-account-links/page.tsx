@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@mis/ui/toast";
 
 type PersonalAccount = { id: string; account_code: string; name: string; status: string; personal_student_subject: string | null; student_name: string | null };
 type Student = { subject: string; name: string; username: string; email: string | null };

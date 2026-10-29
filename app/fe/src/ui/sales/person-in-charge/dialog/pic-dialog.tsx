@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type PicValue = { id?: string; name: string; email: string; account_id: string; account_name: string; account_status?: "ACTIVE" | "INACTIVE"; industry_name: string | null; status: "PENDING" | "ACTIVE" | "INACTIVE"; activation_expires_at?: string | null };
 export type PicAccountOption = { id: string; account_code: string; name: string; industry_name: string | null; status?: "ACTIVE" | "INACTIVE" };

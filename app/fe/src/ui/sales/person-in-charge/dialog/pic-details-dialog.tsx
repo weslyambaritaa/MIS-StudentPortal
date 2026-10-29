@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { ArrowRight, Building2, ChevronDown, Pencil, Trash2, UserRound, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 import type { PicValue } from "./pic-dialog";
 
 export type PicStudent = { subject: string; name: string; ongoingTrainings: string[] };

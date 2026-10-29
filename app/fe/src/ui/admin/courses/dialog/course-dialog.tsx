@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { FileUp, Info, Link2, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@mis/ui/button";
+import { IconButton } from "@mis/ui/icon-button";
 
 export type CourseSyllabus = { id: string; url: string; download_url?: string | null; version: string; created_at?: string };
 export type CourseValue = {

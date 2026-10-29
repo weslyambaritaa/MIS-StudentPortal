@@ -1,16 +1,18 @@
+import { API_BOUNDARIES } from "@mis/config";
+
 export const API_ENDPOINTS = {
   external: {
-    me: "/api/v1/external/me",
-    trainings: "/api/v1/external/trainings",
-    attendance: "/api/v1/external/attendance",
-    evaluations: "/api/v1/external/evaluations",
-    certificates: "/api/v1/external/certificates",
+    me: `${API_BOUNDARIES.EXTERNAL}/me`,
+    trainings: `${API_BOUNDARIES.EXTERNAL}/trainings`,
+    attendance: `${API_BOUNDARIES.EXTERNAL}/attendance`,
+    evaluations: `${API_BOUNDARIES.EXTERNAL}/evaluations`,
+    certificates: `${API_BOUNDARIES.EXTERNAL}/certificates`,
   },
   internal: {
-    accounts: "/api/v1/internal/accounts",
-    trainings: "/api/v1/internal/trainings",
-    quotations: "/api/v1/internal/quotations",
-    invoices: "/api/v1/internal/invoices",
-    reports: "/api/v1/internal/reports",
+    accounts: `${API_BOUNDARIES.INTERNAL}/accounts`,
+    trainings: `${API_BOUNDARIES.INTERNAL}/trainings`,
+    quotations: `${API_BOUNDARIES.INTERNAL}/quotations`,
+    invoices: `${API_BOUNDARIES.INTERNAL}/invoices`,
+    reports: `${API_BOUNDARIES.INTERNAL}/reports`,
   },
 } as const;

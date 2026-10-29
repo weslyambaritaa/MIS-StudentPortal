@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { Button } from "@mis/ui/button";
+import { Pagination } from "@mis/ui/pagination";
+import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import { WithdrawConfirmation } from "./dialog/withdraw-confirmation";
 

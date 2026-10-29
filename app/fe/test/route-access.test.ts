@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { BUSINESS_ROLES, ROLES } from "@mis/shared-types";
+import { MIS_PORTAL_ROLES } from "../src/config/portal-roles";
 
 import { FEATURE_ACCESS_MATRIX, navigationByRole } from "../src/config/navigation";
 import {
@@ -10,17 +11,17 @@ import {
   routeMatches,
 } from "../src/lib/routing/route-access";
 
-test("every business role can access its configured dashboard route", () => {
-  for (const role of BUSINESS_ROLES) {
+test("every MIS portal role can access its dashboard route", () => {
+  for (const role of MIS_PORTAL_ROLES) {
     assert.equal(canActiveRoleAccessRoute("/dashboard", role), true);
   }
 });
 
-test("the component showcase is registered for each current role", () => {
-  for (const role of BUSINESS_ROLES) {
-    assert.equal(canActiveRoleAccessRoute("/components-preview", role), true);
+test("the development-only component showcase is not a registered application route", () => {
+  for (const role of MIS_PORTAL_ROLES) {
+    assert.equal(canActiveRoleAccessRoute("/components-preview", role), false);
   }
-  assert.equal(isRegisteredFrontendRoute("/components-preview"), true);
+  assert.equal(isRegisteredFrontendRoute("/components-preview"), false);
 });
 
 test("Sales Industry route is available only in the Sales active-role context", () => {
@@ -80,7 +81,7 @@ test("Trainer master route is available only in the Admin active-role context", 
 });
 
 test("sidebar navigation lists future features without making them navigable", () => {
-  for (const role of BUSINESS_ROLES) {
+  for (const role of MIS_PORTAL_ROLES) {
     const navigation = navigationByRole[role];
     const menuItems = [
       navigation.dashboard,
@@ -138,17 +139,8 @@ test("role sidebars use the menus read from the supplied designs", () => {
     "Monitor Class",
     "Trainer Calendar",
   ]);
-  assert.deepEqual(menuLabels(ROLES.STUDENT), [
-    "Attendance",
-    "Evaluation Form",
-    "Course History",
-    "E-Learning",
-    "Remote Lab",
-    "My Profile",
-    "Pre / Post Test",
-    "Learning Path",
-  ]);
-  assert.deepEqual(menuLabels(ROLES.PIC), ["Training Account", "Training Report", "Skill Matrix"]);
+  assert.equal(Object.hasOwn(navigationByRole, ROLES.STUDENT), false);
+  assert.equal(Object.hasOwn(navigationByRole, ROLES.PIC), false);
 });
 
 test("nested routes match without accepting similar path prefixes", () => {
@@ -157,7 +149,7 @@ test("nested routes match without accepting similar path prefixes", () => {
 });
 
 test("sidebar items are generated only for roles declared in the feature matrix", () => {
-  for (const role of BUSINESS_ROLES) {
+  for (const role of MIS_PORTAL_ROLES) {
     const navigation = navigationByRole[role];
     const menuItems = [
       navigation.dashboard,

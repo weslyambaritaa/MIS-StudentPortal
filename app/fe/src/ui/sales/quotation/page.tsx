@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
-import { IconButton } from "@/components/ui/icon-button";
-import { Modal } from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
-import { useToast } from "@/components/ui/toast";
+import { Badge } from "@mis/ui/badge";
+import { Button } from "@mis/ui/button";
+import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
+import { IconButton } from "@mis/ui/icon-button";
+import { Modal } from "@mis/ui/modal";
+import { Pagination } from "@mis/ui/pagination";
+import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import {
   QuotationDetailsDialog,

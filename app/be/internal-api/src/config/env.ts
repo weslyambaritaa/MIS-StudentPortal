@@ -12,6 +12,7 @@ export const env = {
   dbHost: required("DB_HOST"), dbPort: Number(process.env.DB_PORT ?? 5432), dbName: required("DB_NAME"), dbUser: required("DB_USER"), dbPassword: required("DB_PASSWORD"),
   gatewaySharedSecret: required("GATEWAY_SHARED_SECRET"),
   serviceSharedSecret: required("SERVICE_SHARED_SECRET"),
+  studentApiUrl: required("STUDENT_API_URL"),
   keycloakUrl: process.env.KEYCLOAK_INTERNAL_URL ?? "http://keycloak:8080",
   keycloakRealm: process.env.KEYCLOAK_REALM ?? "mis-student-portal",
   keycloakProvisionerClientId: process.env.KEYCLOAK_PROVISIONER_CLIENT_ID ?? "mis-account-provisioner",

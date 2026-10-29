@@ -49,9 +49,11 @@
       "attributes": {"pkce.code.challenge.method": "S256"},
       "redirectUris": [
         "https://mis.executrain.co.id/api/auth/callback/keycloak",
-        "https://mis.executrain.co.id/dashboard"
+        "https://mis.executrain.co.id/dashboard",
+        "http://localhost:3100/api/auth/callback/keycloak",
+        "http://localhost:3100/dashboard"
       ],
-      "webOrigins": ["https://mis.executrain.co.id"],
+      "webOrigins": ["https://mis.executrain.co.id", "http://localhost:3100"],
       "fullScopeAllowed": true,
       "protocolMappers": [
         {
@@ -61,6 +63,37 @@
           "consentRequired": false,
           "config": {
             "included.client.audience": "mis-student-portal-frontend",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "student-portal-frontend",
+      "name": "Student Portal Frontend",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {"pkce.code.challenge.method": "S256"},
+      "redirectUris": [
+        "http://localhost:3001/dashboard",
+        "http://localhost:3001/*",
+        "http://localhost:3101/dashboard",
+        "http://localhost:3101/*"
+      ],
+      "webOrigins": ["http://localhost:3001", "http://localhost:3101"],
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "student-portal-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "student-portal-frontend",
             "access.token.claim": "true",
             "id.token.claim": "false"
           }
