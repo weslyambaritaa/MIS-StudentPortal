@@ -367,10 +367,10 @@ export function Dropdown<T = string>({
             renderTrigger(selectedOption, { open: isOpen })
           ) : (
             <span
-              className={`block truncate text-sm transition-colors duration-150 ${
+              className={`block truncate text-sm font-normal transition-colors duration-150 ${
                 selectedOption
-                  ? "font-normal text-slate-900"
-                  : "text-zinc-950 opacity-60 group-hover/dropdown:text-rose-600 group-hover/dropdown:opacity-100"
+                  ? "text-slate-900"
+                  : "text-zinc-950/40 group-hover/dropdown:text-rose-600"
               }`}
             >
               {selectedOption ? selectedOption.label : placeholder}
@@ -462,7 +462,7 @@ export function Dropdown<T = string>({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-zinc-950/60 placeholder:opacity-60"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-zinc-950/40"
                   onClick={(e) => e.stopPropagation()}
                 />
                 {searchQuery && (
@@ -522,12 +522,12 @@ export function Dropdown<T = string>({
                     onClick={() => selectOption(opt)}
                     onMouseEnter={() => setFocusedIndex(index)}
                     className={[
-                      "group/opt flex w-full items-center justify-between gap-2.5 rounded-full px-3 py-1.5 text-left text-xs",
+                      "group/opt flex w-full items-center justify-between gap-2.5 rounded-full px-3 py-1.5 text-left text-sm font-normal",
                       "transition-colors duration-150",
                       isSelected
-                        ? "bg-rose-50/80 font-medium text-rose-600"
+                        ? "bg-rose-50/80 text-rose-600"
                         : isFocused
-                        ? "bg-rose-50 font-medium text-rose-600"
+                        ? "bg-rose-50 text-rose-600"
                         : "text-gray-700 hover:bg-rose-50 hover:text-rose-600",
                       opt.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer",
                     ]
@@ -550,9 +550,9 @@ export function Dropdown<T = string>({
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate">{opt.label}</span>
+                        <span className="block truncate text-sm font-normal">{opt.label}</span>
                         {opt.description && (
-                          <span className="block truncate text-[11px] text-zinc-950/50">
+                          <span className="block truncate text-xs text-zinc-950/50">
                             {opt.description}
                           </span>
                         )}

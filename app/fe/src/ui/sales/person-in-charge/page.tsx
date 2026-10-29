@@ -89,63 +89,138 @@ export default function PersonInChargePage() {
     finally { setBusy(false); }
   };
 
-  const columns: DataTableColumn<PicValue>[] = [
-    { key: "name", header: "Name", render: (row) => <button className="text-left font-medium text-rose-600 hover:underline" onClick={() => void openDetails(row)}>{row.name}</button> },
-    { key: "account", header: "Account", render: (row) => row.account_name },
-    { key: "email", header: "Email", render: (row) => row.email },
-    { key: "status", header: "Status", render: (row) => <Badge variant={row.status === "ACTIVE" ? "success" : row.status === "PENDING" ? "warning" : "danger"} showDot>{statusLabel(row.status)}</Badge> },
-    { key: "action", header: "Action", className: "whitespace-nowrap", render: (row) => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17}/>} size="sm" onClick={() => void openDetails(row)}/>{row.status === "PENDING" && <IconButton label={`Resend activation to ${row.email}`} icon={<Mail size={17}/>} size="sm" disabled={busy || Boolean(row.activation_expires_at && new Date(row.activation_expires_at).getTime() > Date.now())} onClick={() => void resendActivation(row)}/>}<IconButton label={`Edit ${row.name}`} icon={<Pencil size={17}/>} size="sm" onClick={() => setEditor(row)}/><IconButton label={`Delete ${row.name}`} icon={<Trash2 size={17}/>} variant="danger" size="sm" onClick={() => setDeleting(row)}/></div> },
-  ];
+  return (
+    <AppShell title="Manage | PIC List">
+      <div className="flex flex-col gap-6">
+        <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-3xl font-medium text-gray-600">Person In Charge</h1>
+            <p className="mt-1 text-sm text-zinc-600">PIC monitors training for employees in an Account without attending the classes.</p>
+          </div>
+          <AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add PIC</AddButton>
+        </section>
 
-  return <AppShell title="Manage | PIC List"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Person In Charge</h1><p className="mt-1 text-sm text-zinc-600">PIC monitors training for employees in an Account without attending the classes.</p></div><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add PIC</AddButton></section>
-    <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-      <Input
-        id="pic-search"
-        label="Search PIC Name"
-        leftIcon="search"
-        value={searchDraft}
-        onChange={(event) => setSearchDraft(event.target.value)}
-        placeholder="Search PIC name or email"
-        containerClassName="w-full xl:w-60"
-      />
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <Dropdown
-          label="Account"
-          value={accountId}
-          onChange={(val) => {
-            setPage(1);
-            setAccountId(val);
-          }}
-          options={[
-            { label: "All Account", value: "ALL" },
-            ...accounts.map((account) => ({ label: account.name, value: account.id })),
-          ]}
-          containerClassName="w-full sm:w-44"
-        />
-        <Dropdown
-          label="Status"
-          value={status}
-          onChange={(val) => {
-            setPage(1);
-            setStatus(val);
-          }}
-          options={[
-            { label: "All Status", value: "ALL" },
-            { label: "Pending", value: "PENDING" },
-            { label: "Active", value: "ACTIVE" },
-            { label: "Inactive", value: "INACTIVE" },
-          ]}
-          containerClassName="w-full sm:w-44"
-        />
+        <section className="rounded-3xl border border-rose-50 bg-white p-5">
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <Input
+              id="pic-search"
+              label="Search PIC Name"
+              leftIcon="search"
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder="Search PIC name or email"
+              containerClassName="w-full md:w-60"
+            />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Dropdown
+                label="Account"
+                value={accountId}
+                onChange={(val) => {
+                  setPage(1);
+                  setAccountId(val);
+                }}
+                options={[
+                  { label: "All Account", value: "ALL" },
+                  ...accounts.map((account) => ({ label: account.name, value: account.id })),
+                ]}
+                containerClassName="w-full sm:w-44"
+              />
+              <Dropdown
+                label="Status"
+                value={status}
+                onChange={(val) => {
+                  setPage(1);
+                  setStatus(val);
+                }}
+                options={[
+                  { label: "All Status", value: "ALL" },
+                  { label: "Pending", value: "PENDING" },
+                  { label: "Active", value: "ACTIVE" },
+                  { label: "Inactive", value: "INACTIVE" },
+                ]}
+                containerClassName="w-full sm:w-44"
+              />
+            </div>
+          </div>
+
+          {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+
+          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+            <table className="table-fixed w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
+                <tr>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Name</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Email</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
+                  <th className="w-36 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && result.items.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-10 text-center text-zinc-500">
+                      No PICs found.
+                    </td>
+                  </tr>
+                )}
+                {result.items.map((row) => (
+                  <tr key={row.id ?? row.email} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
+                    <td className="px-3 py-3">
+                      <button className="text-left font-medium text-rose-600 hover:underline" onClick={() => void openDetails(row)}>
+                        {row.name}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3">{row.account_name}</td>
+                    <td className="px-3 py-3">{row.email}</td>
+                    <td className="px-3 py-3">
+                      <Badge variant={row.status === "ACTIVE" ? "success" : row.status === "PENDING" ? "warning" : "danger"} showDot>
+                        {statusLabel(row.status)}
+                      </Badge>
+                    </td>
+                    <td className="w-36 whitespace-nowrap px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <IconButton label={`View ${row.name}`} icon="eye" size="sm" onClick={() => void openDetails(row)} />
+                        {row.status === "PENDING" && (
+                          <IconButton
+                            label={`Resend activation to ${row.email}`}
+                            icon="mail"
+                            size="sm"
+                            disabled={busy || Boolean(row.activation_expires_at && new Date(row.activation_expires_at).getTime() > Date.now())}
+                            onClick={() => void resendActivation(row)}
+                          />
+                        )}
+                        <IconButton label={`Edit ${row.name}`} icon="pencil-line" size="sm" onClick={() => setEditor(row)} />
+                        <IconButton label={`Delete ${row.name}`} icon="trash" variant="danger" size="sm" onClick={() => setDeleting(row)} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {loading && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-10 text-center text-zinc-500">
+                      Loading PICs…
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 w-full">
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))}
+              pageSize={result.items.length}
+              totalItems={result.total}
+              onPageChange={setPage}
+            />
+          </div>
+        </section>
       </div>
-    </div>
-    {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {loading ? <div className="py-10 text-center text-zinc-500">Loading PICs…</div> : <DataTable columns={columns} rows={result.items} getRowKey={(row) => row.id ?? row.email} caption="Person In Charge records assigned to current Sales user" emptyMessage="No PICs found."/>}
-    <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage}/></div>
-    </section></div>
     {editor !== undefined && <PicDialog value={editor} accounts={accounts} busy={busy} error={dialogError} onClose={() => { setEditor(undefined); setDialogError(null); }} onSubmit={save}/>}
     {selected && <PicDetailsDialog item={selected} students={students} loading={detailsLoading} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDelete={() => setDeleting(selected)}/>}
     <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`PIC “${deleting?.name ?? ""}” and its Keycloak account will be permanently deleted. Accounts with another business role must be handled separately. The audit record will be retained.`} onClose={() => setDeleting(null)} onConfirm={() => void remove()} loading={busy}/>
-  </AppShell>;
+    </AppShell>
+  );
 }

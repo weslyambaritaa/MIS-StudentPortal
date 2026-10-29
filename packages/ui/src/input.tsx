@@ -89,7 +89,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           disabled={disabled}
-          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950 placeholder:opacity-60 placeholder:transition-all group-hover/input:placeholder:text-rose-600 group-hover/input:placeholder:opacity-100 disabled:cursor-not-allowed"
+          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950/40 placeholder:transition-all group-hover/input:placeholder:text-rose-600 disabled:cursor-not-allowed"
           {...props}
         />
 

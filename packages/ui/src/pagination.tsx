@@ -1,5 +1,3 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
-
 import { Button } from "./button";
 
 type PaginationProps = {
@@ -36,7 +34,7 @@ export function Pagination({
       <div className="flex items-center gap-3">
         <Button
           variant="navigation"
-          leftIcon={<ChevronLeft size={20} />}
+          leftIcon="chevron-left"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
@@ -55,7 +53,8 @@ export function Pagination({
         ))}
 
         <Button
-          rightIcon={<ChevronRight size={20} />}
+          variant="navigation"
+          rightIcon="chevron-right"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >

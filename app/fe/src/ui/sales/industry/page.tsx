@@ -139,7 +139,7 @@ export default function IndustryPage() {
                 )}
                 {result.items.map((industry) => (
                   <tr key={industry.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
-                    <td className="px-3 py-3 font-medium text-zinc-900">{industry.industry_code}</td>
+                    <td className="px-3 py-3">{industry.industry_code}</td>
                     <td className="px-3 py-3">{industry.name}</td>
                     <td className="px-3 py-3">{Number(industry.amount_account)}</td>
                     <td className="px-3 py-3">
@@ -156,11 +156,10 @@ export default function IndustryPage() {
                           onClick={() => setEditor(industry)}
                         />
                         <IconButton
-                          label={industry.ever_used ? "Cannot delete: Industry has been used" : `Delete ${industry.name}`}
+                          label={`Delete ${industry.name}`}
                           icon="trash"
                           variant="danger"
                           size="sm"
-                          disabled={industry.ever_used}
                           onClick={() => setDeleting(industry)}
                         />
                       </div>

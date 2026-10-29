@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ChevronDown, Eye, Pencil, Trash2, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
-import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
@@ -290,71 +289,6 @@ export default function QuotationPage() {
       ...current,
       lines: current.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
     }));
-  const columns: DataTableColumn<Quote>[] = [
-    {
-      key: "code",
-      header: "No.",
-      render: (row) => (
-        <button
-          className="font-medium text-rose-600 hover:underline"
-          onClick={() => void showDetails(row)}
-        >
-          {row.quotation_code}
-        </button>
-      ),
-    },
-    {
-      key: "account",
-      header: "Account",
-      render: (row) => (
-        <div>
-          {row.account_name}
-          <div className="text-xs text-zinc-500">PIC: {row.pic_name}</div>
-        </div>
-      ),
-    },
-    { key: "course", header: "Requested Course", render: (row) => `${row.course_count} course(s)` },
-    { key: "type", header: "Type", render: (row) => typeLabel(row.class_type) },
-    { key: "students", header: "Students", render: (row) => Number(row.students || 0) },
-    { key: "amount", header: "Amount", render: (row) => money(Number(row.amount)) },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <Badge variant={statusVariant(row.status)} showDot>
-          {statusLabel(row.status)}
-        </Badge>
-      ),
-    },
-    {
-      key: "action",
-      header: "Action",
-      className: "whitespace-nowrap",
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <IconButton
-            label="View"
-            icon={<Eye size={17} />}
-            size="sm"
-            onClick={() => void showDetails(row)}
-          />
-          <IconButton
-            label="Edit and resend"
-            icon={<Pencil size={17} />}
-            size="sm"
-            onClick={() => void openEditor(row)}
-          />
-          <IconButton
-            label="Delete"
-            icon={<Trash2 size={17} />}
-            variant="danger"
-            size="sm"
-            onClick={() => setDeleting(row)}
-          />
-        </div>
-      ),
-    },
-  ];
   const field =
     "h-9 w-full rounded-full border border-zinc-950/60 bg-neutral-50 px-3 text-sm text-gray-700 outline-none transition-colors duration-150 hover:border-rose-600 focus:border-rose-600 focus:ring-2 focus:ring-rose-100";
   const label = "flex flex-col gap-[3px] text-sm text-gray-600";
@@ -375,16 +309,16 @@ export default function QuotationPage() {
           </AddButton>
         </section>
         <section className="rounded-3xl border border-rose-50 bg-white p-5">
-          <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <Input
               label="Search Quotation"
               leftIcon="search"
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
               placeholder="Example: QTN-000001"
-              containerClassName="w-full xl:w-60"
+              containerClassName="w-full md:w-60"
             />
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Dropdown
                 label="Course"
                 value={courseFilter}
@@ -396,7 +330,7 @@ export default function QuotationPage() {
                   { label: "All Course", value: "ALL" },
                   ...courses.map((c) => ({ label: c.name, value: c.id })),
                 ]}
-                containerClassName="w-44"
+                containerClassName="w-full sm:w-44"
               />
               <Dropdown
                 label="Status"
@@ -413,7 +347,7 @@ export default function QuotationPage() {
                   { label: "Revision", value: "REVISION" },
                   { label: "Send failed", value: "SEND_FAILED" },
                 ]}
-                containerClassName="w-40"
+                containerClassName="w-full sm:w-40"
               />
             </div>
           </div>
@@ -422,18 +356,89 @@ export default function QuotationPage() {
               {error}
             </p>
           )}
-          {loading ? (
-            <div className="py-10 text-center text-zinc-500">Loading quotations…</div>
-          ) : (
-            <DataTable
-              columns={columns}
-              rows={result.items}
-              getRowKey={(row) => row.id}
-              emptyMessage="No quotations found."
-              caption="Sales quotations"
-            />
-          )}
-          <div className="mt-1">
+          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+            <table className="table-fixed w-full min-w-[960px] text-left text-sm">
+              <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
+                <tr>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">No.</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Course</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Type</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Students</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Amount</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
+                  <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && result.items.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-10 text-center text-zinc-500">
+                      No quotations found.
+                    </td>
+                  </tr>
+                )}
+                {result.items.map((quote) => (
+                  <tr key={quote.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
+                    <td className="px-3 py-3">
+                      <button
+                        className="font-medium text-rose-600 hover:underline"
+                        onClick={() => void showDetails(quote)}
+                      >
+                        {quote.quotation_code}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div>
+                        {quote.account_name}
+                        <div className="text-xs text-zinc-500">PIC: {quote.pic_name}</div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">{quote.course_count} course(s)</td>
+                    <td className="px-3 py-3">{typeLabel(quote.class_type)}</td>
+                    <td className="px-3 py-3">{Number(quote.students || 0)}</td>
+                    <td className="px-3 py-3">{money(Number(quote.amount))}</td>
+                    <td className="px-3 py-3">
+                      <Badge variant={statusVariant(quote.status)} showDot>
+                        {statusLabel(quote.status)}
+                      </Badge>
+                    </td>
+                    <td className="w-28 whitespace-nowrap px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <IconButton
+                          label="View"
+                          icon="eye"
+                          size="sm"
+                          onClick={() => void showDetails(quote)}
+                        />
+                        <IconButton
+                          label="Edit and resend"
+                          icon="pencil-line"
+                          size="sm"
+                          onClick={() => void openEditor(quote)}
+                        />
+                        <IconButton
+                          label="Delete"
+                          icon="trash"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setDeleting(quote)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {loading && (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-10 text-center text-zinc-500">
+                      Loading quotations…
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 w-full">
             <Pagination
               page={page}
               totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))}
