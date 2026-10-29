@@ -106,24 +106,38 @@ export default function AuditTrailPage() {
           </div>
 
           {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-          <div className="mt-5 flex flex-col gap-1">
-            <div className="flex flex-col gap-1 overflow-hidden rounded-xl border border-rose-50 bg-neutral-100 p-3 text-sm font-medium text-gray-600">
-              {["TIME", "USER", "ACTION", "OBJECT", "DETAIL"].map((label) => <div key={label}>{label}</div>)}
-            </div>
-            {!loading && result.items.length === 0 && <div className="px-3 py-10 text-center text-zinc-500">No audit activity found.</div>}
-            {result.items.map((entry) => (
-              <article key={entry.id} className="flex flex-col gap-1.5 overflow-hidden border-b border-rose-50 px-3 py-2 text-sm text-zinc-950/60">
-                <div className="font-medium">{new Date(entry.created_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "System"}</span>
-                  <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${roleBadgeClass(entry.active_role, entry.actor_type)}`}>{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "QPD" : "—")}</span>
-                </div>
-                <div className="font-medium">{entry.action}</div>
-                <div className="font-medium">{entry.object_type}{entry.object_id ? ` / ${entry.object_id}` : ""}</div>
-                <button type="button" className="w-fit text-left font-medium text-zinc-950/60 underline-offset-2 hover:underline" onClick={() => setSelected(entry)}>{summary(entry)}</button>
-              </article>
-            ))}
-            {loading && <div className="px-3 py-10 text-center text-zinc-500">Loading activity…</div>}
+          <div className="mt-5 overflow-x-auto rounded-xl border border-rose-50">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="bg-neutral-100 text-xs font-medium text-gray-600">
+                <tr>
+                  <th scope="col" className="w-40 px-3 py-3">TIME</th>
+                  <th scope="col" className="w-56 px-3 py-3">USER</th>
+                  <th scope="col" className="w-44 px-3 py-3">ACTION</th>
+                  <th scope="col" className="w-72 px-3 py-3">OBJECT</th>
+                  <th scope="col" className="px-3 py-3">DETAIL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && result.items.length === 0 && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">No audit activity found.</td></tr>}
+                {result.items.map((entry) => (
+                  <tr key={entry.id} className="border-t border-rose-50 text-zinc-950/60">
+                    <td className="whitespace-nowrap px-3 py-3 font-medium">{new Date(entry.created_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{entry.actor_name ?? entry.actor_subject ?? entry.process_name ?? "System"}</span>
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${roleBadgeClass(entry.active_role, entry.actor_type)}`}>{entry.active_role ?? (entry.actor_type === "SYSTEM" ? "QPD" : "—")}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 font-medium">{entry.action}</td>
+                    <td className="break-all px-3 py-3">{entry.object_type}{entry.object_id ? ` / ${entry.object_id}` : ""}</td>
+                    <td className="max-w-[360px] px-3 py-3">
+                      <button type="button" className="text-left font-medium text-zinc-950/60 underline-offset-2 hover:underline" onClick={() => setSelected(entry)}>{summary(entry)}</button>
+                    </td>
+                  </tr>
+                ))}
+                {loading && <tr><td colSpan={5} className="px-3 py-10 text-center text-zinc-500">Loading activity...</td></tr>}
+              </tbody>
+            </table>
           </div>
 
           <div className="mt-4">
