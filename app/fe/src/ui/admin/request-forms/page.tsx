@@ -255,18 +255,12 @@ export default function RequestFormReviewPage() {
 
   async function approve() {
     if (!detail || !approvalOptions || !trainerId || !baseFee || !startTime || !endTime || endTime <= startTime || (approvalOptions.roomRequired && !roomId)) return;
-    const trainerBookingConflicts = approvalOptions.trainers.find((trainer) => trainer.id === trainerId)?.booking_conflicts ?? [];
-    if (trainerBookingConflicts.length) {
-      const conflictDates = trainerBookingConflicts.map((booking) => booking.date).join(", ");
-      const shouldReplace = window.confirm(`This Trainer already has a standalone booking on ${conflictDates}. If you continue, the Request Form Training will replace that booking. Continue?`);
-      if (!shouldReplace) return;
-    }
     setBusy(true);
     setDialogError("");
     try {
       await api(`/api/v1/internal/request-form-review/${detail.item.id}/approve`, {
         method: "PATCH",
-        body: JSON.stringify({ trainerId, replaceTrainerBookingIds: trainerBookingConflicts.map((booking) => booking.id), roomId: approvalOptions.roomRequired ? roomId : null, baseFee: Number(baseFee), startTime, endTime }),
+        body: JSON.stringify({ trainerId, roomId: approvalOptions.roomRequired ? roomId : null, baseFee: Number(baseFee), startTime, endTime }),
       });
       showToast(`${formName(detail.item)} approved and scheduled successfully.`);
       setApprovalOpen(false);
@@ -457,15 +451,15 @@ export default function RequestFormReviewPage() {
             </div>}
           </span>
         </div>
-        {selectedTrainerBookingConflicts.length > 0 && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">This Trainer has a standalone booking on {selectedTrainerBookingConflicts.map((booking) => booking.date).join(", ")}. You can continue, but approving this Request Form will replace that booking.</p>}
+        {selectedTrainerBookingConflicts.length > 0 && <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">This Trainer already has a booking on {selectedTrainerBookingConflicts.map((booking) => booking.date).join(", ")}. Choose another Trainer; this conflict blocks approval.</p>}
         {approvalOptions.roomRequired ? <label className="block text-sm text-gray-600">Pick a Room (For {String(course.amount_student)} Students) *
           <span className="relative mt-1 block"><select className={`${searchField} appearance-none pr-9`} value={roomId} onChange={(event) => setRoomId(event.target.value)}><option value="">Pick a Room</option>{approvalOptions.rooms.map((room) => <option key={room.id} value={room.id}>{room.room_code} · {room.name} · Capacity {room.capacity}</option>)}</select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600" /></span>
-          {approvalOptions.rooms.length === 0 && <span className="mt-1 block text-xs text-red-600">No available room fits this class on all requested dates.</span>}
+          {approvalOptions.rooms.length === 0 && <span className="mt-1 block text-xs text-red-600">No active room fits this class. Room conflicts are checked for the selected session times when you approve.</span>}
         </label> : <p className="rounded-xl bg-neutral-50 p-3 text-sm text-zinc-600">Room selection is not required for this location. The requested client address will be used.</p>}
         <label className="block text-sm text-gray-600">Base Fee *<input inputMode="decimal" className={`${searchField} mt-1`} value={baseFee ? Number(baseFee).toLocaleString("id-ID") : ""} onChange={(event) => setBaseFee(event.target.value.replace(/[^0-9]/g, ""))} placeholder="Rp 20.000.000" /></label>
-        <div className="rounded-3xl border border-blue-400 bg-blue-500/10 p-3 text-sm text-slate-700"><p className="font-medium text-blue-600">Room Availability</p><p className="mt-1">Only rooms that fit the capacity and are not booked on any requested date are listed. Selected rooms are reserved for the full day.</p></div>
+        <div className="rounded-3xl border border-blue-400 bg-blue-500/10 p-3 text-sm text-slate-700"><p className="font-medium text-blue-600">Room Availability</p><p className="mt-1">Rooms are checked against Training sessions and standalone bookings for the selected session times. All conflicts block approval.</p></div>
         {dialogError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{dialogError}</p>}
-        <div className="flex justify-end gap-3"><Button variant="ghost" disabled={busy} onClick={() => setApprovalOpen(false)}>Cancel</Button><Button disabled={busy || !trainerId || !baseFee || !startTime || !endTime || endTime <= startTime || (approvalOptions.roomRequired && (!roomId || !approvalOptions.rooms.some((room) => room.id === roomId)))} onClick={() => void approve()}>{busy ? "Approving…" : "Approve Request"}</Button></div>
+        <div className="flex justify-end gap-3"><Button variant="ghost" disabled={busy} onClick={() => setApprovalOpen(false)}>Cancel</Button><Button disabled={busy || !trainerId || selectedTrainerBookingConflicts.length > 0 || !baseFee || !startTime || !endTime || endTime <= startTime || (approvalOptions.roomRequired && (!roomId || !approvalOptions.rooms.some((room) => room.id === roomId)))} onClick={() => void approve()}>{busy ? "Approving…" : "Approve Request"}</Button></div>
       </div>
     </div>}
 
