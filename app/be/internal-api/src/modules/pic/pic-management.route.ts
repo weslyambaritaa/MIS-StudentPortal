@@ -123,7 +123,7 @@ picManagementRouter.get(
       return { id: String(row.id), name: String(row.name), status: String(row.status), industry_name: row.industry?.name ?? null };
     }).filter((account) => !accountId || account.id === accountId);
     if (accountId && !ownedAccounts.length) return res.status(404).json({ message: "Account not found" });
-    const profiles = await studentPicClient.list(req.auth!, { accountIds: ownedAccounts.map((account) => account.id), status: String(status), search: typeof search === "string" ? search : undefined });
+    const profiles = ownedAccounts.length ? await studentPicClient.list(req.auth!, { accountIds: ownedAccounts.map((account) => account.id), status: String(status), search: typeof search === "string" ? search : undefined }) : { items: [] };
     const byAccount = new Map(ownedAccounts.map((account) => [account.id, account]));
     const allRows = profiles.items.flatMap((profile) => profile.assignments.filter((assignment) => !assignment.ended_at).map((assignment) => {
       const account = byAccount.get(assignment.account_id);

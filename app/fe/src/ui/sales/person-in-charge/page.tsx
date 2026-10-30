@@ -56,6 +56,25 @@ export default function PersonInChargePage() {
   useEffect(() => { const timer = window.setTimeout(() => { setPage(1); setSearch(searchDraft.trim()); }, 250); return () => window.clearTimeout(timer); }, [searchDraft]);
   useEffect(() => { void api<{ items: PicAccountOption[] }>("/api/v1/internal/pics/accounts").then((response) => setAccounts(response.items)).catch((cause) => setError(cause instanceof Error ? cause.message : "Failed to load Account options")); }, [api]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("openPic") || params.get("email") || params.get("name");
+    if (!target) return;
+
+    void api<PicPage>(`/api/v1/internal/pics?search=${encodeURIComponent(target)}`).then((res) => {
+      const match = res.items.find(
+        (p) =>
+          p.email?.toLowerCase() === target.toLowerCase() ||
+          p.name?.toLowerCase() === target.toLowerCase() ||
+          p.id === target
+      ) || res.items[0];
+      if (match) {
+        void openDetails(match);
+      }
+    }).catch(() => {});
+  }, [api]);
+
   const openDetails = async (pic: PicValue) => {
     setSelected(pic); setStudents([]); setDetailsLoading(true);
     try { const response = await api<{ item: PicValue; students: PicStudent[] }>(`/api/v1/internal/pics/${pic.id}`); setSelected(response.item); setStudents(response.students); }
@@ -115,6 +134,7 @@ export default function PersonInChargePage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Dropdown
                 label="Account"
+                searchable
                 value={accountId}
                 onChange={(val) => {
                   setPage(1);
@@ -162,14 +182,14 @@ export default function PersonInChargePage() {
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Email</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
-                  <th className="w-36 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                  <th className="w-44 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {result.items.map((row) => (
                   <tr key={row.id ?? row.email} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
                     <td className="px-3 py-3">
-                      <button className="text-left font-medium text-rose-600 hover:underline" onClick={() => void openDetails(row)}>
+                      <button className="text-left font-medium text-slate-900 hover:text-rose-600 hover:underline" onClick={() => void openDetails(row)}>
                         {row.name}
                       </button>
                     </td>
@@ -180,7 +200,7 @@ export default function PersonInChargePage() {
                         {statusLabel(row.status)}
                       </Badge>
                     </td>
-                    <td className="w-36 whitespace-nowrap px-3 py-2">
+                    <td className="w-44 whitespace-nowrap px-3 py-2">
                       <div className="flex items-center gap-1">
                         <IconButton label={`View ${row.name}`} icon="eye" size="sm" onClick={() => void openDetails(row)} />
                         {row.status === "PENDING" && (
@@ -192,7 +212,6 @@ export default function PersonInChargePage() {
                             onClick={() => void resendActivation(row)}
                           />
                         )}
-                        <IconButton label={`Edit ${row.name}`} icon="pencil-line" size="sm" onClick={() => setEditor(row)} />
                         <IconButton label={`Delete ${row.name}`} icon="trash" variant="danger" size="sm" onClick={() => setDeleting(row)} />
                       </div>
                     </td>

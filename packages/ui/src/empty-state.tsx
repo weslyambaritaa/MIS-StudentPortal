@@ -5,13 +5,16 @@ import { AddButton, type ButtonSize } from "./button";
 import { LordIcon, type LordIconName, type LordIconTrigger } from "./lord-icon";
 
 export interface EmptyStateProps {
+  /** Size variant: "default" (500px) | "sm" (compact for modals/sidebars) */
+  size?: "default" | "sm";
+
   /**
    * LordIcon name or custom path.
-   * Defaults to "bookshelf" flat icon (100px).
+   * Defaults to "bookshelf" flat icon.
    */
   icon?: LordIconName | (string & {});
 
-  /** Size in pixels. Default: 100 */
+  /** Size in pixels. Default: 100 for default, 50 for sm */
   iconSize?: number | string;
 
   /** Animation trigger. Default: "loop" */
@@ -40,8 +43,9 @@ export interface EmptyStateProps {
 }
 
 export function EmptyState({
+  size = "default",
   icon = "bookshelf",
-  iconSize = 100,
+  iconSize,
   iconTrigger = "loop",
   iconColors = "primary:#ffc738,secondary:#4bb3fd,tertiary:#de1641,quaternary:#3a3347,quinary:#2ca58d",
   description = "No Data Found",
@@ -51,10 +55,15 @@ export function EmptyState({
   buttonSize = "sm",
   className = "",
 }: EmptyStateProps) {
+  const isSm = size === "sm";
+  const resolvedIconSize = iconSize ?? (isSm ? 50 : 100);
+
   return (
     <div
       className={[
-        "flex h-[500px] w-full flex-col items-center justify-center gap-4 rounded-xl border border-[#E9E9E9] bg-white p-6 text-center",
+        isSm
+          ? "flex h-[200px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-[#E9E9E9] bg-white p-4 text-center"
+          : "flex h-[500px] w-full flex-col items-center justify-center gap-4 rounded-xl border border-[#E9E9E9] bg-white p-6 text-center",
         className,
       ]
         .filter(Boolean)
@@ -63,18 +72,22 @@ export function EmptyState({
       <div className="flex shrink-0 flex-col items-center justify-center gap-1">
         <LordIcon
           src={icon}
-          size={iconSize}
+          size={resolvedIconSize}
           trigger={iconTrigger}
           colors={iconColors}
           className="shrink-0"
         />
-        <p className="text-base font-normal text-zinc-950/60">{description}</p>
+        <p className={`${isSm ? "text-sm" : "text-base"} font-normal text-zinc-950/60`}>
+          {description}
+        </p>
       </div>
 
       {action ? (
         action
       ) : onAdd ? (
-        <AddButton size={buttonSize} onClick={onAdd}>{addLabel ?? "Add New"}</AddButton>
+        <AddButton size={buttonSize} onClick={onAdd}>
+          {addLabel ?? "Add New"}
+        </AddButton>
       ) : null}
     </div>
   );

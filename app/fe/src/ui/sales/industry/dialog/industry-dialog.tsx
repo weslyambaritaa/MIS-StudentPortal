@@ -33,7 +33,7 @@ export function IndustryDialog({
       <form role="dialog" aria-modal="true" aria-labelledby="industry-dialog-title" onSubmit={submit} className="w-full max-w-md rounded-3xl border border-rose-50 bg-white p-5 shadow-xl">
         <header className="mb-6 flex items-start justify-between gap-4">
           <h2 id="industry-dialog-title" className="text-2xl font-medium text-gray-600">{value?.id ? "Edit Industry" : "Add Industry"}</h2>
-          <IconButton label="Close" icon="x" onClick={onClose} disabled={busy} />
+          <IconButton label="Close" size="sm" icon="cross" onClick={onClose} disabled={busy} />
         </header>
         <Input
           label="Industry Code"

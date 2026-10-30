@@ -207,6 +207,53 @@ export function Dropdown<T = string>({
   const isOpenControlled = controlledOpen !== undefined;
   const isOpen = isOpenControlled ? controlledOpen : internalOpen;
 
+  const [computedPlacement, setComputedPlacement] = useState(placement);
+
+  useEffect(() => {
+    if (!isOpen || !dropdownRef.current) return;
+
+    const updatePlacement = () => {
+      if (!dropdownRef.current) return;
+      const rect = dropdownRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      const estimatedHeight = 280;
+      const estimatedWidth = 240;
+
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const spaceRight = viewportWidth - rect.left;
+      const spaceLeft = rect.right;
+
+      let vert: "top" | "bottom" = "bottom";
+      if (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) {
+        vert = "top";
+      }
+
+      let horiz: "start" | "end" = "start";
+      if (spaceRight < estimatedWidth && spaceLeft > spaceRight) {
+        horiz = "end";
+      }
+
+      if (placement === "bottom" && vert === "top") {
+        setComputedPlacement("top-start");
+      } else if (placement === "bottom" && vert === "bottom") {
+        setComputedPlacement("bottom");
+      } else {
+        setComputedPlacement(`${vert}-${horiz}` as any);
+      }
+    };
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [isOpen, placement]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
@@ -334,7 +381,7 @@ export function Dropdown<T = string>({
     "bottom": "top-full left-1/2 -translate-x-1/2 mt-1.5",
     "top-start": "bottom-full left-0 mb-1.5",
     "top-end": "bottom-full right-0 mb-1.5",
-  }[placement];
+  }[computedPlacement] ?? "top-full left-0 mt-1.5";
 
   const widthClass = {
     trigger: "w-full",
@@ -466,7 +513,7 @@ export function Dropdown<T = string>({
           role="listbox"
           tabIndex={-1}
           className={[
-            "absolute z-50 rounded-3xl border border-rose-50 bg-white p-1.5 shadow-xl shadow-rose-950/5",
+            "absolute z-[100] rounded-3xl border border-rose-50 bg-white p-1.5 shadow-xl shadow-rose-950/5",
             "backdrop-blur-sm animate-in fade-in zoom-in-95 duration-150",
             placementClasses,
             widthClass,

@@ -54,7 +54,7 @@ async function assertScope(input: Omit<Input, "quotationCode">, actor: ActiveRol
   const account = await Account.findOne({ where: { id: input.accountId, status: "ACTIVE", account_type: "CORPORATE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] });
   if (!account) throw new AppError(400, "Select an active corporate Account assigned to you");
   const pic = await studentPicClient.get(actor, input.picId);
-  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === input.accountId && !assignment.ended_at)) throw new AppError(400, "Select an active PIC assigned to this Account");
+  if (!pic || pic.status === "INACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === input.accountId && !assignment.ended_at)) throw new AppError(400, "Select an active PIC assigned to this Account");
   const courses = await Course.findAll({ where: { status: "ACTIVE", id: { [Op.in]: input.lines.map((line) => line.courseId) } }, attributes: ["id", "name", "duration_minutes"], raw: true });
   if (courses.length !== input.lines.length) throw new AppError(400, "One or more selected courses are inactive or unavailable");
   return { account, pic, courses };
@@ -98,7 +98,7 @@ async function deliver(quoteId: string, actor: ActiveRoleAuthContext) {
   ] });
   if (!quote) throw new AppError(404, "Quotation not found");
   const pic = await studentPicClient.get(actor, quote.pic_profile_id);
-  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === quote.account_id && !assignment.ended_at)) throw new AppError(409, "The selected PIC is no longer active for this Account");
+  if (!pic || pic.status === "INACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === quote.account_id && !assignment.ended_at)) throw new AppError(409, "The selected PIC is no longer active for this Account");
   const picEmail = pic.email;
   const lineRows = await QuotationOrder.findAll({ where: { quotation_id: quoteId }, attributes: ["course_id", "amount_student", "price", "location"], raw: true });
   const lines = lineRows.map((line) => ({ courseId: line.course_id, amountStudent: Number(line.amount_student), pricePerPax: Number(line.price), location: line.location ?? "" }));
@@ -130,8 +130,8 @@ quotationsRouter.get("/options", authorizeCapability("QUOTATION", ACCESS_ACTIONS
 quotationsRouter.get("/accounts/:accountId/pics", authorizeCapability("QUOTATION", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
   const scope = await Account.findOne({ where: { id: req.params.accountId, status: "ACTIVE", account_type: "CORPORATE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] });
   if (!scope) throw new AppError(404, "Account not found");
-  const profiles = await studentPicClient.list(req.auth!, { accountId: req.params.accountId, status: "ACTIVE" });
-  const items = profiles.items.filter((pic) => pic.assignments.some((assignment) => assignment.account_id === req.params.accountId && !assignment.ended_at)).map(({ id, name, email }) => ({ id, name, email }));
+  const profiles = await studentPicClient.list(req.auth!, { accountId: req.params.accountId });
+  const items = profiles.items.filter((pic) => pic.status !== "INACTIVE" && pic.assignments.some((assignment) => assignment.account_id === req.params.accountId && !assignment.ended_at)).map(({ id, name, email }) => ({ id, name, email }));
   return res.json({ items });
 }));
 quotationsRouter.get("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
@@ -148,12 +148,13 @@ quotationsRouter.get("/", authorizeCapability("QUOTATION", ACCESS_ACTIONS.VIEW),
     { model: Account, as: "account", attributes: ["name"], required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] },
     { model: QuotationOrder, as: "orders", attributes: ["course_id", "amount_student", "price"], required: typeof req.query.courseId === "string" && req.query.courseId !== "ALL" },
   ], distinct: true, order: [["created_at", "DESC"]], limit: pageSize, offset: (page - 1) * pageSize });
-  const pics = rows.length ? await studentPicClient.list(req.auth!, { accountIds: [...new Set(rows.map((row) => row.account_id))] }) : { items: [] };
+  const accountIds = [...new Set(rows.map((row) => row.account_id))].filter(Boolean);
+  const pics = accountIds.length ? await studentPicClient.list(req.auth!, { accountIds }) : { items: [] };
   const items = rows.map((quote) => {
     const orders = quote.get("orders") as QuotationOrder[];
     const account = quote.get("account") as Account;
     const pic = pics.items.find((profile) => profile.id === quote.pic_profile_id);
-    return { id: quote.id, quotation_code: quote.quotation_code, class_type: quote.class_type, status: quote.status, sent_at: quote.sent_at, account_name: account.name, pic_name: pic?.name ?? null, course_count: orders.length, students: orders.reduce((sum, order) => sum + Number(order.amount_student), 0), amount: orders.reduce((sum, order) => sum + Number(order.amount_student) * Number(order.price), 0) };
+    return { id: quote.id, quotation_code: quote.quotation_code, class_type: quote.class_type, status: quote.status, sent_at: quote.sent_at, account_name: account.name, pic_name: pic?.name ?? null, course_count: orders.length, students: orders.reduce((sum, order) => sum + Number(order.amount_student), 0), amount: orders.reduce((sum, order) => sum + (quote.class_type === "PUBLIC" || quote.class_type === "ONLINE_PUBLIC" ? 1 : Number(order.amount_student)) * Number(order.price), 0) };
   });
   return res.json({ items, page, pageSize, total: count });
 }));

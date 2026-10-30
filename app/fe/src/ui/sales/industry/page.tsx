@@ -136,7 +136,7 @@ export default function IndustryPage() {
                       <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Industry Name</th>
                       <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Amount Account</th>
                       <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
-                      <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                      <th className="w-44 whitespace-nowrap px-6 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -150,7 +150,7 @@ export default function IndustryPage() {
                             {industry.status === "ACTIVE" ? "Active" : "Inactive"}
                           </Badge>
                         </td>
-                        <td className="w-28 whitespace-nowrap px-3 py-2">
+                        <td className="w-44 whitespace-nowrap px-6 py-2">
                           <div className="flex items-center gap-1">
                             <IconButton
                               label={`Edit ${industry.name}`}

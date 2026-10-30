@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { LordIcon } from "./lord-icon";
 
 type ToastItem = { id: number; message: string };
 type ToastContextValue = { showToast: (message: string) => void };
@@ -36,11 +36,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="pointer-events-none fixed right-4 top-4 z-[200] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3" aria-live="polite" aria-relevant="additions">
         {toasts.map((toast) => (
-          <div key={toast.id} role="status" className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-lg">
-            <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-green-600" aria-hidden="true" />
-            <p className="min-w-0 flex-1">{toast.message}</p>
-            <button type="button" aria-label="Close notification" onClick={() => dismissToast(toast.id)} className="rounded-full p-1 text-gray-500 hover:bg-neutral-100 hover:text-gray-800">
-              <X size={16} aria-hidden="true" />
+          <div
+            key={toast.id}
+            role="status"
+            className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-green-500 bg-green-500/20 px-4 py-3 text-sm text-green-950 shadow-lg shadow-green-500/10 backdrop-blur-sm animate-in slide-in-from-right duration-300 ease-out transition-all"
+          >
+            <LordIcon
+              src="check-circle"
+              size={20}
+              trigger="loop"
+              colors="primary:#22c55e,secondary:#22c55e"
+              className="mt-0.5 shrink-0"
+            />
+            <p className="min-w-0 flex-1 font-medium">{toast.message}</p>
+            <button
+              type="button"
+              aria-label="Close notification"
+              onClick={() => dismissToast(toast.id)}
+              className="rounded-full p-1 text-green-700 hover:bg-green-500/30 hover:text-green-950 transition-colors"
+            >
+              <LordIcon
+                src="cross"
+                size={16}
+                trigger="hover"
+                colors="primary:#15803d,secondary:#15803d"
+              />
             </button>
           </div>
         ))}

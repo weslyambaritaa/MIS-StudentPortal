@@ -29,7 +29,7 @@ export function AccountDialog({ value, industries, salesUsers, currentSubject, b
   };
   return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
     <form role="dialog" aria-modal="true" aria-labelledby="account-dialog-title" onSubmit={submit} className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5 shadow-xl">
-      <header className="mb-6 flex items-start justify-between"><h2 id="account-dialog-title" className="text-2xl font-medium text-gray-600">{value ? "Edit Account" : "Add Account"}</h2><IconButton label="Close" icon="x" onClick={onClose} disabled={busy} /></header>
+      <header className="mb-6 flex items-start justify-between"><h2 id="account-dialog-title" className="text-2xl font-medium text-gray-600">{value ? "Edit Account" : "Add Account"}</h2><IconButton label="Close" icon="cross" size="sm" onClick={onClose} disabled={busy} /></header>
       <Input
         label="Account Code"
         value={value?.account_code ?? "Generated automatically"}
@@ -51,6 +51,7 @@ export function AccountDialog({ value, industries, salesUsers, currentSubject, b
         <Dropdown
           label="Industry"
           required
+          searchable
           value={industryId}
           placeholder="Choose an active Industry"
           onChange={(val) => {

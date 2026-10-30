@@ -24,7 +24,7 @@ export function WithdrawConfirmation({
           Are you sure you want to withdraw?
         </h2>
 
-        <IconButton label="Close" size="sm" icon="x" onClick={onClose} />
+        <IconButton label="Close" size="sm" icon="cross" onClick={onClose} />
       </div>
 
       <div className="my-4 h-px bg-zinc-950/20" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ChevronDown } from "lucide-react";
+
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
@@ -10,6 +10,7 @@ import { Dropdown } from "@mis/ui/dropdown";
 import { EmptyState } from "@mis/ui/empty-state";
 import { IconButton } from "@mis/ui/icon-button";
 import { Input } from "@mis/ui/input";
+import { NumberInput } from "@mis/ui/number-input";
 import { Modal } from "@mis/ui/modal";
 import { Pagination } from "@mis/ui/pagination";
 import { useToast } from "@mis/ui/toast";
@@ -22,7 +23,13 @@ import {
 } from "./dialog/quotation-details-dialog";
 
 type Status = QuotationStatus;
-type Line = { courseId: string; amountStudent: number; pricePerPax: number; location: string };
+type Line = {
+  courseId: string;
+  amountStudent: number;
+  pricePerPax: number;
+  location: string;
+  courseDays?: number;
+};
 type AccountOption = { id: string; account_code: string; name: string };
 type CourseOption = { id: string; name: string; duration_minutes: number };
 type PicOption = { id: string; name: string; email: string };
@@ -33,6 +40,9 @@ const BLANK: PageResult = { items: [], page: 1, pageSize: 8, total: 0 };
 const TYPES = ["PRIVATE", "PUBLIC", "INHOUSE", "ONLINE_PUBLIC", "ONLINE_PRIVATE"] as const;
 const typeLabel = (value: string) =>
   ({ PRIVATE: "Private", PUBLIC: "Public", INHOUSE: "In-house", ONLINE: "Online", ONLINE_PUBLIC: "Online Public", ONLINE_PRIVATE: "Online Private" })[value] ?? value;
+const formatRupiah = (value: number) => `Rp ${Math.round(value || 0).toLocaleString("id-ID")}`;
+const isPublicType = (type: string) => type === "PUBLIC" || type === "ONLINE_PUBLIC";
+const isOnlineType = (type: string) => type === "ONLINE_PUBLIC" || type === "ONLINE_PRIVATE";
 const statusLabel = (value: Status) =>
   ({
     WAITING: "Waiting",
@@ -91,6 +101,16 @@ export default function QuotationPage() {
     status: "WAITING",
     lines: [{ courseId: "", amountStudent: 1, pricePerPax: 0, location: "" }],
   });
+
+  const isPublic = isPublicType(form.classType);
+  const isOnline = isOnlineType(form.classType);
+  const totalBeforeTax = form.lines.reduce(
+    (sum, line) =>
+      isPublic
+        ? sum + (Number(line.pricePerPax) || 0)
+        : sum + (Number(line.amountStudent) || 1) * (Number(line.pricePerPax) || 0),
+    0
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,7 +177,7 @@ export default function QuotationPage() {
         picId: "",
         classType: "PRIVATE",
         status: "WAITING",
-        lines: [{ courseId: "", amountStudent: 1, pricePerPax: 0, location: "" }],
+        lines: [{ courseId: "", amountStudent: 1, pricePerPax: 0, location: "", courseDays: 1 }],
       });
       setEditor(null);
       return;
@@ -176,6 +196,7 @@ export default function QuotationPage() {
           amountStudent: Number(line.amount_student),
           pricePerPax: Number(line.price),
           location: line.location,
+          courseDays: Math.max(1, Math.ceil((line.duration_minutes || 480) / 480)),
         })),
       });
       setEditor(detail);
@@ -191,21 +212,29 @@ export default function QuotationPage() {
     setDialogError(null);
     const created = editor === null;
     const previousStatus = editor?.item.status;
+    const isPublic = isPublicType(form.classType);
+    const isOnline = isOnlineType(form.classType);
     try {
+      const payloadLines = form.lines.map((line) => ({
+        courseId: line.courseId,
+        amountStudent: Number(line.amountStudent) || 1,
+        pricePerPax: Number(line.pricePerPax) || 0,
+        location: isOnline ? (line.location?.trim() || "Online") : line.location.trim(),
+      }));
       const body = JSON.stringify({
         quotationCode: form.quotationCode,
         accountId: form.accountId,
         picId: form.picId,
         classType: form.classType,
-        lines: form.lines,
+        lines: payloadLines,
       });
       const contentUnchanged = editor && form.quotationCode === editor.item.quotation_code
         && form.accountId === editor.item.account_id && form.picId === editor.item.pic_profile_id
         && form.classType === editor.item.class_type && form.lines.length === editor.lines.length
-        && form.lines.every((line, index) => {
+        && payloadLines.every((line, index) => {
           const original = editor.lines[index];
           return line.courseId === original.course_id && line.amountStudent === Number(original.amount_student)
-            && line.pricePerPax === Number(original.price) && line.location === original.location;
+            && line.pricePerPax === Number(original.price) && (isOnline || line.location === original.location);
         });
       // A status-only change must not regenerate or email the quotation.
       const statusOnly = contentUnchanged && form.status !== "WAITING";
@@ -376,7 +405,7 @@ export default function QuotationPage() {
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Students</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Amount</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
-                  <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                  <th className="w-44 whitespace-nowrap px-6 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -405,7 +434,7 @@ export default function QuotationPage() {
                         {statusLabel(quote.status)}
                       </Badge>
                     </td>
-                    <td className="w-28 whitespace-nowrap px-3 py-2">
+                    <td className="w-44 whitespace-nowrap px-6 py-2">
                       <div className="flex items-center gap-1">
                         <IconButton
                           label="View"
@@ -468,7 +497,7 @@ export default function QuotationPage() {
               <IconButton
                 label="Close"
                 size="sm"
-                icon="x"
+                icon="cross"
                 onClick={() => setEditor(undefined)}
               />
             </div>
@@ -476,9 +505,18 @@ export default function QuotationPage() {
               label="Class / Course Type"
               required
               value={form.classType}
-              onChange={(val) =>
-                setForm((v) => ({ ...v, classType: val as (typeof TYPES)[number] }))
-              }
+              onChange={(val) => {
+                const nextType = val as (typeof TYPES)[number];
+                const nextIsOnline = isOnlineType(nextType);
+                setForm((v) => ({
+                  ...v,
+                  classType: nextType,
+                  lines: v.lines.map((l) => ({
+                    ...l,
+                    location: nextIsOnline ? "Online" : l.location === "Online" ? "" : l.location,
+                  })),
+                }));
+              }}
               options={TYPES.map((type) => ({ label: typeLabel(type), value: type }))}
             />
             <div className="h-px w-full bg-zinc-950/20" />
@@ -542,7 +580,13 @@ export default function QuotationPage() {
                     ...v,
                     lines: [
                       ...v.lines,
-                      { courseId: "", amountStudent: 1, pricePerPax: 0, location: "" },
+                      {
+                        courseId: "",
+                        amountStudent: 1,
+                        pricePerPax: 0,
+                        location: isOnline ? "Online" : "",
+                        courseDays: 1,
+                      },
                     ],
                   }))
                 }
@@ -553,18 +597,20 @@ export default function QuotationPage() {
             {form.lines.map((line, index) => (
               <div key={index} className="flex flex-col gap-4">
                 {form.lines.length > 1 && (
-                  <div className="flex items-center justify-between text-xs font-medium text-rose-600">
-                    Course {index + 1}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-rose-600">Course {index + 1}</span>
                     {index > 0 && (
-                      <IconButton
+                      <Button
                         size="sm"
-                        variant="ghost-red"
-                        icon="x"
-                        label="Remove course"
+                        type="button"
+                        variant="destructive"
+                        leftIcon="trash"
                         onClick={() =>
                           setForm((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== index) }))
                         }
-                      />
+                      >
+                        Delete
+                      </Button>
                     )}
                   </div>
                 )}
@@ -574,39 +620,131 @@ export default function QuotationPage() {
                   searchable
                   value={line.courseId}
                   placeholder="Courses Name - Days"
-                  onChange={(val) => patchLine(index, { courseId: val })}
+                  onChange={(val) => {
+                    const matchedCourse = courses.find((c) => c.id === val);
+                    const days = matchedCourse
+                      ? Math.max(1, Math.ceil(matchedCourse.duration_minutes / 480))
+                      : 1;
+                    patchLine(index, { courseId: val, courseDays: days });
+                  }}
                   options={courses.map((c) => ({
                     label: `${c.name} - ${Math.max(1, Math.ceil(c.duration_minutes / 480))} day(s)`,
                     value: c.id,
                   }))}
                 />
-                <Input
+                <NumberInput
                   label="Amount Student (Pax)"
                   required
-                  type="number"
                   min="1"
                   value={line.amountStudent}
-                  onChange={(e) => patchLine(index, { amountStudent: Number(e.target.value) })}
+                  onChange={(e) =>
+                    patchLine(index, { amountStudent: Number(e.target.value) })
+                  }
                 />
-                <Input
-                  label="Value Amount Per Pax (Rp)"
+                <NumberInput
+                  label={
+                    isPublic
+                      ? courses.find((c) => c.id === line.courseId)
+                        ? `Value Amount Paxes Per (${Math.max(1, Math.ceil((courses.find((c) => c.id === line.courseId)?.duration_minutes || 480) / 480))} Day(s))`
+                        : "Value Amount Paxes Per Day"
+                      : "Value Amount Per Pax (Rp)"
+                  }
                   required
-                  type="number"
                   min="1"
                   step="any"
                   value={line.pricePerPax || ""}
                   placeholder="50.000"
-                  onChange={(e) => patchLine(index, { pricePerPax: Number(e.target.value) })}
+                  onChange={(e) =>
+                    patchLine(index, { pricePerPax: Number(e.target.value) })
+                  }
                 />
-                <Input
-                  label="Location"
-                  required
-                  value={line.location}
-                  onChange={(e) => patchLine(index, { location: e.target.value })}
-                  placeholder="Jakarta, ABC Tower"
-                />
+                {!isOnline && (
+                  <Input
+                    label="Location"
+                    required
+                    value={line.location}
+                    onChange={(e) => patchLine(index, { location: e.target.value })}
+                    placeholder="Jakarta, ABC Tower"
+                  />
+                )}
               </div>
             ))}
+
+            {/* Cost Breakdown & Total Before Tax */}
+            <div className="flex flex-col gap-3 self-stretch pt-2">
+              {isPublic ? (
+                form.lines.map((line, idx) => {
+                  const course = courses.find((c) => c.id === line.courseId);
+                  const days = course
+                    ? Math.max(1, Math.ceil(course.duration_minutes / 480))
+                    : 1;
+                  const price = Number(line.pricePerPax) || 0;
+                  const count = Number(line.amountStudent) || 1;
+                  const label =
+                    form.lines.length === 1
+                      ? course?.name
+                        ? `${course.name} (${count} Pax · ${days} ${days > 1 ? "Days" : "Day"})`
+                        : `Course Fee (${count} Pax · ${days} ${days > 1 ? "Days" : "Day"})`
+                      : `${course?.name || `Course ${idx + 1}`} (${count} Pax · ${days} ${days > 1 ? "Days" : "Day"})`;
+                  return (
+                    <div key={idx} className="flex items-start justify-between gap-6 self-stretch">
+                      <div className="text-base font-normal text-zinc-950/60">{label}</div>
+                      <div className="flex-1 text-right text-base font-medium text-gray-600">
+                        {formatRupiah(price)}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : form.lines.length === 1 ? (
+                <>
+                  <div className="flex items-start justify-between gap-6 self-stretch">
+                    <div className="text-base font-normal text-zinc-950/60">Base Fee</div>
+                    <div className="flex-1 text-right text-base font-medium text-gray-600">
+                      {formatRupiah(Number(form.lines[0].pricePerPax) || 0)}
+                    </div>
+                  </div>
+                  {Number(form.lines[0].amountStudent) > 1 && (
+                    <div className="flex items-start justify-between gap-6 self-stretch">
+                      <div className="text-base font-normal text-zinc-950/60">
+                        Additional Cost Per Participant (x
+                        {Number(form.lines[0].amountStudent) - 1})
+                      </div>
+                      <div className="flex-1 text-right text-base font-medium text-gray-600">
+                        {formatRupiah(
+                          (Number(form.lines[0].amountStudent) - 1) *
+                            (Number(form.lines[0].pricePerPax) || 0)
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                form.lines.map((line, idx) => {
+                  const course = courses.find((c) => c.id === line.courseId);
+                  const count = Number(line.amountStudent) || 1;
+                  const price = Number(line.pricePerPax) || 0;
+                  return (
+                    <div key={idx} className="flex items-start justify-between gap-6 self-stretch">
+                      <div className="text-base font-normal text-zinc-950/60">
+                        {course?.name || `Course ${idx + 1}`} ({count} Pax)
+                      </div>
+                      <div className="flex-1 text-right text-base font-medium text-gray-600">
+                        {formatRupiah(count * price)}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              <div className="h-px w-full bg-zinc-950/20" />
+
+              <div className="flex items-center justify-between gap-6 self-stretch">
+                <div className="text-base font-medium text-gray-600">Total Before Tax</div>
+                <div className="flex-1 text-right text-2xl font-medium text-rose-600">
+                  {formatRupiah(totalBeforeTax)}
+                </div>
+              </div>
+            </div>
             {dialogError && (
               <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
                 {dialogError}

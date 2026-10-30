@@ -28,7 +28,7 @@ export function LogoutConfirmationModal({
             <IconButton
               label="Close logout confirmation"
               size="sm"
-              icon={<X size={20} strokeWidth={1.7} />}
+              icon="cross"
               onClick={onClose}
             />
           </div>

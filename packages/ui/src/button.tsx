@@ -87,7 +87,7 @@ export function Button({
     }
 
     if (variant === "danger" || variant === "destructive") {
-      return ["bg-red-500/10", "text-red-500", "hover:bg-red-500/20"].join(" ");
+      return ["bg-[#FF4343]/20", "text-[#FF4343]", "hover:bg-[#FF4343]/30"].join(" ");
     }
 
     return ["bg-transparent", "text-gray-600", "hover:bg-gray-100"].join(" ");
@@ -99,14 +99,14 @@ export function Button({
     variant === "primary"
       ? "group-hover:text-white group-hover:[--lord-icon-primary:#ffffff] group-hover:[--lord-icon-secondary:#ffffff]"
       : isDestructive
-        ? "group-hover:text-red-600 group-hover:[--lord-icon-primary:#dc2626] group-hover:[--lord-icon-secondary:#dc2626]"
+        ? "group-hover:text-[#FF4343] group-hover:[--lord-icon-primary:#FF4343] group-hover:[--lord-icon-secondary:#FF4343]"
         : "group-hover:text-[#DE1641] group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]";
 
   const defaultIconColors =
     variant === "primary"
       ? "primary:#ffffff,secondary:#ffffff"
       : isDestructive
-        ? "primary:#ef4444,secondary:#ef4444"
+        ? "primary:#FF4343,secondary:#FF4343"
         : "primary:#de1641,secondary:#de1641";
 
   return (
