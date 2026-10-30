@@ -1,5 +1,5 @@
-import RequestFormReviewPage from "@/ui/admin/request-forms/page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <RequestFormReviewPage />;
+  redirect("/admin/trainings?tab=requested");
 }

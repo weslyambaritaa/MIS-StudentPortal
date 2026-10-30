@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Eye, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Eye, Pencil, Search, Trash2, Upload } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { IconButton } from "@mis/ui/icon-button";
@@ -116,7 +116,7 @@ export default function StudentsPage() {
   ];
 
   return <AppShell title="Master Data | Student List"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Student</h1><p className="mt-1 text-sm text-zinc-600">Manage master data for students and their portal accounts. These records are used when adding Training Participants.</p></div><div className="flex flex-wrap items-center gap-3"><Button variant="navigation" leftIcon={<Upload size={18}/>} onClick={() => setShowBulkImport(true)}>Upload Batch</Button><Button leftIcon={<Plus size={18}/>} onClick={() => { setDialogError(null); setEditor(null); }}>Add Student</Button></div></section>
+    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Student</h1><p className="mt-1 text-sm text-zinc-600">Manage master data for students and their portal accounts. These records are used when adding Training Participants.</p></div><div className="flex flex-wrap items-center gap-3"><Button variant="navigation" leftIcon={<Upload size={18}/>} onClick={() => setShowBulkImport(true)}>Upload Batch</Button><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add Student</AddButton></div></section>
     <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
       <label htmlFor="student-search" className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:w-60">Search Student<span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={20} className="shrink-0 text-slate-900/40"/><input id="student-search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search name, email, or role" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-900/40"/></span></label>
       <div className="flex flex-col gap-4 sm:flex-row"><label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-52">Account Name<span className="relative block"><select value={accountId} onChange={(event) => { setPage(1); setAccountId(event.target.value); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm"><option value="ALL">All Account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"/></span></label>

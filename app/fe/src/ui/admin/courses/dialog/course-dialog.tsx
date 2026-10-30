@@ -127,7 +127,7 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
         </ul> : <p className="mt-3 text-xs text-zinc-500">No Practice File added.</p>}
       </section>
       {!value && <div className="mb-6 flex gap-2 rounded-3xl border border-blue-500 bg-blue-500/10 p-3 text-sm text-blue-600"><Info size={18} className="shrink-0"/><span>A PDF is stored in Cloudinary. Previous syllabus versions remain available for Training to select.</span></div>}
-      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy || !courseCode.trim() || !name.trim() || !categoryId || !Number(durationDays)}>{busy ? "Saving…" : value ? "Save Course" : "Add Course"}<Plus size={16}/></Button></footer>
+      <footer className="flex justify-end gap-3"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" rightIcon="plus" disabled={busy || !courseCode.trim() || !name.trim() || !categoryId || !Number(durationDays)}>{busy ? "Saving…" : value ? "Save Course" : "Add Course"}</Button></footer>
     </form>
   </div>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
 
@@ -52,7 +52,7 @@ export function TrainingRoomDialog({ value, busy, onClose, onSubmit }: {
           <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900 outline-none"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>
         </label>
         <section className="mb-6">
-          <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-base font-medium text-rose-600">Room Facility</h3><Button type="button" variant="soft" leftIcon={<Plus size={15} />} onClick={addFacility}>Add Facility</Button></div>
+          <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-base font-medium text-rose-600">Room Facility</h3><Button type="button" variant="soft" leftIcon="plus" onClick={addFacility}>Add Facility</Button></div>
           <div className="flex flex-col gap-3">
             {facilities.map((facility, index) => <div key={index} className="rounded-2xl border border-rose-50 bg-neutral-50 p-3">
               <div className="mb-2 flex items-center justify-between"><span className="text-xs font-medium text-zinc-500">Facility #{index + 1}</span>{facilities.length > 1 && <IconButton label={`Remove facility ${index + 1}`} icon={<Trash2 size={15} />} size="sm" variant="danger" onClick={() => removeFacility(index)} disabled={busy} />}</div>
@@ -67,7 +67,7 @@ export function TrainingRoomDialog({ value, busy, onClose, onSubmit }: {
         </section>
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="navigation" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" rightIcon={<Plus size={16} />} disabled={busy || !ready}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Training Room"}</Button>
+          <Button type="submit" rightIcon="plus" disabled={busy || !ready}>{busy ? "Saving…" : value.id ? "Save Changes" : "Add Training Room"}</Button>
         </footer>
       </form>
     </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
+import { Button, AddButton } from "@mis/ui/button";
 import { DataTable, type DataTableColumn } from "@mis/ui/data-table";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { IconButton } from "@mis/ui/icon-button";
@@ -116,7 +116,7 @@ export default function CoursesPage() {
   ];
 
   return <AppShell title="Master Data | Course"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Course</h1><p className="mt-1 text-sm text-zinc-600">Manage master data for courses and their syllabus versions.</p></div><Button leftIcon={<Plus size={18}/>} onClick={() => { setDialogError(null); setEditor(null); }}>Add Course</Button></section>
+    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Course</h1><p className="mt-1 text-sm text-zinc-600">Manage master data for courses and their syllabus versions.</p></div><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add Course</AddButton></section>
     <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
       <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:w-60">Search Course<span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={20} className="shrink-0 text-slate-900/40"/><input value={draftSearch} onChange={event => setDraftSearch(event.target.value)} placeholder="Example: Data & Analytics" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-900/40"/></span></label>
       <div className="flex flex-wrap gap-4"><label className="flex flex-col gap-[3px] text-sm text-gray-600">Category<select value={categoryId} onChange={event => { setPage(1); setCategoryId(event.target.value); }} className="h-9 w-44 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Category</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="flex flex-col gap-[3px] text-sm text-gray-600">Level<select value={level} onChange={event => { setPage(1); setLevel(event.target.value); }} className="h-9 w-44 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Level</option><option value="BEGINNER">Fundamental</option><option value="INTERMEDIATE">Intermediate</option><option value="ADVANCED">Advanced</option></select></label><label className="flex flex-col gap-[3px] text-sm text-gray-600">Status<select value={status} onChange={event => { setPage(1); setStatus(event.target.value); }} className="h-9 w-40 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label></div>

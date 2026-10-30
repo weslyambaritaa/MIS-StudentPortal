@@ -1,19 +1,20 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { LordIcon, type LordIconName } from "./lord-icon";
 
-type ButtonVariant = "primary" | "soft" | "ghost" | "danger" | "navigation";
+export type ButtonVariant = "primary" | "soft" | "ghost" | "danger" | "navigation";
 
-type ButtonSize = "default" | "sm" | "icon";
+export type ButtonSize = "default" | "sm" | "icon";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children?: ReactNode;
 
   variant?: ButtonVariant;
 
   size?: ButtonSize;
 
-  leftIcon?: ReactNode;
+  leftIcon?: ReactNode | LordIconName | (string & {});
 
-  rightIcon?: ReactNode;
+  rightIcon?: ReactNode | LordIconName | (string & {});
 
   selected?: boolean;
 
@@ -140,7 +141,22 @@ export function Button({
         <span
           className={`inline-flex shrink-0 items-center justify-center leading-none text-current transition-colors duration-150 ${iconHoverClass} ${size === "sm" ? "size-4" : "size-5"}`}
         >
-          {leftIcon}
+          {typeof leftIcon === "string" ? (
+            <LordIcon
+              src={leftIcon as LordIconName}
+              size={size === "sm" ? 16 : 20}
+              trigger="hover"
+              target="button"
+              colors={
+                variant === "primary"
+                  ? "primary:#ffffff,secondary:#ffffff"
+                  : "primary:#de1641,secondary:#de1641"
+              }
+              className="shrink-0"
+            />
+          ) : (
+            leftIcon
+          )}
         </span>
       )}
 
@@ -150,9 +166,43 @@ export function Button({
         <span
           className={`inline-flex shrink-0 items-center justify-center leading-none text-current transition-colors duration-150 ${iconHoverClass} ${size === "sm" ? "size-4" : "size-5"}`}
         >
-          {rightIcon}
+          {typeof rightIcon === "string" ? (
+            <LordIcon
+              src={rightIcon as LordIconName}
+              size={size === "sm" ? 16 : 20}
+              trigger="hover"
+              target="button"
+              colors={
+                variant === "primary"
+                  ? "primary:#ffffff,secondary:#ffffff"
+                  : "primary:#de1641,secondary:#de1641"
+              }
+              className="shrink-0"
+            />
+          ) : (
+            rightIcon
+          )}
         </span>
       )}
     </button>
   );
 }
+
+export type AddButtonProps = Omit<ButtonProps, "leftIcon"> & {
+  icon?: ReactNode | LordIconName | (string & {});
+};
+
+export function AddButton({
+  children,
+  icon = "plus",
+  variant = "primary",
+  size = "default",
+  ...props
+}: AddButtonProps) {
+  return (
+    <Button variant={variant} size={size} leftIcon={icon} {...props}>
+      {children}
+    </Button>
+  );
+}
+
