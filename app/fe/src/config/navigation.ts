@@ -179,7 +179,6 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
     icon: "clipboard",
     roles: [ROLES.ADMIN],
     route: "/admin/request-forms",
-    placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } },
   },
 
   // Finance

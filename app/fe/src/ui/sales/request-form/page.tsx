@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@mis/ui/button";
+import { Badge } from "@mis/ui/badge";
+import { Button, AddButton } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
+import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
+import { LordIcon } from "@mis/ui/lord-icon";
 import { Pagination } from "@mis/ui/pagination";
 import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
@@ -69,6 +74,14 @@ type Details = {
 };
 const statusLabel = (status: Row["status"]) =>
   ({ DRAFT: "Draft", WAITING: "Waiting", REVISION: "Declined", APPROVED: "Approved" })[status];
+const statusVariant = (status: Row["status"]) =>
+  status === "APPROVED"
+    ? ("success" as const)
+    : status === "WAITING"
+      ? ("warning" as const)
+      : status === "REVISION"
+        ? ("danger" as const)
+        : ("neutral" as const);
 const deliveryTypeLabel = (type: string) =>
   (({ INHOUSE: "In-house", ONLINE_PRIVATE: "Online Private", ONLINE_PUBLIC: "Online Public" }) as Record<string, string>)[type] ?? type;
 function formatSessionDates(dates: string[]) {
@@ -441,191 +454,158 @@ export default function RequestFormPage({
               {mode === "REGISTRATION" ? "Manage registration forms for public courses." : "Manage request forms for private and in-house courses."} Send completed forms to the admin (QPD).
             </p>
           </div>
-          <Button onClick={openNew} leftIcon={<Plus size={18} />}>
+          <AddButton onClick={openNew}>
             Add {formName}
-          </Button>
+          </AddButton>
         </section>
         <section className="flex flex-col gap-6 rounded-3xl border border-rose-50 bg-white p-5">
           <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-            <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:max-w-60">
-              Search Quotation Code
-              <span className="relative">
-                <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                />
-                <input
-                  className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 pl-9 pr-3 text-sm outline-none"
-                  placeholder="Example: QTN-0926-001"
-                  value={search}
-                  onChange={(e) => {
-                    setPage(1);
-                    setSearch(e.target.value);
-                  }}
-                />
-              </span>
-            </label>
+            <Input
+              label="Search Quotation Code"
+              leftIcon="search"
+              placeholder="Example: QTN-0926-001"
+              value={search}
+              onChange={(e) => {
+                setPage(1);
+                setSearch(e.target.value);
+              }}
+              containerClassName="w-full xl:max-w-60"
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {[
-                {
-                  label: "Class Type",
-                  value: deliveryType,
-                  set: setDeliveryType,
-                  options: [["ALL", "All Type"], ...deliveryOptions],
-                },
-                {
-                  label: "Company",
-                  value: accountFilter,
-                  set: setAccountFilter,
-                  options: [
-                    ["ALL", "All Company"],
-                    ...accounts.map((account) => [account.id, account.name]),
-                  ],
-                },
-                {
-                  label: "Status",
-                  value: status,
-                  set: setStatus,
-                  options: [
-                    ["ALL", "All Status"],
-                    ["DRAFT", "Draft"],
-                    ["WAITING", "Waiting"],
-                    ["REVISION", "Revision"],
-                    ["APPROVED", "Approved"],
-                  ],
-                },
-              ].map((filter) => (
-                <label
-                  key={filter.label}
-                  className="flex min-w-40 flex-col gap-[3px] text-sm text-gray-600"
-                >
-                  {filter.label}
-                  <span className="relative">
-                    <select
-                      className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm text-slate-900/60 outline-none"
-                      value={filter.value}
-                      onChange={(e) => {
-                        setPage(1);
-                        filter.set(e.target.value);
-                      }}
-                    >
-                      {filter.options.map(([value, text]) => (
-                        <option key={value} value={value}>
-                          {text}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600"
-                    />
-                  </span>
-                </label>
-              ))}
+              <Dropdown
+                label="Class Type"
+                value={deliveryType}
+                onChange={(val) => {
+                  setPage(1);
+                  setDeliveryType(val);
+                }}
+                options={[
+                  { label: "All Type", value: "ALL" },
+                  ...deliveryOptions.map(([val, label]) => ({ label, value: val })),
+                ]}
+                containerClassName="min-w-40"
+              />
+              <Dropdown
+                label="Company"
+                value={accountFilter}
+                onChange={(val) => {
+                  setPage(1);
+                  setAccountFilter(val);
+                }}
+                options={[
+                  { label: "All Company", value: "ALL" },
+                  ...accounts.map((account) => ({ label: account.name, value: account.id })),
+                ]}
+                containerClassName="min-w-40"
+              />
+              <Dropdown
+                label="Status"
+                value={status}
+                onChange={(val) => {
+                  setPage(1);
+                  setStatus(val);
+                }}
+                options={[
+                  { label: "All Status", value: "ALL" },
+                  { label: "Draft", value: "DRAFT" },
+                  { label: "Waiting", value: "WAITING" },
+                  { label: "Revision", value: "REVISION" },
+                  { label: "Approved", value: "APPROVED" },
+                ]}
+                containerClassName="min-w-40"
+              />
             </div>
           </div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
-          {loading ? (
-            <p className="p-8 text-center text-sm text-gray-500">Loading…</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="rounded-xl bg-neutral-100 text-gray-600">
+          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+            <table className="table-fixed w-full min-w-[960px] text-left text-sm">
+              <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
+                <tr>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Request Form #</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Quotation</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Course</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Type</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Students</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Date</th>
+                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
+                  <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && items.length === 0 && (
                   <tr>
-                    {[
-                      "REQUEST FORM #",
-                      "QUOTATION",
-                      "ACCOUNT",
-                      "REQUESTED COURSE",
-                      "TYPE",
-                      "STUDENTS",
-                      "REQUESTED DATE",
-                      "STATUS",
-                      "ACTION",
-                    ].map((heading) => (
-                      <th className="px-3 py-3 text-xs font-medium" key={heading}>
-                        {heading}
-                      </th>
-                    ))}
+                    <td colSpan={9} className="px-3 py-10 text-center text-zinc-500">
+                      No {formName}s found.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const badgeClass =
-                      item.status === "WAITING"
-                        ? "border-orange-600 bg-orange-600/10 text-orange-600"
-                        : item.status === "REVISION"
-                          ? "border-red-500 bg-red-500/10 text-red-500"
-                          : item.status === "APPROVED"
-                            ? "border-green-500 bg-green-500/10 text-green-600"
-                            : "border-gray-300 bg-gray-100 text-gray-600";
-                    return (
-                      <tr className="border-b border-rose-50 text-zinc-950/60" key={item.id}>
-                        <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
-                        <td className="px-3 py-3 font-medium">
-                          {item.quotation_code ?? "-"}
-                        </td>
-                        <td className="px-3 py-3 font-medium">
-                          {item.account_name}
-                          <div className="text-xs font-normal text-zinc-950/50">
-                            {item.pic_name}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          {item.requested_course ?? `${item.course_count} course(s)`}
-                        </td>
-                        <td className="px-3 py-3">
-                          {item.delivery_type ? deliveryTypeLabel(item.delivery_type) : "-"}
-                        </td>
-                        <td className="px-3 py-3">{item.students ?? "-"}</td>
-                        <td className="px-3 py-3">
-                          {formatSessionDates(item.requested_dates?.split(",") ?? [])}
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${badgeClass}`}
-                          >
-                            <span className="size-1.5 rounded-full bg-current" />
-                            {statusLabel(item.status)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              aria-label="View request form"
-                              className="rounded-full p-2 text-zinc-950/60 hover:bg-neutral-100"
-                              onClick={() => void showDetails(item.id)}
-                            >
-                              <Eye size={17} />
-                            </button>
-                            {(item.status === "DRAFT" || item.status === "REVISION") && (
-                              <Button size="sm" className="min-w-max shrink-0 whitespace-nowrap bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white hover:to-[#F90237]" onClick={() => void openEdit(item.id)}>
-                                Edit Form
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!items.length && (
-                    <tr>
-                      <td className="p-8 text-center text-gray-500" colSpan={9}>
-                        No Request Forms found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <Pagination
-            page={page}
-            totalPages={Math.max(1, Math.ceil(total / 8))}
-            pageSize={items.length}
-            totalItems={total}
-            onPageChange={setPage}
-          />
+                )}
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
+                    <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
+                    <td className="px-3 py-3 font-medium">
+                      {item.quotation_code ?? "-"}
+                    </td>
+                    <td className="px-3 py-3 font-medium">
+                      {item.account_name}
+                      <div className="text-xs font-normal text-zinc-950/50">
+                        {item.pic_name}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      {item.requested_course ?? `${item.course_count} course(s)`}
+                    </td>
+                    <td className="px-3 py-3">
+                      {item.delivery_type ? deliveryTypeLabel(item.delivery_type) : "-"}
+                    </td>
+                    <td className="px-3 py-3">{item.students ?? "-"}</td>
+                    <td className="px-3 py-3">
+                      {formatSessionDates(item.requested_dates?.split(",") ?? [])}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Badge variant={statusVariant(item.status)} showDot>
+                        {statusLabel(item.status)}
+                      </Badge>
+                    </td>
+                    <td className="w-28 whitespace-nowrap px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <IconButton
+                          label="View request form"
+                          icon="eye"
+                          size="sm"
+                          onClick={() => void showDetails(item.id)}
+                        />
+                        {(item.status === "DRAFT" || item.status === "REVISION") && (
+                          <IconButton
+                            label="Edit form"
+                            icon="pencil-line"
+                            size="sm"
+                            onClick={() => void openEdit(item.id)}
+                          />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {loading && (
+                  <tr>
+                    <td colSpan={9} className="px-3 py-10 text-center text-zinc-500">
+                      Loading {formName}s…
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 w-full">
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(total / 8))}
+              pageSize={items.length}
+              totalItems={total}
+              onPageChange={setPage}
+            />
+          </div>
         </section>
       </div>
       {editor && (
@@ -770,7 +750,7 @@ export default function RequestFormPage({
                   {mode === "REGISTRATION" ? "Registration Attachment *" : "RF Attachment *"}
                   <input ref={attachmentInputRef} className="sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(event) => { const selectedFiles = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; addFiles(selectedFiles); }} />
                   <button type="button" onClick={() => attachmentInputRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setFilesDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFilesDragging(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFilesDragging(false); }} onDrop={handleAttachmentDrop} className={`flex min-h-32 w-full flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center ${filesDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}>
-                    <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><Plus size={20} /></span>
+                    <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><LordIcon src="upload" size={20} colors="primary:#ffffff,secondary:#ffffff" /></span>
                     <span className="text-sm text-gray-600">Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></span>
                   </button>
                   <span className="text-sm text-zinc-950/60">(Word, PDF), Max size 10MB per file</span>
@@ -844,7 +824,7 @@ export default function RequestFormPage({
                 <section className="space-y-3 bg-white">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-medium text-rose-600">Special Instructions / Notes</h3>
-                    <Button size="sm" variant="primary" leftIcon={<Plus size={15} />} onClick={() => setNotes((current) => [...current, ""])}>Add Notes</Button>
+                    <AddButton size="sm" onClick={() => setNotes((current) => [...current, ""])}>Add Notes</AddButton>
                   </div>
                   <div className="h-px bg-zinc-950/20" />
                   {notes.map((note, index) => (

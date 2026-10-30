@@ -100,7 +100,16 @@ export default function RequestFormReviewPage() {
   const [trainingSearch, setTrainingSearch] = useState("");
   const [trainingStatus, setTrainingStatus] = useState("ALL");
   const [trainingSessionDate, setTrainingSessionDate] = useState("");
-  const [activeTab, setActiveTab] = useState<"TRAININGS" | "REQUESTED">("REQUESTED");
+  const [activeTab, setActiveTab] = useState<"TRAININGS" | "REQUESTED">("TRAININGS");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("tab") === "requested") {
+        setActiveTab("REQUESTED");
+      }
+    }
+  }, []);
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -141,10 +150,12 @@ export default function RequestFormReviewPage() {
   }, [api, page, statusFilter, accountFilter, search]);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+    if (activeTab === "REQUESTED") {
+      void load();
+      const timer = window.setInterval(() => void load(), 60_000);
+      return () => window.clearInterval(timer);
+    }
+  }, [activeTab, load]);
 
   const loadTrainings = useCallback(async () => {
     try {
@@ -203,7 +214,13 @@ export default function RequestFormReviewPage() {
     finally { setParticipantBusy(false); }
   }
 
-  useEffect(() => { if (activeTab === "TRAININGS") void loadTrainings(); }, [activeTab, loadTrainings]);
+  useEffect(() => {
+    if (activeTab === "TRAININGS") {
+      void loadTrainings();
+      const timer = window.setInterval(() => void loadTrainings(), 60_000);
+      return () => window.clearInterval(timer);
+    }
+  }, [activeTab, loadTrainings]);
 
   async function open(id: string) {
     try {

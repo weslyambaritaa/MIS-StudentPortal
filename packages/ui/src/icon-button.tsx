@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { LordIcon, type LordIconName } from "./lord-icon";
 
-type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: ReactNode;
+export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon: ReactNode | LordIconName | (string & {});
   label: string;
   size?: "sm" | "md";
   variant?: "default" | "primary" | "soft" | "danger" | "profile" | "ghost-red";
@@ -13,6 +14,7 @@ export function IconButton({
   size = "md",
   variant = "default",
   className = "",
+  disabled,
   ...props
 }: IconButtonProps) {
   const sizes = {
@@ -21,17 +23,58 @@ export function IconButton({
   };
 
   const variants = {
-    default: "bg-transparent text-gray-600 hover:bg-gray-100",
+    default: "group bg-transparent text-gray-600 hover:bg-neutral-100 hover:text-rose-600",
 
     primary: "bg-[var(--color-primary)] text-white",
 
     soft: "bg-[var(--color-primary-soft)] text-[var(--color-primary)]",
 
-    danger: "bg-red-500/10 text-red-500 hover:bg-red-500/20",
+    danger: "group bg-[#FF4343]/20 text-[#FF4343] hover:bg-[#FF4343]/30 disabled:opacity-40 disabled:pointer-events-none",
 
     profile: "bg-radial-[at_50%_0%] from-sky-200 to-sky-500 text-white",
 
-    "ghost-red": "bg-transparent text-rose-600 hover:bg-rose-50 hover:text-rose-700",
+    "ghost-red": "group bg-transparent text-rose-600 hover:bg-rose-50 hover:text-rose-700",
+  };
+
+  const renderIcon = () => {
+    if (typeof icon === "string") {
+      const iconSize = size === "sm" ? 18 : 20;
+      if (variant === "danger") {
+        return (
+          <LordIcon
+            src={icon as LordIconName}
+            size={iconSize}
+            trigger="hover"
+            target="button"
+            colors="primary:#FF4343,secondary:#FF4343"
+            className="shrink-0"
+          />
+        );
+      }
+      if (variant === "primary") {
+        return (
+          <LordIcon
+            src={icon as LordIconName}
+            size={iconSize}
+            trigger="hover"
+            target="button"
+            colors="primary:#ffffff,secondary:#ffffff"
+            className="shrink-0"
+          />
+        );
+      }
+      return (
+        <LordIcon
+          src={icon as LordIconName}
+          size={iconSize}
+          trigger="hover"
+          target="button"
+          colors="primary:#6b7280,secondary:#9ca3af"
+          className="shrink-0 transition-colors duration-150 group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]"
+        />
+      );
+    }
+    return icon;
   };
 
   return (
@@ -39,6 +82,7 @@ export function IconButton({
       type="button"
       aria-label={label}
       title={label}
+      disabled={disabled}
       className={[
         "inline-flex shrink-0 items-center justify-center",
         "rounded-[100px]",
@@ -50,7 +94,8 @@ export function IconButton({
       ].join(" ")}
       {...props}
     >
-      {icon}
+      {renderIcon()}
     </button>
   );
 }
+

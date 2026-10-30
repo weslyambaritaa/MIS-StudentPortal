@@ -118,7 +118,6 @@ test("role sidebars use the menus read from the supplied designs", () => {
     "Training Room",
     "Booking Room",
     "Personal Account Students",
-    "Request Form Review",
     "List Training",
     "Training Calendar",
     "Generate Certificate",

@@ -25,7 +25,7 @@ export function DataTable<Row>({
 }: DataTableProps<Row>) {
   return (
     <div
-      className="w-full overflow-x-auto rounded-xl border border-rose-50 bg-neutral-100 p-3"
+      className="w-full overflow-x-auto rounded-xl border border-[#E9E9E9] bg-neutral-100 p-3"
       role="region"
       aria-label={caption ?? "Data table"}
       tabIndex={0}
@@ -38,7 +38,7 @@ export function DataTable<Row>({
               <th
                 key={column.key}
                 scope="col"
-                className={`px-3 py-2 text-sm font-medium text-gray-600 ${column.className ?? ""}`}
+                className={`px-3 py-2 text-sm font-normal text-zinc-950/60 ${column.className ?? ""}`}
               >
                 {column.header}
               </th>
@@ -57,11 +57,11 @@ export function DataTable<Row>({
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={getRowKey(row)} className="border-t border-rose-50 bg-white/70">
+              <tr key={getRowKey(row)} className="border-t border-[#E9E9E9] bg-white/70">
                 {columns.map((column) => (
                   <td
                     key={column.key}
-                    className={`border-t border-rose-50 px-3 py-3 text-sm text-zinc-950/80 ${column.className ?? ""}`}
+                    className={`border-t border-[#E9E9E9] px-3 py-3 text-sm text-zinc-950/80 ${column.className ?? ""}`}
                   >
                     {column.render(row)}
                   </td>

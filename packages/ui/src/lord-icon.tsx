@@ -140,6 +140,7 @@ export const LORD_ICON_REGISTRY = {
   "clock": "/lord-icons/system/system-outline-45-clock.json",
   "history": "/lord-icons/system/system-outline-45-clock.json",
   "complete": "/lord-icons/system/system-outline-24-check-circle.json",
+  "check": "/lord-icons/system/system-outline-24-check-circle.json",
   "check-circle": "/lord-icons/system/system-outline-24-check-circle.json",
   "monitor": "/lord-icons/system/system-outline-4125-desktop-alt.json",
   "desktop": "/lord-icons/system/system-outline-4125-desktop-alt.json",

@@ -174,7 +174,7 @@ export function PortalShell({
         <div className="absolute right-3 top-3 z-10"><IconButton label="Close menu" icon={<X size={19} />} onClick={closeMobileSidebar} /></div>
         <PortalSidebar navigation={navigation} activePath={pathname} userName={userName} activeRole={activeRole} collapsed={false} onNavigate={closeMobileSidebar} />
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col px-4 py-5 md:px-5 lg:px-6">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col px-4 pt-0 pb-5 md:px-5 lg:px-6">{children}</main>
     </div>
     <LogoutConfirmationModal open={logoutOpen} onClose={() => setLogoutOpen(false)} onConfirm={onLogout} />
   </div>;

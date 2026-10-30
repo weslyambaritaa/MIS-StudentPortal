@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Building2, ChevronDown, Pencil, Trash2, UserRound, X } from "lucide-react";
 import { Badge } from "@mis/ui/badge";
 import { Button } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
 import type { PicValue } from "./pic-dialog";
 
@@ -57,11 +58,15 @@ export function PicDetailsDialog({
           </section>
           <section className="space-y-3">
             <h3 className="font-medium text-rose-600">Account Available Student</h3>
-            <label className="block text-sm text-gray-600">Course<span className="relative mt-1 block">
-              <select aria-label="Course filter" value={course} onChange={(event) => { setCourse(event.target.value); setShowAll(false); }} className="h-9 w-full appearance-none rounded-full border border-rose-600 bg-neutral-50 px-3 pr-9 text-sm text-rose-600">
-                <option value="ALL">Showing All Course</option>{courses.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            </span></label>
+            <Dropdown
+              label="Course"
+              value={course}
+              onChange={(val) => {
+                setCourse(val);
+                setShowAll(false);
+              }}
+              options={[{ label: "Showing All Course", value: "ALL" }, ...courses.map((name) => ({ label: name, value: name }))]}
+            />
             {loading ? <p className="py-4 text-center text-sm text-zinc-500">Loading students…</p> : filteredStudents.length ? (
               <ul className="divide-y divide-rose-50">{visibleStudents.map((student, index) => (
                 <li key={student.subject} className="flex items-center gap-3 py-3">
