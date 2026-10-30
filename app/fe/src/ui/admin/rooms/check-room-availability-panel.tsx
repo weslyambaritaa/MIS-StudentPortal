@@ -1,18 +1,16 @@
 "use client";
 
+import { useRef } from "react";
 import { AlertCircle, CalendarDays, CheckCircle2, Search } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { Dropdown } from "@mis/ui/dropdown";
 import { Input } from "@mis/ui/input";
-import { Modal } from "@mis/ui/modal";
 
 export type CheckRoomAvailabilityStatus = "idle" | "booked" | "available" | "loading";
 export type RoomOption = { id: string; name: string; capacity: number };
 export type RoomBookingConflict = { dateLabel: string; timeLabel: string; trainingCode: string | null; trainingName?: string };
 
-type CheckRoomAvailabilityModalProps = {
-  open: boolean;
-  onClose: () => void;
+type CheckRoomAvailabilityPanelProps = {
   rooms: RoomOption[];
   selectedDate: string;
   selectedRoomId: string;
@@ -38,11 +36,12 @@ const finishTime = (start: string, duration: number) => {
   return end >= 24 * 60 ? "" : `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 };
 
-export function CheckRoomAvailabilityModal({
-  open, onClose, rooms, selectedDate, selectedRoomId, startTime, durationMinutes, status,
+export function CheckRoomAvailabilityPanel({
+  rooms, selectedDate, selectedRoomId, startTime, durationMinutes, status,
   onDateChange, onRoomChange, onStartTimeChange, onDurationChange, onSelectionChange,
   onCheckAvailability, onBookRoom, conflict, error,
-}: CheckRoomAvailabilityModalProps) {
+}: CheckRoomAvailabilityPanelProps) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
   const endTime = finishTime(startTime, durationMinutes);
   const canCheck = Boolean(selectedDate && selectedRoom && startTime && endTime && durationMinutes >= 15 && durationMinutes <= 720);
@@ -52,9 +51,9 @@ export function CheckRoomAvailabilityModal({
   const roomOptions = rooms.map((room) => ({ value: room.id, label: `${room.name} - ${room.capacity} Capacity` }));
 
   return (
-    <Modal open={open} onClose={onClose} className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto">
+    <aside aria-labelledby="check-room-availability-title" className="h-fit rounded-3xl border border-rose-50 bg-white p-5">
       <div className="flex flex-col items-center gap-6">
-        <h2 className="self-stretch font-sans text-2xl font-medium text-rose-600">Check Room Availability</h2>
+        <h2 id="check-room-availability-title" className="self-stretch font-sans text-2xl font-medium text-rose-600">Check Room Availability</h2>
 
         {status === "idle" && <div className="flex w-full flex-col items-center gap-2.5 rounded-3xl border border-rose-50 bg-neutral-50 p-6">
           <Search aria-hidden="true" className="size-20 text-rose-600" strokeWidth={1.2} />
@@ -75,7 +74,12 @@ export function CheckRoomAvailabilityModal({
         </div>}
 
         <div className="flex w-full flex-col gap-4">
-          <Input label="Pick a Date" type="date" value={selectedDate} onChange={(event) => { onSelectionChange(); onDateChange(event.target.value); }} rightIcon={<CalendarDays size={18} />} hideNativeDateIcon className="border-rose-600" />
+          <Input ref={dateInputRef} label="Pick a Date" type="date" value={selectedDate} onChange={(event) => { onSelectionChange(); onDateChange(event.target.value); }} rightIcon={<CalendarDays size={18} />} onRightIconClick={() => {
+            const input = dateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+            if (!input) return;
+            if (input.showPicker) input.showPicker();
+            else { input.focus(); input.click(); }
+          }} rightIconActionLabel="Open date picker" hideNativeDateIcon className="border-rose-600" />
           <Dropdown label="Pick Room Name" value={selectedRoomId} onChange={(value) => { onSelectionChange(); onRoomChange(value); }} placeholder="Select a room" options={roomOptions} className="border-rose-600" />
           <div className="grid grid-cols-2 gap-3">
             <Input label="Start Time" type="time" value={startTime} onChange={(event) => { onSelectionChange(); onStartTimeChange(event.target.value); }} className="border-rose-600" />
@@ -87,7 +91,7 @@ export function CheckRoomAvailabilityModal({
           <Button onClick={onCheckAvailability} disabled={!canCheck || status === "loading"} rightIcon={<CalendarDays size={18} />} className="w-full">Check Availability &amp; Book</Button>
         </div>
       </div>
-    </Modal>
+    </aside>
   );
 }
 

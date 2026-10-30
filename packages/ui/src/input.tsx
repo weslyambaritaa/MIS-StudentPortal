@@ -13,6 +13,10 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
   /** Dynamic right icon: can be a LordIcon name shorthand or any ReactNode */
   rightIcon?: ReactNode | LordIconName | (string & {});
 
+  /** Optional action for the right icon, such as opening a native picker. */
+  onRightIconClick?: () => void;
+  rightIconActionLabel?: string;
+
   /** Custom classes for the outer label wrapper */
   containerClassName?: string;
 
@@ -28,6 +32,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     label,
     leftIcon,
     rightIcon,
+    onRightIconClick,
+    rightIconActionLabel = "Open picker",
     className = "",
     containerClassName = "",
     size = "default",
@@ -97,7 +103,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {...props}
         />
 
-        {renderIcon(rightIcon, "right")}
+        {onRightIconClick && rightIcon ? (
+          <button
+            type="button"
+            aria-label={rightIconActionLabel}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onRightIconClick();
+            }}
+            disabled={disabled}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 disabled:cursor-not-allowed"
+          >
+            {renderIcon(rightIcon, "right")}
+          </button>
+        ) : renderIcon(rightIcon, "right")}
       </div>
     </label>
   );
