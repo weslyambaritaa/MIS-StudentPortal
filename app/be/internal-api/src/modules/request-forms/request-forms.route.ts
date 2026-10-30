@@ -5,7 +5,7 @@ import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES, type ActiveRoleAuthContext } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerProfile } from "../../database/models";
+import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerBooking, TrainerProfile } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -150,24 +150,24 @@ async function readForm(id: string, actor: ActiveRoleAuthContext, subject?: stri
   return { item, courses, attachments };
 }
 
-async function sessionsOnDates(dates: string[]) {
+async function sessionsOnDates(dates: string[], transaction?: Transaction) {
   if (!dates.length) return [];
   const sorted = [...dates].sort();
   const start = new Date(`${sorted[0]}T00:00:00.000Z`);
   const end = new Date(`${sorted[sorted.length - 1]}T23:59:59.999Z`);
-  const candidates = await TrainingSession.findAll({ where: { starts_at: { [Op.gte]: start, [Op.lte]: end } }, include: [{ model: Training, as: "training", where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, attributes: ["id"], required: true }] });
+  const candidates = await TrainingSession.findAll({ where: { starts_at: { [Op.gte]: start, [Op.lte]: end } }, include: [{ model: Training, as: "training", where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, attributes: ["id"], required: true }], ...(transaction ? { transaction } : {}) });
   const wanted = new Set(dates);
   return candidates.filter((session) => wanted.has(new Date(session.starts_at).toISOString().slice(0, 10)));
 }
 
-async function unavailableTrainerIds(dates: string[]) {
-  const sessions = await sessionsOnDates(dates);
+async function unavailableTrainerIds(dates: string[], transaction?: Transaction) {
+  const sessions = await sessionsOnDates(dates, transaction);
   if (!sessions.length) return new Set<string>();
   const trainingIds = [...new Set(sessions.map((session) => session.training_id))];
   const sessionIds = sessions.map((session) => session.id);
   const [trainingAssignments, sessionAssignments] = await Promise.all([
-    TrainingTrainerAssignment.findAll({ where: { training_id: { [Op.in]: trainingIds }, ended_at: null }, attributes: ["trainer_profile_id"] }),
-    SessionTrainerAssignment.findAll({ where: { session_id: { [Op.in]: sessionIds }, ended_at: null }, attributes: ["trainer_profile_id"] }),
+    TrainingTrainerAssignment.findAll({ where: { training_id: { [Op.in]: trainingIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
+    SessionTrainerAssignment.findAll({ where: { session_id: { [Op.in]: sessionIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
   ]);
   return new Set([...trainingAssignments, ...sessionAssignments].map((assignment) => assignment.trainer_profile_id));
 }
@@ -591,7 +591,8 @@ requestFormReviewRouter.get("/:id/approval-options", authorizeCapability("REQUES
   const dates = (form.courses[0].sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
   const unavailableTrainers = await unavailableTrainerIds(dates);
   const trainerProfiles = await TrainerProfile.findAll({ where: { status: "ACTIVE", id: { [Op.notIn]: [...unavailableTrainers] } }, attributes: ["id", "name", "email", "status", "rating"], order: [["name", "ASC"]], raw: true });
-  const trainers = trainerProfiles.map((trainer) => ({ ...trainer, name: trainer.name ?? trainer.email }));
+  const bookings = trainerProfiles.length ? await TrainerBooking.findAll({ where: { trainer_profile_id: { [Op.in]: trainerProfiles.map((trainer) => trainer.id) }, booking_date: { [Op.in]: dates }, status: "BOOKED" }, attributes: ["id", "trainer_profile_id", "booking_date", "reason", "detail_booking"], order: [["booking_date", "ASC"]], raw: true }) : [];
+  const trainers = trainerProfiles.map((trainer) => ({ ...trainer, name: trainer.name ?? trainer.email, booking_conflicts: bookings.filter((booking) => booking.trainer_profile_id === trainer.id).map((booking) => ({ id: booking.id, date: String(booking.booking_date).slice(0, 10), reason: booking.reason, detail_booking: booking.detail_booking })) }));
   const needsRoom = form.courses[0].location_type === "INTERNAL";
   const busyRooms = needsRoom ? await unavailableRoomIds(dates) : new Set<string>();
   const rooms = needsRoom ? await Room.findAll({ where: { status: "ACTIVE", capacity: { [Op.gte]: Number(form.courses[0].amount_student) }, id: { [Op.notIn]: [...busyRooms] } }, attributes: ["id", "room_code", "name", "capacity", "facilities"], order: [["name", "ASC"]], raw: true }) : [];
@@ -603,6 +604,7 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const baseFee = Number(req.body?.baseFee);
   const startTime = req.body?.startTime;
   const endTime = req.body?.endTime;
+  const replaceTrainerBookingIds = req.body?.replaceTrainerBookingIds;
   const validTime = (value: unknown): value is string => typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!isUuid(trainerId) || !Number.isFinite(baseFee) || baseFee < 0 || (roomId !== null && !isUuid(roomId)) || !validTime(startTime) || !validTime(endTime) || endTime <= startTime) throw new AppError(400, "Choose a Trainer, valid session times, enter a valid Base Fee, and choose a Room when required");
   const form = await readForm(req.params.id, req.auth!);
@@ -611,6 +613,7 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const course = form.courses[0];
   const dates = (course.sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
   if (!dates.length) throw new AppError(409, "The Request Form has no requested session dates");
+  if (replaceTrainerBookingIds !== undefined && (!Array.isArray(replaceTrainerBookingIds) || replaceTrainerBookingIds.some((id: unknown) => typeof id !== "string" || !isUuid(id)))) throw new AppError(400, "Invalid Trainer booking confirmation.");
   const unavailableTrainers = await unavailableTrainerIds(dates);
   const selectedTrainer = await TrainerProfile.findOne({ where: { id: trainerId, status: "ACTIVE" }, attributes: ["id"] });
   if (!selectedTrainer || unavailableTrainers.has(trainerId)) throw new AppError(409, "The selected Trainer is inactive or unavailable on a requested date");
@@ -626,6 +629,17 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const trainingId = randomUUID();
   const now = new Date();
   await sequelize.transaction(async (transaction) => {
+    const lockedTrainer = await TrainerProfile.findByPk(trainerId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!lockedTrainer || lockedTrainer.status !== "ACTIVE") throw new AppError(409, "The selected Trainer is no longer active.");
+    const unavailableInTraining = await unavailableTrainerIds(dates, transaction);
+    if (unavailableInTraining.has(trainerId)) throw new AppError(409, "The selected Trainer is already assigned to another Training on a requested date.");
+    const conflictingBookings = await TrainerBooking.findAll({ where: { trainer_profile_id: trainerId, booking_date: { [Op.in]: dates }, status: "BOOKED" }, transaction, lock: transaction.LOCK.UPDATE });
+    const actualBookingIds = conflictingBookings.map((booking) => booking.id).sort();
+    const confirmedBookingIds = Array.isArray(replaceTrainerBookingIds) ? [...replaceTrainerBookingIds].sort() : [];
+    if (actualBookingIds.length && (actualBookingIds.length !== confirmedBookingIds.length || actualBookingIds.some((id, index) => id !== confirmedBookingIds[index]))) {
+      throw new AppError(409, "The selected Trainer has a standalone booking on a requested date. Review the conflict warning and approve again to replace it.");
+    }
+    if (!actualBookingIds.length && confirmedBookingIds.length) throw new AppError(409, "The Trainer booking changed. Refresh the approval options and try again.");
     await Training.create({ id: trainingId, account_id: form.item.account_id, name: String(form.item.training_title ?? "").slice(0, 255), course_id: course.course_id, syllabus_id: null, request_form_id: form.item.id, pic_profile_id: form.item.pic_profile_id, expected_students: Number(course.amount_student), training_type: course.delivery_type, status: "SCHEDULED", base_fee: baseFee }, { transaction });
     const sessionRows: Array<Record<string, unknown>> = [];
     const roomRows: Array<Record<string, unknown>> = [];
@@ -637,6 +651,10 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
     await TrainingSession.bulkCreate(sessionRows, { transaction });
     if (roomRows.length) await BookingRoom.bulkCreate(roomRows, { transaction });
     await TrainingTrainerAssignment.create({ id: randomUUID(), training_id: trainingId, trainer_profile_id: trainerId, assignment_type: "PRIMARY", assigned_at: now, ended_at: null, assigned_by_subject: req.auth!.userId, ended_by_subject: null }, { transaction });
+    if (conflictingBookings.length) {
+      await TrainerBooking.update({ status: "REPLACED_BY_TRAINING", replaced_by_training_id: trainingId }, { where: { id: { [Op.in]: actualBookingIds }, status: "BOOKED" }, transaction });
+      for (const booking of conflictingBookings) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "TRAINER_BOOKING", objectId: booking.id, before: { status: "BOOKED", booking_date: String(booking.booking_date).slice(0, 10) }, after: { status: "REPLACED_BY_TRAINING", replaced_by_training_id: trainingId, request_form_number: form.item.request_form_number }, processName: "trainer-booking-replaced-by-request-form" }, transaction);
+    }
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "TRAINING", objectId: trainingId, after: { request_form_id: form.item.id, request_form_number: form.item.request_form_number, account_id: form.item.account_id, pic_profile_id: form.item.pic_profile_id, course_id: course.course_id, expected_students: Number(course.amount_student), status: "SCHEDULED", training_type: course.delivery_type, trainer_id: trainerId, room_id: roomId, base_fee: baseFee, session_dates: dates }, processName: "request-form-approve-create-training" }, transaction);
     const [updatedCount] = await RequestForm.update(
       { status: "APPROVED", review_note: null, reviewed_by_subject: req.auth!.userId, approved_at: now, sla_due_at: null, sla_notified_at: null },

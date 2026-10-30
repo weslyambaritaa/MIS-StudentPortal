@@ -7,6 +7,7 @@ export { SalesAccountAssignment } from "./sales-account-assignment.model";
 export { SessionTrainerAssignment } from "./session-trainer-assignment.model";
 export { SessionTrainerReplacement } from "./session-trainer-replacement.model";
 export { TrainerProfile } from "./trainer-profile.model";
+export { TrainerBooking } from "./trainer-booking.model";
 export { TrainerCertification } from "./trainer-certification.model";
 export { TrainingTrainerAssignment } from "./training-trainer-assignment.model";
 export { Training } from "./training.model";

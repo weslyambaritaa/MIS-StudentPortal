@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { FileUp, Info, Link2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
@@ -50,9 +50,13 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
   const [status, setStatus] = useState<CourseValue["status"]>(value?.status ?? "ACTIVE");
   const [syllabusKind, setSyllabusKind] = useState<"UPLOAD" | "URL">("UPLOAD");
   const [file, setFile] = useState<File | null>(null);
+  const [syllabusDragging, setSyllabusDragging] = useState(false);
+  const syllabusInputRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState("");
   const [practiceKind, setPracticeKind] = useState<"UPLOAD" | "URL">("UPLOAD");
   const [practiceDrafts, setPracticeDrafts] = useState<PracticeDraft[]>([]);
+  const [practiceDragging, setPracticeDragging] = useState(false);
+  const practiceInputRef = useRef<HTMLInputElement>(null);
   const [practiceUrl, setPracticeUrl] = useState("");
   const [removedPracticeFileIds, setRemovedPracticeFileIds] = useState<string[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -63,6 +67,21 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
     else setLocalError(null);
     const accepted = files.filter(item => item.size <= 10 * 1024 * 1024);
     if (accepted.length) setPracticeDrafts(items => [...items, ...accepted.map(file => ({ key: crypto.randomUUID(), kind: "UPLOAD" as const, file }))]);
+  };
+
+  const handleSyllabusDrop = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSyllabusDragging(false);
+    const droppedFile = event.dataTransfer.files[0];
+    if (droppedFile) setFile(droppedFile);
+  };
+
+  const handlePracticeDrop = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setPracticeDragging(false);
+    addPracticeFiles(Array.from(event.dataTransfer.files));
   };
 
   const submit = async (event: FormEvent) => {
@@ -108,7 +127,10 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
           <button type="button" onClick={() => setSyllabusKind("UPLOAD")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${syllabusKind === "UPLOAD" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><FileUp size={16}/>Upload Syllabus</button>
           <button type="button" onClick={() => setSyllabusKind("URL")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${syllabusKind === "URL" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><Link2 size={16}/>Via URL</button>
         </div>
-        {syllabusKind === "UPLOAD" ? <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center text-sm text-gray-600"><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>{file ? file.name : "Drag / Drop files here or Choose files from Computer"}</span><input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={event => setFile(event.target.files?.[0] ?? null)} /><span className="text-xs text-zinc-500">PDF, maximum 10 MB</span></label> : <label className="block text-sm text-gray-600">Syllabus URL<input type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/syllabus.pdf" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3" /></label>}
+        {syllabusKind === "UPLOAD" ? <>
+          <input ref={syllabusInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={event => { setFile(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} />
+          <button type="button" onClick={() => syllabusInputRef.current?.click()} onDragEnter={event => { event.preventDefault(); setSyllabusDragging(true); }} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setSyllabusDragging(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSyllabusDragging(false); }} onDrop={handleSyllabusDrop} className={`flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600 ${syllabusDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>{file ? file.name : "Drag / Drop files here or Choose files from Computer"}</span><span className="text-xs text-zinc-500">PDF, maximum 10 MB</span></button>
+        </> : <label className="block text-sm text-gray-600">Syllabus URL<input type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/syllabus.pdf" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3" /></label>}
         {value?.latest_syllabus && <p className="mt-3 break-all text-xs text-zinc-500">Current latest: <a href={value.latest_syllabus.download_url ?? value.latest_syllabus.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">{value.latest_syllabus.version}</a>. Adding a syllabus will create a new version and keep older versions.</p>}
       </section>
       <section className="mb-6 rounded-xl bg-white p-3">
@@ -117,7 +139,10 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
           <button type="button" onClick={() => setPracticeKind("UPLOAD")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${practiceKind === "UPLOAD" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><FileUp size={16}/>Upload File</button>
           <button type="button" onClick={() => setPracticeKind("URL")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${practiceKind === "URL" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><Link2 size={16}/>Via URL</button>
         </div>
-        {practiceKind === "UPLOAD" ? <label onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); addPracticeFiles(Array.from(event.dataTransfer.files)); }} className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center text-sm text-gray-600"><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>Drag / Drop files here or Choose files from Computer</span><input type="file" multiple className="sr-only" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; addPracticeFiles(files); }} /><span className="text-xs text-zinc-500">Multiple files, maximum 10 MB each</span></label> : <div className="flex gap-2"><input type="url" maxLength={2048} value={practiceUrl} onChange={event => setPracticeUrl(event.target.value)} placeholder="https://example.com/practice-file" className="h-9 min-w-0 flex-1 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm"/><Button type="button" size="sm" onClick={addPracticeUrl} disabled={!practiceUrl.trim()}><Plus size={16}/>Add URL</Button></div>}
+        {practiceKind === "UPLOAD" ? <>
+          <input ref={practiceInputRef} type="file" multiple className="sr-only" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; addPracticeFiles(files); }} />
+          <button type="button" onClick={() => practiceInputRef.current?.click()} onDragEnter={event => { event.preventDefault(); setPracticeDragging(true); }} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setPracticeDragging(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPracticeDragging(false); }} onDrop={handlePracticeDrop} className={`flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600 ${practiceDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>Drag / Drop files here or Choose files from Computer</span><span className="text-xs text-zinc-500">Multiple files, maximum 10 MB each</span></button>
+        </> : <div className="flex gap-2"><input type="url" maxLength={2048} value={practiceUrl} onChange={event => setPracticeUrl(event.target.value)} placeholder="https://example.com/practice-file" className="h-9 min-w-0 flex-1 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm"/><Button type="button" size="sm" onClick={addPracticeUrl} disabled={!practiceUrl.trim()}><Plus size={16}/>Add URL</Button></div>}
         {(value?.practice_files?.length || practiceDrafts.length) ? <ul className="mt-3 space-y-2">
           {value?.practice_files?.map(file => {
             const removed = removedPracticeFileIds.includes(file.id);

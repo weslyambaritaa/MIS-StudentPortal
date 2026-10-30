@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil, Search, Trash2 } from "lucide-react";
+import { CalendarPlus, Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
@@ -13,6 +13,7 @@ import { useApi } from "@/hooks/use-api";
 import { useToast } from "@mis/ui/toast";
 import { TrainerDetailsDialog } from "./dialog/trainer-details-dialog";
 import { TrainerDialog, type TrainerSubmitValue, type TrainerValue } from "./dialog/trainer-dialog";
+import { TrainerBookingDialog } from "./dialog/trainer-booking-dialog";
 
 type TrainerPage = { items: TrainerValue[]; page: number; pageSize: number; total: number };
 type Training = { id: string; name: string; status: string; assigned_at: string };
@@ -38,6 +39,7 @@ export default function TrainersPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [deleting, setDeleting] = useState<TrainerValue | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -101,7 +103,7 @@ export default function TrainersPage() {
   ];
 
   return <AppShell title="Master Data | Trainer"><div className="flex flex-col gap-6">
-    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Trainer</h1><p className="mt-1 text-sm text-zinc-600">Manage trainer profiles, portal access, training history, and certification expiry.</p></div><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add Trainer</AddButton></section>
+    <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center"><div><h1 className="text-3xl font-medium text-gray-600">Trainer</h1><p className="mt-1 text-sm text-zinc-600">Manage trainer profiles, portal access, training history, and certification expiry.</p></div><div className="flex flex-wrap items-center gap-3"><Button variant="ghost" className="text-rose-600 hover:bg-transparent hover:text-rose-600" leftIcon={<CalendarPlus size={18}/>} onClick={() => setBookingOpen(true)}>Book Trainer</Button><AddButton onClick={() => { setDialogError(null); setEditor(null); }}>Add Trainer</AddButton></div></section>
     <section className="rounded-3xl border border-rose-50 bg-white p-5"><div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
       <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 xl:w-64">Search Trainer Name<span className="flex h-9 items-center gap-2 rounded-full border border-rose-600 bg-neutral-50 px-3"><Search size={20} className="shrink-0 text-slate-900/40"/><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Name, code, or email" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-900/40"/></span></label>
       <div className="flex flex-col gap-4 sm:flex-row"><label className="flex flex-col gap-[3px] text-sm text-gray-600">Speciality<select value={specialization} onChange={(event) => { setPage(1); setSpecialization(event.target.value); }} className="h-9 w-52 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Speciality</option>{specializations.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="flex flex-col gap-[3px] text-sm text-gray-600">Status<select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-40 rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ALL">All Status</option><option value="PENDING">Pending</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label></div>
@@ -111,6 +113,7 @@ export default function TrainersPage() {
     <div className="mt-1"><Pagination page={page} totalPages={Math.max(1, Math.ceil(result.total / result.pageSize))} pageSize={result.items.length} totalItems={result.total} onPageChange={setPage}/></div>
     </section></div>
     {editor !== undefined && <TrainerDialog value={editor} busy={busy} error={dialogError} onClose={() => setEditor(undefined)} onSubmit={save}/>}
+    {bookingOpen && <TrainerBookingDialog api={api} onClose={() => setBookingOpen(false)} onBooked={() => { setBookingOpen(false); showToast("Trainer booked successfully for the selected date."); }} />}
     {selected && <TrainerDetailsDialog trainer={selected} trainings={trainings} loading={detailsLoading} onClose={() => setSelected(null)} onEdit={() => { setDialogError(null); setEditor(selected); setSelected(null); }} onDelete={() => { setDeleting(selected); setSelected(null); }} onResendActivation={() => void resendActivation(selected)}/>}
     <DeleteConfirmationModal open={Boolean(deleting)} itemName={deleting?.name ?? ""} description={`Permanently delete Trainer “${deleting?.name ?? ""}”, all profile and certification data, and the associated portal account? This is allowed only when the Trainer has never had a Training assignment.`} onClose={() => !busy && setDeleting(null)} onConfirm={() => void deleteTrainer()} loading={busy}/>
   </AppShell>;

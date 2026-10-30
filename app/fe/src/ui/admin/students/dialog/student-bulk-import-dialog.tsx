@@ -95,7 +95,7 @@ export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: Api
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault(); setDragging(false); void selectFile(event.dataTransfer.files[0]);
+    event.preventDefault(); event.stopPropagation(); setDragging(false); void selectFile(event.dataTransfer.files[0]);
   };
 
   const loadPreview = async () => {
@@ -138,7 +138,7 @@ export function StudentBulkImportDialog({ api, onClose, onComplete }: { api: Api
 
     {!isPreview && !isResult && <section className="mb-6">
       <div className="mb-1 text-sm text-gray-600">Excel Student Batch (.xlsx)</div>
-      <div onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} className={`flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center ${dragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}>
+      <div onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDragging(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }} onDrop={handleDrop} className={`flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center ${dragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}>
         <div className="mb-3 flex size-10 items-center justify-center rounded-full bg-gradient-to-b from-red-400 to-rose-600 text-white"><Upload size={20}/></div>
         <p className="text-sm text-gray-600">Drag and drop a file here, or <button type="button" className="text-rose-600" onClick={() => inputRef.current?.click()}>choose a file</button></p>
         {fileName && <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-gray-700"><FileSpreadsheet size={16} className="text-green-600"/>{fileName}</p>}
