@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { DataTable } from "@mis/ui/data-table";
@@ -18,6 +18,10 @@ type BookingList = { items: RoomBooking[]; page: number; pageSize: number; total
 type Availability = { available: boolean; conflicts: Array<{ kind: string; className: string; classCode: string | null; startTime: string; endTime: string }> };
 const REASONS = [{ value: "MEETING", label: "Meeting" }, { value: "EVENTS", label: "Events" }, { value: "WORKSHOP", label: "Workshop" }, { value: "OTHERS", label: "Others" }];
 const reasonLabel = (reason: string, detail?: string | null) => reason === "OTHERS" ? detail || "Others" : REASONS.find((item) => item.value === reason)?.label ?? reason;
+const getLocalDate = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+};
 const getEndTime = (time: string, duration: number) => {
   if (!time || !Number.isFinite(duration)) return "";
   const [hours, minutes] = time.split(":").map(Number);
@@ -35,6 +39,7 @@ export default function BookingRoomPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
+  const [bookingDate, setBookingDate] = useState(getLocalDate);
   const [reasonFilter, setReasonFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,16 +56,27 @@ export default function BookingRoomPage() {
   const [detailBooking, setDetailBooking] = useState("");
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const bookingDateInputRef = useRef<HTMLInputElement>(null);
+  const openBookingDatePicker = () => {
+    const input = bookingDateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!input) return;
+    try {
+      if (typeof input.showPicker === "function") input.showPicker();
+      else input.focus();
+    } catch {
+      input.focus();
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const query = new URLSearchParams({ page: String(page), pageSize: "8", reason: reasonFilter, search });
+      const query = new URLSearchParams({ page: String(page), pageSize: "8", reason: reasonFilter, search, date: bookingDate });
       const result = await api<BookingList>(`/api/v1/internal/rooms/bookings?${query}`);
       setItems(result.items); setTotal(result.total); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load room bookings."); }
     finally { setLoading(false); }
-  }, [api, page, reasonFilter, search]);
+  }, [api, bookingDate, page, reasonFilter, search]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -122,9 +138,13 @@ export default function BookingRoomPage() {
       </section>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
       <section className="min-w-0 rounded-3xl border border-rose-50 bg-white p-5">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <Input label="Search Room Name" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Search room or booking detail" leftIcon={<Search size={18}/>} containerClassName="w-full sm:max-w-72" className="border-rose-600" />
-          <Dropdown label="Reason" value={reasonFilter} onChange={(value) => { setPage(1); setReasonFilter(value); }} options={[{ value: "ALL", label: "All Reason" }, ...REASONS]} className="border-rose-600 sm:w-48" />
+        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <h2 className="text-xl font-medium text-rose-600">Booked Room</h2>
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[10rem_8rem_8rem]">
+            <Input label="Search Room Name" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Example: Bright" leftIcon={<Search size={18}/>} containerClassName="w-full" className="border-rose-600" />
+            <Input ref={bookingDateInputRef} label="Date" type="date" value={bookingDate} onChange={(event) => { setPage(1); setBookingDate(event.target.value); }} onClick={openBookingDatePicker} rightIcon={<CalendarDays size={16}/>} onRightIconClick={openBookingDatePicker} rightIconActionLabel="Open date picker" hideNativeDateIcon containerClassName="w-full" className="border-rose-600 text-xs" />
+            <Dropdown label="Reason" value={reasonFilter} onChange={(value) => { setPage(1); setReasonFilter(value); }} options={[{ value: "ALL", label: "All Reason" }, ...REASONS]} className="border-rose-600" />
+          </div>
         </div>
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {loading ? <p role="status" className="py-8 text-center text-zinc-500">Loading room bookings...</p> : <DataTable columns={columns} rows={items} getRowKey={(item) => item.id} emptyMessage="No room bookings found." caption="Room bookings" />}
