@@ -190,6 +190,15 @@ export const LORD_ICON_REGISTRY = {
   "chevron-left": "/lord-icons/system/system-outline-32-chevron-left.json",
   "chevron-down": "/lord-icons/system/system-outline-33-chevron-down.json",
   "chevron-up": "/lord-icons/system/system-outline-34-chevron-up.json",
+  "chevron-circle": "/lord-icons/system/system-outline-3412-chevron-right-circle.json",
+  "chevron-right-circle": "/lord-icons/system/system-outline-3412-chevron-right-circle.json",
+  "chevron-left-circle": "/lord-icons/system/system-outline-3413-chevron-left-circle.json",
+  "chevron-up-circle": "/lord-icons/system/system-outline-3410-chevron-up-circle.json",
+  "chevron-down-circle": "/lord-icons/system/system-outline-3411-chevron-down-circle.json",
+  "chevron-circle-right": "/lord-icons/system/system-outline-3412-chevron-right-circle.json",
+  "chevron-circle-left": "/lord-icons/system/system-outline-3413-chevron-left-circle.json",
+  "chevron-circle-up": "/lord-icons/system/system-outline-3410-chevron-up-circle.json",
+  "chevron-circle-down": "/lord-icons/system/system-outline-3411-chevron-down-circle.json",
   "info": "/lord-icons/system/system-outline-367-info-circle.json",
   "info-circle": "/lord-icons/system/system-outline-367-info-circle.json",
   "figures": "/lord-icons/system/system-outline-372-figures.json",
@@ -215,6 +224,7 @@ export const LORD_ICON_REGISTRY = {
   "toolbox": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
   "flat-toolbox": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
   "construction": "/lord-icons/flat/wired-flat-2499-toolbox-hover-pinch.json",
+  "bookshelf": "/lord-icons/flat/wired-flat-1622-bookshelf-hover-pinch.json",
 } as const;
 
 export type LordIconName = keyof typeof LORD_ICON_REGISTRY;

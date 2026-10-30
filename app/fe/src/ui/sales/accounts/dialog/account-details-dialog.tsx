@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, ChevronDown, ChevronRight, Pencil, Trash2, UserRound, X } from "lucide-react";
+import { Building2, ChevronRight, UserRound } from "lucide-react";
 import { Badge } from "@mis/ui/badge";
 import { Button } from "@mis/ui/button";
 import { Dropdown } from "@mis/ui/dropdown";
@@ -59,7 +59,7 @@ export function AccountDetailsDialog({
       <aside aria-label="Account details" className="flex h-full w-full max-w-[420px] flex-col items-start justify-between overflow-hidden bg-white p-6 outline outline-1 outline-offset-[-1px] outline-gray-200 shadow-2xl">
         <div className="flex min-h-0 w-full flex-1 flex-col gap-6 self-stretch overflow-y-auto pr-1">
           <header className="flex shrink-0 items-start gap-3">
-            <IconButton label="Close details" icon={<X size={18} />} onClick={onClose} />
+            <IconButton label="Close details" icon="x" onClick={onClose} />
             <h2 className="pt-0.5 text-2xl font-medium text-gray-600">Account Details</h2>
           </header>
 
@@ -121,16 +121,24 @@ export function AccountDetailsDialog({
               </div>
             ) : <p className="py-2 text-center text-sm text-zinc-500">No students found for this course.</p>}
             <p className="text-center text-sm text-zinc-600">Available {visibleStudents.length} Student..</p>
-            {visibleStudents.length > 5 && <button type="button" onClick={() => setViewAllStudents((current) => !current)} className="inline-flex w-full items-center justify-center gap-3 rounded-full px-3 py-2.5 text-base font-medium text-rose-600 hover:bg-rose-50">{viewAllStudents ? "Show Less" : "View All Student"}<ChevronRight size={18} className={viewAllStudents ? "rotate-90" : ""} /></button>}
+            {visibleStudents.length > 5 && (
+              <Button
+                variant="ghost"
+                onClick={() => setViewAllStudents((current) => !current)}
+                className="w-full text-rose-600"
+                rightIcon={viewAllStudents ? "chevron-up" : "chevron-down"}
+              >
+                {viewAllStudents ? "Show Less" : "View All Student"}
+              </Button>
+            )}
           </section>
         </div>
 
         <footer className="mt-6 flex w-full shrink-0 gap-6 self-stretch pt-1">
-          <Button variant="danger" leftIcon={<Trash2 size={18} />} onClick={onDelete} disabled={!canDelete} className="min-w-0 flex-1 whitespace-nowrap">Delete Account</Button>
-          <Button leftIcon={<Pencil size={18} />} onClick={onEdit} className="min-w-0 flex-1 whitespace-nowrap">Edit Account</Button>
+          <Button variant="danger" leftIcon="trash" onClick={onDelete} disabled={!canDelete} className="min-w-0 flex-1 whitespace-nowrap">Delete Account</Button>
+          <Button leftIcon="pencil-line" onClick={onEdit} className="min-w-0 flex-1 whitespace-nowrap">Edit Account</Button>
         </footer>
       </aside>
     </div>
   );
 }
-

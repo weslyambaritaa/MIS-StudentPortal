@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, LogOut, Menu, User, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "./button";
+import { Dropdown } from "./dropdown";
 import { IconButton } from "./icon-button";
 import { LogoutConfirmationModal } from "./logout-confirmation-modal";
 
@@ -111,7 +112,7 @@ function PortalSidebar({ navigation, activePath, userName, activeRole, collapsed
             <p className="truncate text-sm text-zinc-950/60">{activeRole ?? "-"}</p>
           </div>
         )}
-        <IconButton label="User profile" variant="profile" icon={<User size={20} />} />
+        <IconButton label="User profile" variant="profile" icon="avatar" />
       </div>
     </div>
   );
@@ -143,14 +144,25 @@ export function PortalShell({
         <Image src={brandSrc} alt="ExecuTrain" width={553} height={140} priority className="h-10 w-40 shrink-0 object-contain" />
         <div className="hidden h-6 w-px bg-zinc-950/20 md:block" />
         <div className="hidden min-w-0 items-center gap-2 md:flex">
-          <IconButton label={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"} variant="ghost-red" icon={sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)} />
+          <IconButton label={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Open sidebar" : "Collapse sidebar"} variant="ghost-red" icon={sidebarCollapsed ? "chevron-right-circle" : "chevron-left-circle"} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)} />
           <span className="truncate text-sm font-normal text-zinc-950/60">&ldquo;{title}&rdquo;</span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {headerActions}
-        {availableRoles.length > 0 && activeRole && <label className="flex items-center gap-2 text-sm text-zinc-700"><span className="hidden sm:inline">Role</span><select aria-label="Active role" className="max-w-36 rounded-full border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-rose-400" value={activeRole} onChange={(event) => onRoleChange(event.target.value)}>{availableRoles.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}</select></label>}
-        <Button variant="danger" size="default" leftIcon={<LogOut size={16} strokeWidth={1.7} />} onClick={() => setLogoutOpen(true)}>Logout</Button>
+        {availableRoles.length > 0 && activeRole && (
+          <Dropdown
+            label={<span className="hidden whitespace-nowrap text-sm font-medium text-gray-600 sm:inline">Role (For Development)</span>}
+            value={activeRole}
+            onChange={(val) => onRoleChange(val)}
+            options={availableRoles.map((role) => ({
+              label: roleLabel(role),
+              value: role,
+            }))}
+            containerClassName="flex items-center gap-2 space-y-0"
+          />
+        )}
+        <Button variant="destructive" size="default" leftIcon="person-exit" onClick={() => setLogoutOpen(true)}>Logout</Button>
       </div>
     </header>
 

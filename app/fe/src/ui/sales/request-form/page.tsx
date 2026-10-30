@@ -5,7 +5,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
+import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { Dropdown } from "@mis/ui/dropdown";
+import { EmptyState } from "@mis/ui/empty-state";
 import { IconButton } from "@mis/ui/icon-button";
 import { Input } from "@mis/ui/input";
 import { LordIcon } from "@mis/ui/lord-icon";
@@ -179,6 +181,7 @@ export default function RequestFormPage({
   const [editor, setEditor] = useState(false);
   const [selected, setSelected] = useState<Details | null>(null);
   const [withdrawConfirmationOpen, setWithdrawConfirmationOpen] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState<Details | null>(null);
   const [editingId, setEditingId] = useState("");
   const [sourceTab, setSourceTab] = useState<"QUOTATION" | "MANUAL">("QUOTATION");
   const [quotationId, setQuotationId] = useState("");
@@ -398,6 +401,22 @@ export default function RequestFormPage({
       setBusy(false);
     }
   }
+  async function deleteDraft() {
+    if (!deletingDraft) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/internal/request-forms/${deletingDraft.item.id}`, { method: "DELETE" });
+      showToast(`${formName} draft deleted successfully.`);
+      setDeletingDraft(null);
+      setSelected(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete draft");
+      setDeletingDraft(null);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function withdrawSelected() {
     if (!selected || selected.item.status !== "WAITING") return;
     setBusy(true);
@@ -511,7 +530,15 @@ export default function RequestFormPage({
             </div>
           </div>
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
-          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+          {!loading && items.length === 0 ? (
+            <EmptyState
+              description={`No ${formName}s Found`}
+              onAdd={openNew}
+              addLabel={`Add ${formName}`}
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
             <table className="table-fixed w-full min-w-[960px] text-left text-sm">
               <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
                 <tr>
@@ -527,13 +554,6 @@ export default function RequestFormPage({
                 </tr>
               </thead>
               <tbody>
-                {!loading && items.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-zinc-500">
-                      No {formName}s found.
-                    </td>
-                  </tr>
-                )}
                 {items.map((item) => (
                   <tr key={item.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
                     <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
@@ -600,6 +620,8 @@ export default function RequestFormPage({
               onPageChange={setPage}
             />
           </div>
+            </>
+          )}
         </section>
       </div>
       {editor && (
@@ -609,26 +631,56 @@ export default function RequestFormPage({
               <h2 className="text-2xl font-medium text-gray-600">
                 {editingId ? `Edit ${formName}` : `Create ${formName}`}
               </h2>
-              <button className="flex size-8 items-center justify-center rounded-full text-gray-600 hover:bg-neutral-100" onClick={() => setEditor(false)} aria-label="Close">
-                ✕
-              </button>
+              <IconButton label="Close" size="sm" icon="x" onClick={() => setEditor(false)} />
             </div>
             {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
             <div className="grid gap-6 lg:h-[520px] lg:grid-cols-2">
               <div className="space-y-6 overflow-y-auto rounded-3xl border border-gray-200 p-4">
                 <h3 className="font-medium text-slate-900">Quotation Details</h3>
                 <div className="flex gap-2 rounded-full border border-rose-600 bg-neutral-50 p-1">
-                  <button type="button" disabled={Boolean(editingId)} className={`flex-1 rounded-full px-3 py-2 text-xs font-medium ${sourceTab === "QUOTATION" ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600"}`} onClick={() => { setSourceTab("QUOTATION"); setQuotationId(""); setQuotePreview(null); setAccountId(""); setPicId(""); setLines([{ ...emptyCourse(), deliveryType: mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE" }]); }}>Pick Quotation</button>
-                  <button type="button" disabled={Boolean(editingId)} className={`flex-1 rounded-full px-3 py-2 text-xs font-medium ${sourceTab === "MANUAL" ? "bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white" : "text-rose-600"}`} onClick={() => { setSourceTab("MANUAL"); setQuotationId(""); setQuotePreview(null); setAccountId(""); setPicId(""); setLines([{ ...emptyCourse(), deliveryType: mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE" }]); }}>Without Quotation</button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={sourceTab === "QUOTATION" ? "primary" : "ghost"}
+                    disabled={Boolean(editingId)}
+                    className="flex-1"
+                    onClick={() => {
+                      setSourceTab("QUOTATION");
+                      setQuotationId("");
+                      setQuotePreview(null);
+                      setAccountId("");
+                      setPicId("");
+                      setLines([{ ...emptyCourse(), deliveryType: mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE" }]);
+                    }}
+                  >
+                    Pick Quotation
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={sourceTab === "MANUAL" ? "primary" : "ghost"}
+                    disabled={Boolean(editingId)}
+                    className="flex-1"
+                    onClick={() => {
+                      setSourceTab("MANUAL");
+                      setQuotationId("");
+                      setQuotePreview(null);
+                      setAccountId("");
+                      setPicId("");
+                      setLines([{ ...emptyCourse(), deliveryType: mode === "REGISTRATION" ? "PUBLIC" : "PRIVATE" }]);
+                    }}
+                  >
+                    Without Quotation
+                  </Button>
                 </div>
-                {sourceTab === "QUOTATION" && <label className="block text-sm">
-                  Pick approved Quotation
-                  <select
-                    className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200"
-                    value={quotationId}
+                {sourceTab === "QUOTATION" && (
+                  <Dropdown
+                    label="Pick approved Quotation"
                     disabled={Boolean(editingId && quotationId)}
-                    onChange={async (e) => {
-                      const q = e.target.value;
+                    searchable
+                    placeholder="Pick a Quotation Number"
+                    value={quotationId}
+                    onChange={async (q) => {
                       setQuotationId(q);
                       if (q) {
                         try {
@@ -659,15 +711,12 @@ export default function RequestFormPage({
                         setLines([emptyCourse()]);
                       }
                     }}
-                  >
-                    <option value="">Pick a Quotation Number</option>
-                    {quotes.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {q.quotation_code} — {q.account_name} / {q.pic_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>}
+                    options={quotes.map((q) => ({
+                      label: `${q.quotation_code} — ${q.account_name} / ${q.pic_name}`,
+                      value: q.id,
+                    }))}
+                  />
+                )}
                 {quotationId && (
                   <section className="space-y-3">
                     <h4 className="text-base font-medium text-gray-600">Quotation Preview</h4>
@@ -691,7 +740,7 @@ export default function RequestFormPage({
                       </p>
                     </div>
                     {quotePreview && <fieldset className="space-y-2 rounded-xl border border-rose-50 p-3">
-                      <legend className="px-1 text-sm font-medium text-gray-600">Choose one Course for this {formName} *</legend>
+                      <legend className="px-1 text-sm font-medium text-gray-600">Choose one Course for this {formName} <span className="text-[#de1641] font-semibold">*</span></legend>
                       {quotePreview.lines.map((line) => <label className="flex items-start gap-2 text-sm text-gray-600" key={line.course_id}>
                         <input className="mt-1 accent-rose-600" type="radio" name="quotation-course" checked={lines.some((selectedLine) => selectedLine.courseId === line.course_id)} onChange={() => toggleQuotationCourse(line.course_id)} />
                         <span>{line.course_name}<span className="block text-xs text-zinc-950/60">{line.amount_student} students</span></span>
@@ -736,36 +785,128 @@ export default function RequestFormPage({
                     </label>
                   </>
                 )}
-                {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><span className="text-sm font-medium text-gray-600">Course</span><label className="block text-sm text-gray-600">Requested Course *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Format *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"} onChange={(e) => updateCourseFormat(index, e.target.value as "ONLINE" | "OFFLINE")}><option value="OFFLINE">Offline</option><option value="ONLINE">Online</option></select></label></div><label className="block text-sm text-gray-600">Class Type *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateCourseDeliveryType(index, e.target.value)}>{deliveryOptions.filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>)}</section>}
+                {sourceTab === "MANUAL" && (
+                  <section className="space-y-4">
+                    <h4 className="text-base font-medium text-gray-600">Course Detail</h4>
+                    {lines.map((line, index) => (
+                      <div className="space-y-3 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}>
+                        <span className="text-sm font-medium text-gray-600">Course</span>
+                        <Dropdown
+                          label="Requested Course"
+                          required
+                          searchable
+                          placeholder="Pick a Course"
+                          value={line.courseId}
+                          onChange={(val) => updateLine(index, { courseId: val })}
+                          options={courses.map((c) => ({ label: c.name, value: c.id }))}
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input
+                            label="Student Amount"
+                            required
+                            type="number"
+                            min={1}
+                            value={line.amountStudent}
+                            onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })}
+                          />
+                          <Dropdown
+                            label="Class Format"
+                            required
+                            value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"}
+                            onChange={(val) => updateCourseFormat(index, val as "ONLINE" | "OFFLINE")}
+                            options={[
+                              { label: "Offline", value: "OFFLINE" },
+                              { label: "Online", value: "ONLINE" },
+                            ]}
+                          />
+                        </div>
+                        <Dropdown
+                          label="Class Type"
+                          required
+                          value={line.deliveryType}
+                          onChange={(val) => updateCourseDeliveryType(index, val)}
+                          options={deliveryOptions
+                            .filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE"))
+                            .map(([value, label]) => ({ label, value }))}
+                        />
+                      </div>
+                    ))}
+                  </section>
+                )}
               </div>
               <div className="space-y-4 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">▣</span>{formName}</div>
                 <label className="flex cursor-pointer flex-col gap-1 text-sm text-gray-600">
-                  {mode === "REGISTRATION" ? "Registration Attachment *" : "RF Attachment *"}
+                  <span>{mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"} <span className="text-[#de1641] font-semibold">*</span></span>
                   <span className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center">
                     <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><LordIcon src="upload" size={20} colors="primary:#ffffff,secondary:#ffffff" /></span>
                     <span className="text-sm text-gray-600">Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></span>
                     <input className="sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(e) => void addFiles(e)} />
                   </span>
                   <span className="text-sm text-zinc-950/60">(Word, PDF), Max size 10MB per file</span>
-                  {files.map((f, index) => <span key={`${f.name}-${f.size}-${index}`} className="flex items-center justify-between gap-2 text-xs text-rose-600">{f.name}<button type="button" className="text-red-500" aria-label={`Remove ${f.name}`} onClick={(event) => { event.preventDefault(); setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); }}>Remove</button></span>)}
+                  {files.map((f, index) => (
+                    <span key={`${f.name}-${f.size}-${index}`} className="flex items-center justify-between gap-2 text-xs text-rose-600">
+                      {f.name}
+                      <IconButton
+                        size="sm"
+                        variant="danger"
+                        icon="trash"
+                        label={`Remove ${f.name}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                        }}
+                      />
+                    </span>
+                  ))}
                 </label>
-                <label className="block text-sm text-gray-600">Training Title *<input readOnly className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none" placeholder="Generated from selected Course" value={trainingTitle} /></label>
+                <Input
+                  label="Training Title"
+                  required
+                  readOnly
+                  disabled
+                  placeholder="Generated from selected Course"
+                  value={trainingTitle}
+                />
                 {lines.map((line, index) => (
                   <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">
-                    {mode === "REGISTRATION" && !line.deliveryType.startsWith("ONLINE") && line.deliveryType !== "INHOUSE" && <fieldset className="space-y-2 text-sm"><legend className="text-gray-600">Training Location *</legend><div className="flex gap-5"><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "INTERNAL"} onChange={() => updateLine(index, { locationType: "INTERNAL", locationName: "", locationAddress: "" })} />Internal Training Room</label><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "CLIENT"} onChange={() => updateLine(index, { locationType: "CLIENT" })} />Client Location</label></div></fieldset>}
-                    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <label className="block text-sm text-gray-600">Location Training *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" maxLength={500} value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")} onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })} placeholder="Training location name and address" /></label>}
-                    {mode === "REGISTRATION" && line.locationType === "CLIENT" && <div className="grid gap-2 sm:grid-cols-2"><label className="block text-sm text-gray-600">Location Name *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationName} onChange={(e) => updateLine(index, { locationName: e.target.value })} placeholder="Client site / venue" /></label><label className="block text-sm text-gray-600">Location Address *<input required className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm" value={line.locationAddress} onChange={(e) => updateLine(index, { locationAddress: e.target.value })} placeholder="Full address" /></label></div>}
+                    {mode === "REGISTRATION" && !line.deliveryType.startsWith("ONLINE") && line.deliveryType !== "INHOUSE" && <fieldset className="space-y-2 text-sm"><legend className="text-gray-600">Training Location <span className="text-[#de1641] font-semibold">*</span></legend><div className="flex gap-5"><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "INTERNAL"} onChange={() => updateLine(index, { locationType: "INTERNAL", locationName: "", locationAddress: "" })} />Internal Training Room</label><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "CLIENT"} onChange={() => updateLine(index, { locationType: "CLIENT" })} />Client Location</label></div></fieldset>}
+                    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <Input
+                        label="Location Training"
+                        required
+                        maxLength={500}
+                        value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")}
+                        onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })}
+                        placeholder="Training location name and address"
+                      />}
+                    {mode === "REGISTRATION" && line.locationType === "CLIENT" && <div className="grid gap-2 sm:grid-cols-2"><Input
+                          label="Location Name"
+                          required
+                          value={line.locationName}
+                          onChange={(e) => updateLine(index, { locationName: e.target.value })}
+                          placeholder="Client site / venue"
+                        /><Input
+                          label="Location Address"
+                          required
+                          value={line.locationAddress}
+                          onChange={(e) => updateLine(index, { locationAddress: e.target.value })}
+                          placeholder="Full address"
+                        /></div>}
                     {line.locationType === "ONLINE" && <p className="text-sm text-zinc-950/60">Online training does not require a physical location.</p>}
-                    <label className="block text-sm text-gray-600">Requested Date *</label>
+                    <label className="block text-sm text-gray-600">Requested Date <span className="text-[#de1641] font-semibold">*</span></label>
                     <MultiDateCalendar dates={line.sessions.map((session) => session.date)} onChange={(dates) => updateLine(index, { sessions: dates.map((date) => ({ date })) })} />
-                    <label className="block text-sm text-gray-600">Language *
-                      <select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.language} onChange={(e) => updateLine(index, { language: e.target.value })}>
-                        <option>Indonesia</option><option>English</option>
-                      </select>
-                    </label>
+                    <Dropdown
+                        label="Language"
+                        required
+                        value={line.language}
+                        onChange={(val) => updateLine(index, { language: val })}
+                        options={[
+                          { label: "Indonesia", value: "Indonesia" },
+                          { label: "English", value: "English" },
+                        ]}
+                      />
                     <fieldset className="space-y-1 text-sm">
-                      <legend className="text-gray-600">Class Type * (Pilih Satu)</legend>
+                      <legend className="text-gray-600">Class Type <span className="text-[#de1641] font-semibold">*</span> (Pilih Satu)</legend>
                       <div className="flex flex-wrap gap-x-6 gap-y-2 text-zinc-950/60">{[["STANDARD", "Standard"], ["CUSTOMIZED", "Customized"], ["CEO", "CEO"]].map(([value, label]) => <label className="inline-flex items-center gap-2" key={value}><input className="accent-rose-600" type="radio" name={`service-${index}`} checked={line.serviceType === value} onChange={() => updateLine(index, { serviceType: value })} />{label}</label>)}</div>
                     </fieldset>
                     <fieldset className="space-y-1 text-sm">
@@ -827,7 +968,13 @@ export default function RequestFormPage({
                         Notes #{index + 1}
                         <input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={note} placeholder="Add a note" onChange={(event) => setNotes((current) => current.map((value, noteIndex) => noteIndex === index ? event.target.value : value))} />
                       </label>
-                      <Button size="icon" variant="danger" aria-label={`Remove note ${index + 1}`} onClick={() => setNotes((current) => current.filter((_, noteIndex) => noteIndex !== index))}>×</Button>
+                      <IconButton
+                        size="sm"
+                        variant="danger"
+                        icon="trash"
+                        label={`Remove note ${index + 1}`}
+                        onClick={() => setNotes((current) => current.filter((_, noteIndex) => noteIndex !== index))}
+                      />
                     </div>
                   ))}
                 </section>
@@ -840,7 +987,7 @@ export default function RequestFormPage({
               <Button variant="soft" disabled={busy} onClick={() => void save(false)}>
                 {busy ? "Saving…" : "Save Draft"}
               </Button>
-              <Button disabled={busy} onClick={() => void save(true)}>
+              <Button disabled={busy} onClick={() => void save(true)} leftIcon={editingId ? "pencil-line" : "plus"}>
                 {busy ? "Submitting…" : "Submit to Admin (QPD)"}
               </Button>
             </div>
@@ -850,7 +997,10 @@ export default function RequestFormPage({
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelected(null)}>
           <div className="max-h-[92vh] w-full max-w-[902px] overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-6 flex items-start justify-between"><h2 className="text-2xl font-medium text-gray-600">{formName} Details</h2><button className="flex size-8 items-center justify-center rounded-full text-xl text-gray-600 hover:bg-neutral-100" aria-label="Close" onClick={() => setSelected(null)}>✕</button></div>
+            <div className="mb-6 flex items-start justify-between">
+              <h2 className="text-2xl font-medium text-gray-600">{formName} Details</h2>
+              <IconButton label="Close" size="sm" icon="x" onClick={() => setSelected(null)} />
+            </div>
             <div className="mb-4 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-gray-600">Request Form #: <span className="font-medium">{selected.item.request_form_number}</span>{selected.item.training_id && <> <span className="mx-2 text-zinc-400">·</span> Training ID: <span className="font-medium">{selected.item.training_id}</span></>}</div>
             {selected.item.review_note && <p className="mb-4 rounded-xl border border-red-500 bg-red-50 p-3 text-sm text-red-600">Revision note: {selected.item.review_note}</p>}
             <div className="grid gap-6 lg:grid-cols-2">
@@ -869,7 +1019,20 @@ export default function RequestFormPage({
                 <div className="space-y-2"><h4 className="text-base font-medium text-rose-600">Special Instructions</h4><div className="whitespace-pre-line rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-950/60">{[...new Set(selected.courses.flatMap((c) => String(c.special_instruction ?? "").split("\n")).filter(Boolean))].join("\n") || "-"}</div></div>
               </section>
             </div>
-            <div className="mt-6 flex justify-between border-t border-zinc-950/20 pt-5">{selected.item.status === "DRAFT" ? <Button variant="danger" disabled={busy} onClick={async () => { if (!window.confirm("Delete this draft? This cannot be undone.")) return; setBusy(true); try { await api(`/api/v1/internal/request-forms/${selected.item.id}`, { method: "DELETE" }); showToast(`${formName} draft deleted successfully.`); setSelected(null); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Could not delete draft"); } finally { setBusy(false); } }}>Delete Draft</Button> : selected.item.status === "WAITING" ? <Button variant="ghost" className="border border-rose-600 text-rose-600 hover:bg-rose-50" disabled={busy} onClick={() => setWithdrawConfirmationOpen(true)}>Withdraw to Draft</Button> : <span /> }<Button onClick={() => setSelected(null)}>Close</Button></div>
+            <div className="mt-6 flex justify-between border-t border-zinc-950/20 pt-5">
+              {selected.item.status === "DRAFT" ? (
+                <Button variant="danger" leftIcon="trash" disabled={busy} onClick={() => setDeletingDraft(selected)}>
+                  Delete Draft
+                </Button>
+              ) : selected.item.status === "WAITING" ? (
+                <Button variant="ghost" className="border border-rose-600 text-rose-600 hover:bg-rose-50" disabled={busy} onClick={() => setWithdrawConfirmationOpen(true)}>
+                  Withdraw to Draft
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button onClick={() => setSelected(null)}>Close</Button>
+            </div>
           </div>
         </div>
       )}
@@ -877,6 +1040,14 @@ export default function RequestFormPage({
         open={withdrawConfirmationOpen}
         onClose={() => setWithdrawConfirmationOpen(false)}
         onConfirm={() => void withdrawSelected()}
+        loading={busy}
+      />
+      <DeleteConfirmationModal
+        open={Boolean(deletingDraft)}
+        itemName={deletingDraft?.item.request_form_number ?? ""}
+        description={`This ${formName} draft will be permanently deleted.`}
+        onClose={() => setDeletingDraft(null)}
+        onConfirm={() => void deleteDraft()}
         loading={busy}
       />
     </AppShell>

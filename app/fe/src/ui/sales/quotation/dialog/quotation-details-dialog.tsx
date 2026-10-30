@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ExternalLink, FilePenLine, HandCoins, Info, Pencil, Trash2, UserRound, Users, X } from "lucide-react";
+import { BookOpen, ExternalLink, FilePenLine, HandCoins, Info, UserRound, Users } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
 
@@ -114,7 +114,7 @@ export function QuotationDetailsDialog({
       <aside className="relative z-10 flex h-full w-full max-w-96 flex-col justify-between overflow-hidden border-l border-gray-200 bg-white p-6 shadow-xl">
         <div className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-1">
           <div className="flex shrink-0 items-start gap-3">
-            <IconButton label="Close" size="sm" icon={<X size={18} />} onClick={onClose} />
+            <IconButton label="Close" size="sm" icon="x" onClick={onClose} />
             <h2 className="pt-0.5 text-2xl font-medium text-gray-600">Quotation Details</h2>
           </div>
 
@@ -222,21 +222,21 @@ export function QuotationDetailsDialog({
             </Button>
           )}
           <div className="flex gap-3">
-          <Button
-            variant="danger"
-            leftIcon={<Trash2 size={18} />}
-            className="min-w-0 flex-1 whitespace-nowrap"
-            onClick={() => onDelete(quotation.item)}
-          >
-            Delete Quotation
-          </Button>
-          <Button
-            leftIcon={<Pencil size={18} />}
-            className="min-w-0 flex-1 whitespace-nowrap"
-            onClick={() => onEdit(quotation.item)}
-          >
-            Edit Quotation
-          </Button>
+            <Button
+              variant="danger"
+              leftIcon="trash"
+              className="min-w-0 flex-1 whitespace-nowrap"
+              onClick={() => onDelete(quotation.item)}
+            >
+              Delete Quotation
+            </Button>
+            <Button
+              leftIcon="pencil-line"
+              className="min-w-0 flex-1 whitespace-nowrap"
+              onClick={() => onEdit(quotation.item)}
+            >
+              Edit Quotation
+            </Button>
           </div>
         </div>
       </aside>

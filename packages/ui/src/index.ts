@@ -5,6 +5,7 @@ export * from "./data-table";
 export * from "./dashboard-welcome-panel";
 export * from "./delete-confirmation-modal";
 export * from "./drop-box";
+export * from "./empty-state";
 export * from "./icon-button";
 export * from "./input";
 export * from "./logout-confirmation-modal";

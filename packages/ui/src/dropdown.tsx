@@ -124,6 +124,36 @@ export interface DropdownProps<T = string> {
   ) => ReactNode;
 }
 
+function renderDropdownLabel(label: ReactNode, required?: boolean) {
+  if (!label) return null;
+  if (typeof label === "string") {
+    const starMatch = label.match(/^(.*?)\s*\*(\s*.*)$/);
+    if (starMatch) {
+      return (
+        <>
+          {starMatch[1]}
+          <span className="text-[#de1641] font-semibold"> *</span>
+          {starMatch[2]}
+        </>
+      );
+    }
+    if (required) {
+      return (
+        <>
+          {label}
+          <span className="text-[#de1641] font-semibold ml-0.5">*</span>
+        </>
+      );
+    }
+  }
+  return (
+    <>
+      {label}
+      {required && <span className="text-[#de1641] font-semibold ml-0.5">*</span>}
+    </>
+  );
+}
+
 export function Dropdown<T = string>({
   options,
   value: controlledValue,
@@ -334,7 +364,7 @@ export function Dropdown<T = string>({
           className="block text-sm font-medium text-gray-600"
           onClick={() => !disabled && setOpen(!isOpen)}
         >
-          {label}
+          {renderDropdownLabel(label, required)}
         </label>
       )}
 

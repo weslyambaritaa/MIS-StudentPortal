@@ -1,7 +1,5 @@
 "use client";
 
-import { Undo2, X } from "lucide-react";
-
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
 import { Modal } from "@mis/ui/modal";
@@ -26,7 +24,7 @@ export function WithdrawConfirmation({
           Are you sure you want to withdraw?
         </h2>
 
-        <IconButton label="Close" size="sm" icon={<X size={20} />} onClick={onClose} />
+        <IconButton label="Close" size="sm" icon="x" onClick={onClose} />
       </div>
 
       <div className="my-4 h-px bg-zinc-950/20" />
@@ -36,15 +34,14 @@ export function WithdrawConfirmation({
       </p>
 
       <div className="mt-6 flex items-center gap-3">
-        <Button onClick={onClose} className="min-w-0 flex-1">
+        <Button variant="ghost" onClick={onClose} className="min-w-0 flex-1">
           No, Cancel
         </Button>
 
         <Button
-          variant="ghost"
+          variant="primary"
           onClick={onConfirm}
           disabled={loading}
-          rightIcon={<Undo2 size={17} />}
           className="min-w-0 flex-1"
         >
           {loading ? "Withdrawing..." : "Yes, Withdraw"}

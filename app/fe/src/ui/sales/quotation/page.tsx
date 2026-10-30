@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { Dropdown } from "@mis/ui/dropdown";
+import { EmptyState } from "@mis/ui/empty-state";
 import { IconButton } from "@mis/ui/icon-button";
 import { Input } from "@mis/ui/input";
 import { Modal } from "@mis/ui/modal";
@@ -356,7 +357,15 @@ export default function QuotationPage() {
               {error}
             </p>
           )}
-          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+          {!loading && result.items.length === 0 ? (
+            <EmptyState
+              description="No Quotations Found"
+              onAdd={() => openEditor()}
+              addLabel="Add Quotation"
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
             <table className="table-fixed w-full min-w-[960px] text-left text-sm">
               <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
                 <tr>
@@ -371,13 +380,6 @@ export default function QuotationPage() {
                 </tr>
               </thead>
               <tbody>
-                {!loading && result.items.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-10 text-center text-zinc-500">
-                      No quotations found.
-                    </td>
-                  </tr>
-                )}
                 {result.items.map((quote) => (
                   <tr key={quote.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
                     <td className="px-3 py-3">
@@ -447,6 +449,8 @@ export default function QuotationPage() {
               onPageChange={setPage}
             />
           </div>
+            </>
+          )}
         </section>
       </div>
 
@@ -464,117 +468,67 @@ export default function QuotationPage() {
               <IconButton
                 label="Close"
                 size="sm"
-                icon={<X size={17} />}
+                icon="x"
                 onClick={() => setEditor(undefined)}
               />
             </div>
-            <section className="flex flex-col gap-1">
-              <h3 className="text-base font-medium text-rose-600">Class / Course Type</h3>
-              <div className="relative">
-                <select
-                  className={`${field} appearance-none pr-10`}
-                  value={form.classType}
-                  onChange={(e) =>
-                    setForm((v) => ({ ...v, classType: e.target.value as (typeof TYPES)[number] }))
-                  }
-                >
-                  {TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {typeLabel(type)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                />
-              </div>
-            </section>
+            <Dropdown
+              label="Class / Course Type"
+              required
+              value={form.classType}
+              onChange={(val) =>
+                setForm((v) => ({ ...v, classType: val as (typeof TYPES)[number] }))
+              }
+              options={TYPES.map((type) => ({ label: typeLabel(type), value: type }))}
+            />
             <div className="h-px w-full bg-zinc-950/20" />
-            <label className={label}>
-              Quotation Code *
-              <input
+            <Input
+              label="Quotation Code"
+              required
+              maxLength={30}
+              value={form.quotationCode}
+              onChange={(e) => setForm((v) => ({ ...v, quotationCode: e.target.value }))}
+              placeholder="Example: QTN-1234-13"
+            />
+            <Dropdown
+              label="Account"
+              required
+              searchable
+              value={form.accountId}
+              placeholder="Pick an active Account"
+              onChange={(val) => setForm((v) => ({ ...v, accountId: val, picId: "" }))}
+              options={accounts.map((a) => ({ label: a.name, value: a.id }))}
+            />
+            <Dropdown
+              label="Person in Charge"
+              required
+              disabled={!form.accountId}
+              value={form.picId}
+              placeholder="Pick an active PIC"
+              onChange={(val) => setForm((v) => ({ ...v, picId: val }))}
+              options={pics.map((p) => ({ label: `${p.name} · ${p.email}`, value: p.id }))}
+            />
+            {editor ? (
+              <Dropdown
+                label="Current Status"
                 required
-                maxLength={30}
-                className={field}
-                value={form.quotationCode}
-                onChange={(e) => setForm((v) => ({ ...v, quotationCode: e.target.value }))}
-                placeholder="Example: QTN-1234-13"
+                value={form.status}
+                onChange={(val) => setForm((current) => ({ ...current, status: val as typeof current.status }))}
+                options={[
+                  { label: "Waiting", value: "WAITING" },
+                  { label: "Approved", value: "APPROVED" },
+                  { label: "Cancelled", value: "CANCELLED" },
+                  { label: "Revision", value: "REVISION" },
+                ]}
               />
-            </label>
-            <label className={label}>
-              Account *
-              <span className="relative">
-                <select
-                  required
-                  className={`${field} appearance-none pr-9`}
-                  value={form.accountId}
-                  onChange={(e) => setForm((v) => ({ ...v, accountId: e.target.value, picId: "" }))}
-                >
-                  <option value="">Pick an active Account</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                />
-              </span>
-            </label>
-            <label className={label}>
-              Person in Charge *
-              <span className="relative">
-                <select
-                  required
-                  className={`${field} appearance-none pr-9`}
-                  value={form.picId}
-                  onChange={(e) => setForm((v) => ({ ...v, picId: e.target.value }))}
-                  disabled={!form.accountId}
-                >
-                  <option value="">Pick an active PIC</option>
-                  {pics.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · {p.email}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                />
-              </span>
-            </label>
-            <label className={label}>
-              Current Status *
-              {editor ? (
-                <span className="relative">
-                  <select
-                    className={`${field} appearance-none pr-9 text-slate-900/40`}
-                    value={form.status}
-                    onChange={(e) => setForm((current) => ({ ...current, status: e.target.value as typeof current.status }))}
-                  >
-                    <option value="WAITING">Waiting</option>
-                    <option value="APPROVED">Approved</option>
-                    <option value="CANCELLED">Cancelled</option>
-                    <option value="REVISION">Revision</option>
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                  />
-                </span>
-              ) : (
-                <input
-                  readOnly
-                  aria-readonly="true"
-                  className={`${field} cursor-not-allowed text-slate-900/40`}
-                  value="Waiting after successful email"
-                />
-              )}
-            </label>
+            ) : (
+              <Input
+                label="Current Status"
+                value="Waiting after successful email"
+                readOnly
+                disabled
+              />
+            )}
             <div className="h-px w-full bg-zinc-950/20" />
             <div className="flex items-center justify-between">
               <h3 className="text-base font-medium text-rose-600">Quotation Details</h3>
@@ -597,80 +551,60 @@ export default function QuotationPage() {
               </Button>
             </div>
             {form.lines.map((line, index) => (
-              <div key={index} className="flex flex-col gap-6">
+              <div key={index} className="flex flex-col gap-4">
                 {form.lines.length > 1 && (
                   <div className="flex items-center justify-between text-xs font-medium text-rose-600">
                     Course {index + 1}
                     {index > 0 && (
-                      <button
-                        type="button"
-                        aria-label="Remove course"
-                        className="rounded-full p-1 text-rose-600 hover:bg-rose-50"
+                      <IconButton
+                        size="sm"
+                        variant="ghost-red"
+                        icon="x"
+                        label="Remove course"
                         onClick={() =>
                           setForm((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== index) }))
                         }
-                      >
-                        <X size={15} />
-                      </button>
+                      />
                     )}
                   </div>
                 )}
-                <label className={label}>
-                  Requested Course *
-                  <span className="relative">
-                    <select
-                      required
-                      className={`${field} appearance-none pr-9`}
-                      value={line.courseId}
-                      onChange={(e) => patchLine(index, { courseId: e.target.value })}
-                    >
-                      <option value="">Courses Name - Days</option>
-                      {courses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} - {Math.max(1, Math.ceil(c.duration_minutes / 480))} day(s)
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
-                    />
-                  </span>
-                </label>
-                <label className={label}>
-                  Amount Student (Pax) *
-                  <input
-                    required
-                    min="1"
-                    type="number"
-                    className={field}
-                    value={line.amountStudent}
-                    onChange={(e) => patchLine(index, { amountStudent: Number(e.target.value) })}
-                  />
-                </label>
-                <label className={label}>
-                  Value Amount Per Pax (Rp) *
-                  <input
-                    required
-                    min="1"
-                    step="any"
-                    type="number"
-                    className={field}
-                    value={line.pricePerPax || ""}
-                    placeholder="50.000"
-                    onChange={(e) => patchLine(index, { pricePerPax: Number(e.target.value) })}
-                  />
-                </label>
-                <label className={label}>
-                  Location *
-                  <input
-                    required
-                    className={field}
-                    value={line.location}
-                    onChange={(e) => patchLine(index, { location: e.target.value })}
-                    placeholder="Jakarta, ABC Tower"
-                  />
-                </label>
+                <Dropdown
+                  label="Requested Course"
+                  required
+                  searchable
+                  value={line.courseId}
+                  placeholder="Courses Name - Days"
+                  onChange={(val) => patchLine(index, { courseId: val })}
+                  options={courses.map((c) => ({
+                    label: `${c.name} - ${Math.max(1, Math.ceil(c.duration_minutes / 480))} day(s)`,
+                    value: c.id,
+                  }))}
+                />
+                <Input
+                  label="Amount Student (Pax)"
+                  required
+                  type="number"
+                  min="1"
+                  value={line.amountStudent}
+                  onChange={(e) => patchLine(index, { amountStudent: Number(e.target.value) })}
+                />
+                <Input
+                  label="Value Amount Per Pax (Rp)"
+                  required
+                  type="number"
+                  min="1"
+                  step="any"
+                  value={line.pricePerPax || ""}
+                  placeholder="50.000"
+                  onChange={(e) => patchLine(index, { pricePerPax: Number(e.target.value) })}
+                />
+                <Input
+                  label="Location"
+                  required
+                  value={line.location}
+                  onChange={(e) => patchLine(index, { location: e.target.value })}
+                  placeholder="Jakarta, ABC Tower"
+                />
               </div>
             ))}
             {dialogError && (
@@ -690,7 +624,7 @@ export default function QuotationPage() {
               <Button
                 type="submit"
                 disabled={busy || !form.lines.length}
-                rightIcon="plus"
+                leftIcon={editor ? "pencil-line" : "plus"}
               >
                 {busy ? "Sending..." : editor ? "Update Quotation" : "Add Quotation"}
               </Button>

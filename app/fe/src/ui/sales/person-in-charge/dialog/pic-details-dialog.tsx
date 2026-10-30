@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Building2, ChevronDown, Pencil, Trash2, UserRound, X } from "lucide-react";
+import { Building2, UserRound } from "lucide-react";
 import { Badge } from "@mis/ui/badge";
 import { Button } from "@mis/ui/button";
 import { Dropdown } from "@mis/ui/dropdown";
@@ -36,7 +36,7 @@ export function PicDetailsDialog({
     <div className="fixed inset-0 z-40 flex justify-end bg-zinc-950/30" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside role="dialog" aria-modal="true" aria-label="PIC Details" className="flex h-full w-full max-w-[440px] flex-col border-l border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-6 flex items-center gap-3">
-          <IconButton label="Close PIC details" icon={<X size={18} />} onClick={onClose} />
+          <IconButton label="Close PIC details" icon="x" onClick={onClose} />
           <h2 className="text-2xl font-medium text-gray-600">PIC Details</h2>
         </div>
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
@@ -76,15 +76,23 @@ export function PicDetailsDialog({
               ))}</ul>
             ) : <p className="rounded-xl border border-rose-50 bg-neutral-50 p-3 text-sm text-zinc-500">No students found for this Account.</p>}
             <p className="text-center text-sm text-zinc-500">{filteredStudents.length} Student{filteredStudents.length === 1 ? "" : "s"}</p>
-            {filteredStudents.length > 5 && <Button variant="ghost" className="w-full" rightIcon={<ArrowRight size={18} />} onClick={() => setShowAll((value) => !value)}>{showAll ? "Show Less" : "View All Student"}</Button>}
+            {filteredStudents.length > 5 && (
+              <Button
+                variant="ghost"
+                className="w-full text-rose-600"
+                rightIcon={showAll ? "chevron-up" : "chevron-down"}
+                onClick={() => setShowAll((value) => !value)}
+              >
+                {showAll ? "Show Less" : "View All Student"}
+              </Button>
+            )}
           </section>
         </div>
         <footer className="mt-5 flex gap-3 border-t border-rose-50 pt-4">
-          <Button variant="danger" className="min-w-0 flex-1 whitespace-nowrap" leftIcon={<Trash2 size={17} />} onClick={onDelete}>Delete PIC</Button>
-          <Button className="min-w-0 flex-1 whitespace-nowrap" leftIcon={<Pencil size={17} />} onClick={onEdit}>Edit PIC</Button>
+          <Button variant="danger" className="min-w-0 flex-1 whitespace-nowrap" leftIcon="trash" onClick={onDelete}>Delete PIC</Button>
+          <Button className="min-w-0 flex-1 whitespace-nowrap" leftIcon="pencil-line" onClick={onEdit}>Edit PIC</Button>
         </footer>
       </aside>
     </div>
   );
 }
-

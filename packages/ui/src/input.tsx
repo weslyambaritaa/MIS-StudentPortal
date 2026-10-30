@@ -20,6 +20,36 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
   size?: "sm" | "default" | "lg";
 };
 
+function renderInputLabel(label: ReactNode, required?: boolean) {
+  if (!label) return null;
+  if (typeof label === "string") {
+    const starMatch = label.match(/^(.*?)\s*\*(\s*.*)$/);
+    if (starMatch) {
+      return (
+        <>
+          {starMatch[1]}
+          <span className="text-[#de1641] font-semibold"> *</span>
+          {starMatch[2]}
+        </>
+      );
+    }
+    if (required) {
+      return (
+        <>
+          {label}
+          <span className="text-[#de1641] font-semibold ml-0.5">*</span>
+        </>
+      );
+    }
+  }
+  return (
+    <>
+      {label}
+      {required && <span className="text-[#de1641] font-semibold ml-0.5">*</span>}
+    </>
+  );
+}
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   {
     label,
@@ -68,7 +98,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
   return (
     <label className={`block space-y-[3px] ${containerClassName}`}>
-      {label && <span className="block text-sm font-medium text-gray-600">{label}</span>}
+      {label && <span className="block text-sm font-medium text-gray-600">{renderInputLabel(label, props.required)}</span>}
 
       <div
         className={[
