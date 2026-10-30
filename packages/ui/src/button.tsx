@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { LordIcon, type LordIconName } from "./lord-icon";
 
-export type ButtonVariant = "primary" | "soft" | "ghost" | "danger" | "navigation";
+export type ButtonVariant = "primary" | "soft" | "ghost" | "danger" | "destructive" | "navigation";
 
 export type ButtonSize = "default" | "sm" | "icon";
 
@@ -86,17 +86,28 @@ export function Button({
       return ["bg-[#DE16411A]", "text-[#DE1641]", "hover:bg-[#DE164126]"].join(" ");
     }
 
-    if (variant === "danger") {
-      return ["bg-red-500/10", "text-red-500", "hover:bg-red-500/20"].join(" ");
+    if (variant === "danger" || variant === "destructive") {
+      return ["bg-[#FF4343]/20", "text-[#FF4343]", "hover:bg-[#FF4343]/30"].join(" ");
     }
 
     return ["bg-transparent", "text-gray-600", "hover:bg-gray-100"].join(" ");
   };
 
+  const isDestructive = variant === "danger" || variant === "destructive";
+
   const iconHoverClass =
     variant === "primary"
       ? "group-hover:text-white group-hover:[--lord-icon-primary:#ffffff] group-hover:[--lord-icon-secondary:#ffffff]"
-      : "group-hover:text-[#DE1641] group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]";
+      : isDestructive
+        ? "group-hover:text-[#FF4343] group-hover:[--lord-icon-primary:#FF4343] group-hover:[--lord-icon-secondary:#FF4343]"
+        : "group-hover:text-[#DE1641] group-hover:[--lord-icon-primary:#de1641] group-hover:[--lord-icon-secondary:#de1641]";
+
+  const defaultIconColors =
+    variant === "primary"
+      ? "primary:#ffffff,secondary:#ffffff"
+      : isDestructive
+        ? "primary:#FF4343,secondary:#FF4343"
+        : "primary:#de1641,secondary:#de1641";
 
   return (
     <button
@@ -147,11 +158,7 @@ export function Button({
               size={size === "sm" ? 16 : 20}
               trigger="hover"
               target="button"
-              colors={
-                variant === "primary"
-                  ? "primary:#ffffff,secondary:#ffffff"
-                  : "primary:#de1641,secondary:#de1641"
-              }
+              colors={defaultIconColors}
               className="shrink-0"
             />
           ) : (
@@ -172,11 +179,7 @@ export function Button({
               size={size === "sm" ? 16 : 20}
               trigger="hover"
               target="button"
-              colors={
-                variant === "primary"
-                  ? "primary:#ffffff,secondary:#ffffff"
-                  : "primary:#de1641,secondary:#de1641"
-              }
+              colors={defaultIconColors}
               className="shrink-0"
             />
           ) : (
@@ -205,4 +208,3 @@ export function AddButton({
     </Button>
   );
 }
-

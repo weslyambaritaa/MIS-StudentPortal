@@ -1,7 +1,5 @@
 "use client";
 
-import { Trash2, X } from "lucide-react";
-
 import { Button } from "./button";
 import { IconButton } from "./icon-button";
 import { Modal } from "./modal";
@@ -30,7 +28,7 @@ export function DeleteConfirmationModal({
           Are you sure you want to delete?
         </h2>
 
-        <IconButton label="Close" size="sm" icon={<X size={20} />} onClick={onClose} />
+        <IconButton label="Close" size="sm" icon="cross" onClick={onClose} />
       </div>
 
       <div className="my-4 h-px bg-zinc-950/20" />
@@ -40,15 +38,15 @@ export function DeleteConfirmationModal({
       </p>
 
       <div className="mt-6 flex items-center gap-3">
-        <Button onClick={onClose} className="min-w-0 flex-1">
+        <Button variant="ghost" onClick={onClose} className="min-w-0 flex-1">
           No, Cancel
         </Button>
 
         <Button
-          variant="ghost"
+          variant="danger"
           onClick={onConfirm}
           disabled={loading}
-          rightIcon={<Trash2 size={17} />}
+          rightIcon="trash"
           className="min-w-0 flex-1"
         >
           {loading ? "Deleting..." : "Yes, Delete"}

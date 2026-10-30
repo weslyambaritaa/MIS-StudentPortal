@@ -1,4 +1,5 @@
 import type { ActiveRoleAuthContext } from "@mis/shared-types";
+import { AppError } from "../../errors/app-error";
 import { env } from "../../config/env";
 
 const PREFIX = "/api/v1/internal-service/pics";
@@ -25,9 +26,9 @@ export type PicRecord = {
   assignments: PicAssignmentRecord[];
 };
 
-export class StudentApiError extends Error {
+export class StudentApiError extends AppError {
   constructor(readonly status: number, message: string) {
-    super(message);
+    super(status, message);
     this.name = "StudentApiError";
   }
 }
@@ -50,8 +51,9 @@ async function requestStudentApi<T>(path: string, actor: ActiveRoleAuthContext, 
     if (options.body !== undefined) headers.set("content-type", "application/json");
     const response = await fetch(target, { method: options.method ?? "GET", headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: controller.signal });
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({})) as { message?: string };
-      throw new StudentApiError(response.status, payload.message ?? "Student API request failed");
+      const payload = await response.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
+      const message = payload.error?.message ?? payload.message ?? "Student API request failed";
+      throw new StudentApiError(response.status, message);
     }
     if (response.status === 204) return undefined as T;
     return await response.json() as T;
@@ -70,14 +72,17 @@ export const studentPicClient = {
     if (filters.id) query.set("id", filters.id);
     if (filters.profileIds?.length) query.set("profileIds", filters.profileIds.join(","));
     if (filters.accountId) query.set("accountId", filters.accountId);
-    if (filters.accountIds?.length) query.set("accountIds", filters.accountIds.join(","));
+    if (filters.accountIds?.length) {
+      const ids = filters.accountIds.filter(Boolean);
+      if (ids.length) query.set("accountIds", ids.join(","));
+    }
     if (filters.status && filters.status !== "ALL") query.set("status", filters.status);
     if (filters.search) query.set("search", filters.search);
     const suffix = query.size ? `?${query}` : "";
     return requestStudentApi<{ items: PicRecord[] }>(`${PREFIX}/${suffix}`, actor);
   },
   async get(actor: ActiveRoleAuthContext, id: string) {
-    const response = await requestStudentApi<{ items: PicRecord[] }>(`${PREFIX}/?id=${encodeURIComponent(id)}`, actor);
+    const response = await requestStudentApi<{ items: PicRecord[] }>(`${PREFIX}?id=${encodeURIComponent(id)}`, actor);
     return response.items[0] ?? null;
   },
   async create(actor: ActiveRoleAuthContext, body: { id: string; keycloakSubject: string; name: string; email: string; position: string; status: PicRecord["status"]; activationExpiresAt: string | null; accountId: string; assignedBySubject: string }) {

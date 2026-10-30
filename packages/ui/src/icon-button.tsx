@@ -51,7 +51,7 @@ export function IconButton({
           />
         );
       }
-      if (variant === "primary") {
+      if (variant === "primary" || variant === "profile") {
         return (
           <LordIcon
             src={icon as LordIconName}
@@ -59,6 +59,18 @@ export function IconButton({
             trigger="hover"
             target="button"
             colors="primary:#ffffff,secondary:#ffffff"
+            className="shrink-0"
+          />
+        );
+      }
+      if (variant === "ghost-red") {
+        return (
+          <LordIcon
+            src={icon as LordIconName}
+            size={iconSize}
+            trigger="hover"
+            target="button"
+            colors="primary:#de1641,secondary:#de1641"
             className="shrink-0"
           />
         );
@@ -98,4 +110,3 @@ export function IconButton({
     </button>
   );
 }
-

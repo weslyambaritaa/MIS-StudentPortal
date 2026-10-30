@@ -6,6 +6,7 @@ import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
 import { DeleteConfirmationModal } from "@mis/ui/delete-confirmation-modal";
 import { Dropdown } from "@mis/ui/dropdown";
+import { EmptyState } from "@mis/ui/empty-state";
 import { IconButton } from "@mis/ui/icon-button";
 import { Input } from "@mis/ui/input";
 import { Pagination } from "@mis/ui/pagination";
@@ -66,6 +67,7 @@ export default function AccountsPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Dropdown
                 label="Industry"
+                searchable
                 value={industryId}
                 onChange={(val) => {
                   setPage(1);
@@ -93,7 +95,18 @@ export default function AccountsPage() {
 
           {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-          <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
+          {!loading && result.items.length === 0 ? (
+            <EmptyState
+              description="No Accounts Found"
+              onAdd={() => {
+                setDialogError(null);
+                setEditor(null);
+              }}
+              addLabel="Add Account"
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
             <table className="table-fixed w-full min-w-[760px] text-left text-sm">
               <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
                 <tr>
@@ -103,22 +116,15 @@ export default function AccountsPage() {
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Student</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">PIC</th>
                   <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
-                  <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                  <th className="w-44 whitespace-nowrap px-6 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {!loading && result.items.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-3 py-10 text-center text-zinc-500">
-                      No Accounts found.
-                    </td>
-                  </tr>
-                )}
                 {result.items.map((row) => (
                   <tr key={row.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
                     <td className="px-3 py-3">{row.account_code}</td>
                     <td className="px-3 py-3">
-                      <button className="text-left font-medium text-rose-600 hover:underline" onClick={() => void openDetails(row)}>
+                      <button className="text-left font-medium text-slate-900 hover:text-rose-600 hover:underline" onClick={() => void openDetails(row)}>
                         {row.name}
                       </button>
                     </td>
@@ -139,7 +145,7 @@ export default function AccountsPage() {
                         {row.status === "ACTIVE" ? "Active" : "Inactive"}
                       </Badge>
                     </td>
-                    <td className="w-28 whitespace-nowrap px-3 py-2">
+                    <td className="w-44 whitespace-nowrap px-6 py-2">
                       <div className="flex items-center gap-1">
                         <IconButton label={`View ${row.name}`} icon="eye" size="sm" onClick={() => void openDetails(row)} />
                         <IconButton label={`Edit ${row.name}`} icon="pencil-line" size="sm" onClick={() => setEditor(row)} />
@@ -168,6 +174,8 @@ export default function AccountsPage() {
               onPageChange={setPage}
             />
           </div>
+            </>
+          )}
         </section>
       </div>
     {editor !== undefined && <AccountDialog value={editor ?? null} industries={industries} salesUsers={salesUsers} currentSubject={currentSubject} busy={busy} error={dialogError} onClose={() => { setEditor(undefined); setDialogError(null); }} onSubmit={save} />}

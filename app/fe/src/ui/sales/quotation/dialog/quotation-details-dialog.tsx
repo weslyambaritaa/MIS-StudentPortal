@@ -1,8 +1,10 @@
 "use client";
 
-import { BookOpen, ExternalLink, FilePenLine, HandCoins, Info, Pencil, Trash2, UserRound, Users, X } from "lucide-react";
+import { useState } from "react";
+import { Badge } from "@mis/ui/badge";
 import { Button } from "@mis/ui/button";
 import { IconButton } from "@mis/ui/icon-button";
+import { LordIcon } from "@mis/ui/lord-icon";
 
 export type QuotationStatus =
   | "WAITING"
@@ -55,9 +57,6 @@ type Props = {
   onOpenDocument: (quotationId: string, version: number) => void;
 };
 
-const typeLabel = (value: string) =>
-  ({ PRIVATE: "Private", PUBLIC: "Public", INHOUSE: "Inhouse", ONLINE: "Online" })[value] ?? value;
-
 const statusLabel = (value: QuotationStatus) =>
   ({
     WAITING: "Waiting",
@@ -71,20 +70,11 @@ const statusLabel = (value: QuotationStatus) =>
     EXPIRED: "Cancelled",
   })[value];
 
-const statusStyle = (value: QuotationStatus) => {
-  if (value === "WAITING" || value === "SENT") {
-    return "bg-orange-600/20 text-orange-600 outline outline-1 outline-offset-[-1px] outline-orange-600";
-  }
-  if (value === "APPROVED") {
-    return "bg-green-500/20 text-green-500 outline outline-1 outline-offset-[-1px] outline-green-500";
-  }
-  if (value === "REVISION") {
-    return "bg-blue-500/20 text-blue-600 outline outline-1 outline-offset-[-1px] outline-blue-500";
-  }
-  if (value === "SEND_FAILED" || value === "CANCELLED" || value === "REJECTED" || value === "EXPIRED") {
-    return "bg-red-500/20 text-red-500 outline outline-1 outline-offset-[-1px] outline-red-500";
-  }
-  return "bg-zinc-300/20 text-zinc-500 outline outline-1 outline-offset-[-1px] outline-zinc-400";
+const statusVariant = (value: QuotationStatus): "success" | "danger" | "warning" | "neutral" => {
+  if (value === "APPROVED") return "success";
+  if (value === "WAITING" || value === "SENT") return "warning";
+  if (value === "SEND_FAILED" || value === "CANCELLED" || value === "REJECTED" || value === "EXPIRED") return "danger";
+  return "neutral";
 };
 
 const money = (value: number) => `Rp ${Math.round(value || 0).toLocaleString("id-ID")}`;
@@ -98,10 +88,22 @@ export function QuotationDetailsDialog({
   onResend,
   onOpenDocument,
 }: Props) {
+  const [isClosing, setIsClosing] = useState(false);
+
   if (!quotation) return null;
 
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 250);
+  };
+
+  const isPublic =
+    quotation.item.class_type === "PUBLIC" || quotation.item.class_type === "ONLINE_PUBLIC";
   const amount = quotation.lines.reduce(
-    (total, line) => total + Number(line.price) * Number(line.amount_student),
+    (total, line) =>
+      total + Number(line.price) * (isPublic ? 1 : Number(line.amount_student)),
     0,
   );
   const latestDocument = quotation.documents?.length
@@ -109,23 +111,37 @@ export function QuotationDetailsDialog({
     : undefined;
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <button aria-label="Close details" className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative z-10 flex h-full w-full max-w-96 flex-col justify-between overflow-hidden border-l border-gray-200 bg-white p-6 shadow-xl">
+    <div
+      className={`fixed inset-0 z-40 flex justify-end bg-zinc-950/30 backdrop-blur-[1px] ${
+        isClosing ? "animate-fade-out" : "animate-fade-in"
+      }`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
+      <aside
+        aria-label="Quotation details"
+        className={`relative z-10 flex h-full w-full max-w-[420px] flex-col justify-between overflow-hidden border-l border-gray-200 bg-white p-6 shadow-xl ${
+          isClosing ? "animate-slide-out-right" : "animate-slide-in-right"
+        }`}
+      >
         <div className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-1">
-          <div className="flex shrink-0 items-start gap-3">
-            <IconButton label="Close" size="sm" icon={<X size={18} />} onClick={onClose} />
+          <header className="flex shrink-0 items-start gap-3">
+            <IconButton label="Close details" size="sm" icon="cross" onClick={handleClose} />
             <h2 className="pt-0.5 text-2xl font-medium text-gray-600">Quotation Details</h2>
-          </div>
+          </header>
 
           <div className="flex flex-col gap-6">
             <section className="flex flex-col gap-3">
-              <h3 className="text-base font-medium text-rose-600">Quotation Details</h3>
-              <div className="flex flex-col gap-4 rounded-xl border border-rose-50 bg-neutral-50 p-3">
+              <h3 className="text-base font-normal text-zinc-950/60">Quotation Details</h3>
+              <div className="flex flex-col gap-4 rounded-xl border border-rose-50 bg-[#FFFAFB] p-3 outline outline-1 outline-offset-[-1px] outline-[#FFE7EB]">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-orange-600 text-white">
-                    <FilePenLine size={19} />
-                  </div>
+                  <LordIcon
+                    src="file-text"
+                    size={22}
+                    colors="primary:#de1641,secondary:#de1641"
+                    className="shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-base font-medium text-gray-600">
                       {quotation.item.quotation_code}
@@ -134,14 +150,18 @@ export function QuotationDetailsDialog({
                       {quotation.item.account_name}
                     </div>
                   </div>
-                  <span className={`ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusStyle(quotation.item.status)}`}>
-                    <span className="size-1.5 rounded-full bg-current" />
+                  <Badge variant={statusVariant(quotation.item.status)} showDot>
                     {statusLabel(quotation.item.status)}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="h-px w-full bg-zinc-950/20" />
-                <div className="flex items-start gap-2">
-                  <HandCoins size={20} className="mt-0.5 shrink-0 text-zinc-950/60" />
+                <div className="flex items-center gap-2">
+                  <LordIcon
+                    src="hand-dollar"
+                    size={20}
+                    colors="primary:#de1641,secondary:#de1641"
+                    className="shrink-0"
+                  />
                   <div className="text-base font-medium text-gray-600">
                     Amount: <span className="text-rose-600">{money(amount)}</span>
                   </div>
@@ -150,10 +170,15 @@ export function QuotationDetailsDialog({
             </section>
 
             <section className="flex flex-col gap-3">
-              <h3 className="text-base font-medium text-rose-600">PIC Name</h3>
-              <div className="flex items-center gap-4 overflow-hidden rounded-xl border border-rose-50 bg-neutral-50 p-3">
+              <h3 className="text-base font-normal text-zinc-950/60">PIC Name</h3>
+              <div className="flex items-center gap-4 overflow-hidden rounded-xl border border-rose-50 bg-[#FFFAFB] p-3 outline outline-1 outline-offset-[-1px] outline-[#FFE7EB]">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <UserRound size={20} className="shrink-0 text-rose-600" />
+                  <LordIcon
+                    src="avatar-circle"
+                    size={20}
+                    colors="primary:#de1641,secondary:#de1641"
+                    className="shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-base font-medium text-gray-600">
                       {quotation.item.pic_name}
@@ -167,24 +192,25 @@ export function QuotationDetailsDialog({
             </section>
 
             <section className="flex flex-col gap-3">
-              <div className="flex items-start gap-2">
-                <BookOpen size={20} className="text-rose-600" />
-                <h3 className="text-base font-medium text-rose-600">Requested Course</h3>
-              </div>
+              <h3 className="text-base font-normal text-zinc-950/60">Requested Course</h3>
               <div className="flex flex-col gap-3">
                 {quotation.lines.map((line) => (
                   <div
                     key={line.course_id}
-                    className="flex items-center gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3"
+                    className="flex items-center gap-3 rounded-xl border border-rose-50 bg-[#FFFAFB] p-3 outline outline-1 outline-offset-[-1px] outline-[#FFE7EB]"
                   >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-orange-600 text-white">
-                      <BookOpen size={19} />
-                    </div>
+                    <LordIcon
+                      src="book"
+                      size={20}
+                      colors="primary:#de1641,secondary:#de1641"
+                      className="shrink-0"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-gray-600">{line.course_name}</div>
                       <div className="mt-1 flex items-center gap-1 text-xs font-medium text-rose-600">
-                        <Users size={14} className="text-gray-600" />
-                        {line.amount_student} Students
+                        {isPublic
+                          ? `${Math.max(1, Math.ceil(line.duration_minutes / 480))} Day(s)`
+                          : `${line.amount_student} Students`}
                       </div>
                     </div>
                   </div>
@@ -193,22 +219,27 @@ export function QuotationDetailsDialog({
             </section>
 
             <section className="flex flex-col gap-3">
-              <h3 className="text-base font-medium text-rose-600">Template Email</h3>
+              <h3 className="text-base font-normal text-zinc-950/60">Template Email</h3>
               <div className="flex flex-col gap-2 rounded-3xl border border-blue-500 bg-blue-500/20 px-3 py-2.5">
-                <div className="flex items-center gap-1 text-sm font-medium text-blue-500">
-                  <Info size={20} />
+                <div className="flex items-center gap-1.5 text-sm font-medium text-blue-700">
+                  <LordIcon
+                    src="info"
+                    size={18}
+                    colors="primary:#2563eb,secondary:#3b82f6"
+                    className="shrink-0"
+                  />
                   Quotation Email Template
                 </div>
-                <p className="text-sm text-slate-900/40">
+                <p className="text-sm text-slate-900/60">
                   The email template is the one that will be sent to the client for a quotation.
                 </p>
                 <button
                   type="button"
                   disabled={!latestDocument}
-                  className="flex items-center gap-1 self-start text-sm font-medium text-blue-500 underline disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-1 self-start text-sm font-medium text-blue-600 hover:text-blue-800 underline disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
                   onClick={() => latestDocument && onOpenDocument(quotation.item.id, latestDocument.version)}
                 >
-                  View Email Template <ExternalLink size={16} />
+                  View Email Template ↗
                 </button>
               </div>
             </section>
@@ -222,21 +253,21 @@ export function QuotationDetailsDialog({
             </Button>
           )}
           <div className="flex gap-3">
-          <Button
-            variant="danger"
-            leftIcon={<Trash2 size={18} />}
-            className="min-w-0 flex-1 whitespace-nowrap"
-            onClick={() => onDelete(quotation.item)}
-          >
-            Delete Quotation
-          </Button>
-          <Button
-            leftIcon={<Pencil size={18} />}
-            className="min-w-0 flex-1 whitespace-nowrap"
-            onClick={() => onEdit(quotation.item)}
-          >
-            Edit Quotation
-          </Button>
+            <Button
+              variant="danger"
+              leftIcon="trash"
+              className="min-w-0 flex-1 whitespace-nowrap"
+              onClick={() => onDelete(quotation.item)}
+            >
+              Delete Quotation
+            </Button>
+            <Button
+              leftIcon="pencil-line"
+              className="min-w-0 flex-1 whitespace-nowrap"
+              onClick={() => onEdit(quotation.item)}
+            >
+              Edit Quotation
+            </Button>
           </div>
         </div>
       </aside>

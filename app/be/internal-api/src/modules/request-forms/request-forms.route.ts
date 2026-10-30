@@ -118,11 +118,26 @@ async function approvedQuotation(quotationId: string, salesSubject: string, acto
     { model: Account, as: "account", where: { status: "ACTIVE", account_type: "CORPORATE" }, required: true, include: [{ model: SalesAccountAssignment, as: "salesAssignments", where: { sales_subject: salesSubject, ended_at: null }, required: true }] },
   ] });
   if (!quote) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
-  const pic = quote.pic_profile_id ? await studentPicClient.get(actor, quote.pic_profile_id) : null;
-  if (!pic || pic.status !== "ACTIVE" || !pic.assignments.some((assignment) => assignment.account_id === quote.account_id && !assignment.ended_at)) throw new AppError(400, "Only an active Approved Quotation assigned to you can be selected");
+  const pic = quote.pic_profile_id ? await studentPicClient.get(actor, quote.pic_profile_id).catch(() => null) : null;
+  if (pic && pic.status === "INACTIVE") throw new AppError(400, "The PIC assigned to this Quotation is inactive");
   const lines = await QuotationOrder.findAll({ where: { quotation_id: quotationId }, include: [{ model: Course, as: "course", attributes: ["name", "duration_minutes"], required: true }] });
   if (!lines.length) throw new AppError(409, "The approved Quotation has no Course details");
-  return { quote, lines: lines.map((line) => ({ course_id: line.course_id, amount_student: line.amount_student, class_type: line.class_type, course_name: (line.get("course") as Course).name, duration_minutes: (line.get("course") as Course).duration_minutes })) };
+  const account = quote.get("account") as Account | null;
+  return {
+    quote: {
+      ...quote.toJSON(),
+      account_name: account?.name ?? "",
+      pic_name: pic?.name ?? "",
+      pic_email: pic?.email ?? "",
+    },
+    lines: lines.map((line) => ({
+      course_id: line.course_id,
+      amount_student: line.amount_student,
+      class_type: line.class_type,
+      course_name: (line.get("course") as Course).name,
+      duration_minutes: (line.get("course") as Course).duration_minutes,
+    })),
+  };
 }
 
 async function validateCourses(courses: CourseInput[], allowInactive = false) {
@@ -297,15 +312,16 @@ requestFormsRouter.get("/options", authorizeCapability("REQUEST_FORM", ACCESS_AC
   ]);
   const allowedTypes = formType === "REGISTRATION" ? ["PUBLIC", "ONLINE_PUBLIC"] : ["PRIVATE", "INHOUSE", "ONLINE_PRIVATE"];
   const quotations = allQuotations.filter((quotation) => allowedTypes.includes(quotation.class_type));
-  const pics = quotations.length ? (await studentPicClient.list(req.auth!, { profileIds: [...new Set(quotations.map((quotation) => quotation.pic_profile_id).filter((id): id is string => Boolean(id)))], status: "ACTIVE" })).items : [];
+  const picProfileIds = [...new Set(quotations.map((quotation) => quotation.pic_profile_id).filter((id): id is string => Boolean(id)))];
+  const pics = picProfileIds.length ? (await studentPicClient.list(req.auth!, { profileIds: picProfileIds, status: "ALL" }).catch(() => ({ items: [] }))).items : [];
   return res.json({ accounts, courses, quotations: quotations.map((quotation) => ({ id: quotation.id, quotation_code: quotation.quotation_code, class_type: quotation.class_type, account_name: (quotation.get("account") as Account).name, pic_name: pics.find((pic) => pic.id === quotation.pic_profile_id)?.name ?? null })) });
 }));
 
 requestFormsRouter.get("/accounts/:accountId/pics", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
   const account = await Account.findOne({ where: { id: req.params.accountId, status: "ACTIVE" }, include: [{ model: SalesAccountAssignment, as: "salesAssignments", attributes: [], where: { sales_subject: req.auth!.userId, ended_at: null }, required: true }] });
   if (!account) throw new AppError(404, "Account not found");
-  const items = (await studentPicClient.list(req.auth!, { accountId: req.params.accountId, status: "ACTIVE" })).items
-    .filter((pic) => pic.assignments.some((assignment) => !assignment.ended_at))
+  const items = (await studentPicClient.list(req.auth!, { accountId: req.params.accountId })).items
+    .filter((pic) => pic.status !== "INACTIVE" && pic.assignments.some((assignment) => !assignment.ended_at))
     .map(({ id, name, email }) => ({ id, name, email }));
   return res.json({ items });
 }));

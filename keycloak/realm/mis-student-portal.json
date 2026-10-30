@@ -103,6 +103,7 @@
     {
       "clientId": "mis-account-provisioner",
       "name": "MIS Account Provisioner Service",
+      "secret": "OmA9oPUjF2Pz3B2RxOUUkVtLpIyC1uONKO6iv5Vn4u3VeRyQUNiLlAnbo213FO6C914els1779mkaBaRh9rYlX",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -110,12 +111,13 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "fullScopeAllowed": false,
+      "fullScopeAllowed": true,
       "protocolMappers": []
     },
     {
       "clientId": "mis-audit-reader",
       "name": "MIS Keycloak Audit Reader",
+      "secret": "3vYFsSoSUnnjDJqn2QKkHER1EMTSPBgmKu5OXVcspdkn06ZmnQpfo0xCQbOypTjQoLHgZ8t8OLuyCzSqg5qTJL",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -123,7 +125,7 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "fullScopeAllowed": false,
+      "fullScopeAllowed": true,
       "protocolMappers": []
     }
   ]

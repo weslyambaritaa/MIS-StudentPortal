@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { X } from "lucide-react";
 import { Button } from "@mis/ui/button";
 import { Dropdown } from "@mis/ui/dropdown";
 import { IconButton } from "@mis/ui/icon-button";
@@ -34,12 +33,15 @@ export function IndustryDialog({
       <form role="dialog" aria-modal="true" aria-labelledby="industry-dialog-title" onSubmit={submit} className="w-full max-w-md rounded-3xl border border-rose-50 bg-white p-5 shadow-xl">
         <header className="mb-6 flex items-start justify-between gap-4">
           <h2 id="industry-dialog-title" className="text-2xl font-medium text-gray-600">{value?.id ? "Edit Industry" : "Add Industry"}</h2>
-          <IconButton label="Close" icon={<X size={18} />} onClick={onClose} disabled={busy} />
+          <IconButton label="Close" size="sm" icon="cross" onClick={onClose} disabled={busy} />
         </header>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-600">Industry Code</label>
-          <input value={value?.industry_code ?? "Generated automatically"} readOnly className="mt-1 h-9 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-sm text-slate-500 outline-none" />
-        </div>
+        <Input
+          label="Industry Code"
+          value={value?.industry_code ?? "Generated automatically"}
+          readOnly
+          disabled
+          containerClassName="mb-4"
+        />
         <Input
           label="Industry Name"
           autoFocus
@@ -52,6 +54,7 @@ export function IndustryDialog({
         />
         <Dropdown
           label="Status"
+          required
           value={status}
           onChange={(val) => setStatus(val as "ACTIVE" | "INACTIVE")}
           options={[
@@ -62,7 +65,7 @@ export function IndustryDialog({
         />
         <footer className="flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : value?.id ? "Save Changes" : "Add Industry"}</Button>
+          <Button type="submit" disabled={busy || !name.trim()} leftIcon={value?.id ? "pencil-line" : "plus"}>{busy ? "Saving…" : value?.id ? "Save Changes" : "Add Industry"}</Button>
         </footer>
       </form>
     </div>

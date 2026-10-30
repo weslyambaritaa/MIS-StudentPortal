@@ -34,7 +34,7 @@ const itemShape = async (profile: PicProfile) => ({
 });
 
 picDomainRouter.get("/", asyncHandler(async (req, res) => {
-  const schema = Joi.object({ id: uuid.optional(), profileIds: Joi.string().max(20000).optional(), accountId: uuid.optional(), accountIds: Joi.string().max(20000).optional(), status: statusSchema.optional(), search: Joi.string().max(150).allow("").optional() }).unknown(false);
+  const schema = Joi.object({ id: uuid.optional(), profileIds: Joi.string().max(20000).allow("").optional(), accountId: uuid.optional(), accountIds: Joi.string().max(20000).allow("").optional(), status: statusSchema.optional(), search: Joi.string().max(150).allow("").optional() }).unknown(false);
   const { error, value } = schema.validate(req.query);
   if (error) throw new AppError(400, "Invalid PIC search filters");
   const accountIds = value.accountIds ? String(value.accountIds).split(",").filter(Boolean) : [];
