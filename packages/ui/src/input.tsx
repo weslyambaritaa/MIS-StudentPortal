@@ -13,11 +13,18 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
   /** Dynamic right icon: can be a LordIcon name shorthand or any ReactNode */
   rightIcon?: ReactNode | LordIconName | (string & {});
 
+  /** Optional action for the right icon, such as opening a native picker. */
+  onRightIconClick?: () => void;
+  rightIconActionLabel?: string;
+
   /** Custom classes for the outer label wrapper */
   containerClassName?: string;
 
   /** Size variant */
   size?: "sm" | "default" | "lg";
+
+  /** Hide the browser's built-in calendar glyph while keeping the date input usable. */
+  hideNativeDateIcon?: boolean;
 };
 
 function renderInputLabel(label: ReactNode, required?: boolean) {
@@ -55,9 +62,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     label,
     leftIcon,
     rightIcon,
+    onRightIconClick,
+    rightIconActionLabel = "Open picker",
     className = "",
     containerClassName = "",
     size = "default",
+    hideNativeDateIcon = false,
     disabled,
     ...props
   },
@@ -119,11 +129,25 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           disabled={disabled}
-          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950/40 placeholder:transition-all group-hover/input:placeholder:text-rose-600 disabled:cursor-not-allowed"
+          className={`min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950/40 placeholder:transition-all group-hover/input:placeholder:text-rose-600 disabled:cursor-not-allowed ${hideNativeDateIcon ? "[&::-webkit-calendar-picker-indicator]:opacity-0" : ""}`}
           {...props}
         />
 
-        {renderIcon(rightIcon, "right")}
+        {onRightIconClick && rightIcon ? (
+          <button
+            type="button"
+            aria-label={rightIconActionLabel}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onRightIconClick();
+            }}
+            disabled={disabled}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 disabled:cursor-not-allowed"
+          >
+            {renderIcon(rightIcon, "right")}
+          </button>
+        ) : renderIcon(rightIcon, "right")}
       </div>
     </label>
   );

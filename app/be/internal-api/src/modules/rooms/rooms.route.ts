@@ -3,11 +3,14 @@ import { Op, QueryTypes } from "sequelize";
 import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { sequelize } from "../../database/sequelize";
-import { BookingRoom, Participant, Room, Training, TrainingSession } from "../../database/models";
+import { BookingRoom, Participant, RequestForm, Room, RoomReservation, Training, TrainingSession } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
+import { AppError } from "../../errors/app-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
+import Joi from "joi";
+import { validateBody } from "../../utils/joi-validation";
 
 export const roomsRouter = Router();
 
@@ -40,6 +43,43 @@ function roomJson(room: Room) {
   return { ...item, facilities: parseFacilities(room.facilities) };
 }
 function codeFor(value: string | number | bigint) { return `TR-${String(value).padStart(2, "0")}`; }
+const validDate = (value: unknown): value is string => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+};
+const validTime = (value: unknown): value is string => typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+function minutesToTime(value: number) { return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}:00`; }
+async function findRoomConflicts(roomId: string, date: string, startTime: string, endTime: string, transaction?: Awaited<ReturnType<typeof sequelize.transaction>>) {
+  const startAt = new Date(`${date}T${startTime.slice(0, 5)}+07:00`);
+  const endAt = new Date(`${date}T${endTime.slice(0, 5)}+07:00`);
+  const [trainingBookings, independentBookings] = await Promise.all([
+    BookingRoom.findAll({
+      where: { room_id: roomId },
+      include: [{ model: TrainingSession, as: "session", where: { starts_at: { [Op.lt]: endAt }, ends_at: { [Op.gt]: startAt } }, required: true,
+        include: [{ model: Training, as: "training", where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, required: true, attributes: ["id", "name", "request_form_id"] }] }],
+      ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}),
+    }),
+    RoomReservation.findAll({ where: { room_id: roomId, booking_date: date, status: "BOOKED", start_time: { [Op.lt]: endTime }, end_time: { [Op.gt]: startTime } }, ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }),
+  ]);
+  const matchedTrainingBookings = trainingBookings;
+  const trainingIds = matchedTrainingBookings.map((booking) => (booking.get("session") as TrainingSession).training_id);
+  const trainings = trainingIds.length ? await Training.findAll({ where: { id: { [Op.in]: trainingIds } }, attributes: ["id", "name", "request_form_id"], transaction }) : [];
+  const requestFormIds = trainings.map((training) => training.request_form_id);
+  const forms = requestFormIds.length ? await RequestForm.findAll({ where: { id: { [Op.in]: requestFormIds } }, attributes: ["id", "request_form_number"], transaction }) : [];
+  const trainingConflicts = matchedTrainingBookings.map((booking) => {
+    const session = booking.get("session") as TrainingSession;
+    const training = trainings.find((item) => item.id === session.training_id);
+    const form = forms.find((item) => item.id === training?.request_form_id);
+    const starts = new Date(session.starts_at.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(11, 16);
+    const ends = new Date(session.ends_at.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(11, 16);
+    return { kind: "TRAINING" as const, className: training?.name ?? "Training", classCode: form?.request_form_number ?? null, startTime: starts, endTime: ends };
+  });
+  const reservationConflicts = independentBookings.map((booking) => ({ kind: "ROOM_BOOKING" as const, className: booking.reason === "OTHERS" ? booking.reason_detail ?? "Other booking" : booking.reason, classCode: null, startTime: booking.start_time.slice(0, 5), endTime: booking.end_time.slice(0, 5) }));
+  return [...trainingConflicts, ...reservationConflicts];
+}
 async function nextRoomCode(transaction: Awaited<ReturnType<typeof sequelize.transaction>>) {
   const [row] = await sequelize.query<{ value: number | string | bigint }>("SELECT nextval('room_code_seq') AS value", { type: QueryTypes.SELECT, transaction });
   return codeFor(row.value);
@@ -50,6 +90,65 @@ roomsRouter.get("/eligible", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
   if (!participantCount) return res.status(400).json({ message: "participantCount must be a positive integer" });
   const rooms = await Room.findAll({ where: { status: "ACTIVE" }, order: [["capacity", "ASC"], ["name", "ASC"]] });
   return res.json({ items: rooms.filter((room) => Number(room.capacity) >= participantCount).map(roomJson) });
+}));
+
+roomsRouter.get("/availability", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("ROOM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
+  const { date, startTime, endTime, roomId } = req.query;
+  if (!validDate(date) || !validTime(startTime) || !validTime(endTime) || endTime <= startTime || typeof roomId !== "string") return res.status(400).json({ message: "Choose a valid date, room, and time range." });
+  const room = await Room.findOne({ where: { id: roomId, status: "ACTIVE" } });
+  if (!room) return res.status(404).json({ message: "Training Room not found or inactive." });
+  const conflicts = await findRoomConflicts(roomId, date, `${startTime}:00`, `${endTime}:00`);
+  return res.json({ available: conflicts.length === 0, room: roomJson(room), date, startTime, endTime, conflicts });
+}));
+
+roomsRouter.get("/bookings", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("ROOM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
+  const page = pageNumber(req.query.page, 1, 100_000);
+  const pageSize = pageNumber(req.query.pageSize, 8, 100);
+  const reason = req.query.reason;
+  const search = req.query.search;
+  const date = req.query.date;
+  if (!page || !pageSize || (reason !== undefined && reason !== "ALL" && !["MEETING", "EVENTS", "WORKSHOP", "OTHERS"].includes(String(reason))) || (search !== undefined && (typeof search !== "string" || search.length > 150)) || (date !== undefined && !validDate(date))) return res.status(400).json({ message: "Invalid room booking filters." });
+  const reasonFilter = typeof reason === "string" && ["MEETING", "EVENTS", "WORKSHOP", "OTHERS"].includes(reason) ? reason as "MEETING" | "EVENTS" | "WORKSHOP" | "OTHERS" : "ALL";
+  const searchText = typeof search === "string" ? search : "";
+  const searchPattern = searchText ? `%${searchText.replace(/[\\%_]/g, "\\$&")}%` : undefined;
+  const where = { status: "BOOKED", ...(typeof date === "string" ? { booking_date: date } : {}), ...(reasonFilter !== "ALL" ? { reason: reasonFilter } : {}), ...(searchPattern ? { [Op.or]: [{ detail_booking: { [Op.iLike]: searchPattern } }, { "$room.name$": { [Op.iLike]: searchPattern } }, { "$room.room_code$": { [Op.iLike]: searchPattern } }] } : {}) };
+  const { rows, count } = await RoomReservation.findAndCountAll({ where, include: [{ model: Room, as: "room", attributes: ["name", "room_code"], required: true }], distinct: true, order: [["booking_date", "DESC"], ["start_time", "ASC"]], limit: pageSize, offset: (page - 1) * pageSize });
+  return res.json({ items: rows.map((booking) => ({ ...booking.toJSON(), room: (booking.get("room") as Room).toJSON() })), page, pageSize, total: count });
+}));
+
+roomsRouter.post("/bookings", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("ROOM", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
+  const schema = Joi.object({
+    roomId: Joi.string().guid({ version: ["uuidv4", "uuidv5"] }).required(),
+    date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+    startTime: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/).required(),
+    durationMinutes: Joi.number().integer().min(15).max(720).required(),
+    reason: Joi.string().valid("MEETING", "EVENTS", "WORKSHOP", "OTHERS").required(),
+    reasonDetail: Joi.string().max(255).allow("").default(""),
+    detailBooking: Joi.string().trim().min(1).max(1000).required(),
+  }).custom((value, helpers) => {
+    const [year, month, day] = value.date.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return helpers.error("any.invalid");
+    if (value.reason === "OTHERS" && !value.reasonDetail.trim()) return helpers.error("any.invalid");
+    if (toMinutes(value.startTime) + value.durationMinutes >= 24 * 60) return helpers.error("any.invalid");
+    return value;
+  }).messages({ "any.invalid": "Check the date, booking duration, and reason details." });
+  const value = validateBody<{ roomId: string; date: string; startTime: string; durationMinutes: number; reason: "MEETING" | "EVENTS" | "WORKSHOP" | "OTHERS"; reasonDetail: string; detailBooking: string }>(schema, req.body);
+  const endTime = minutesToTime(toMinutes(value.startTime) + value.durationMinutes);
+  const transaction = await sequelize.transaction();
+  try {
+    const room = await Room.findByPk(value.roomId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!room || room.status !== "ACTIVE") throw new AppError(409, "This Training Room is no longer available.");
+    const conflicts = await findRoomConflicts(room.id, value.date, `${value.startTime}:00`, endTime, transaction);
+    if (conflicts.length) {
+      const conflict = conflicts[0];
+      throw new AppError(409, `This room conflicts with ${conflict.classCode ? `${conflict.classCode} (${conflict.className})` : conflict.className} on ${value.date}, ${conflict.startTime}-${conflict.endTime}.`);
+    }
+    const booking = await RoomReservation.create({ id: randomUUID(), room_id: room.id, booking_date: value.date, start_time: `${value.startTime}:00`, end_time: endTime, reason: value.reason, reason_detail: value.reason === "OTHERS" ? value.reasonDetail.trim() : null, detail_booking: value.detailBooking.trim(), status: "BOOKED", created_by_subject: req.auth!.userId }, { transaction });
+    await appendRequestAuditTrail(req, { action: "CREATE", objectType: "ROOM_RESERVATION", objectId: booking.id, after: { room_id: room.id, room_name: room.name, booking_date: value.date, start_time: booking.start_time, end_time: booking.end_time, reason: booking.reason, reason_detail: booking.reason_detail, detail_booking: booking.detail_booking }, processName: "room-reservation-create" }, transaction);
+    await transaction.commit();
+    return res.status(201).json({ item: booking });
+  } catch (error) { await transaction.rollback(); throw error; }
 }));
 
 roomsRouter.get("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("ROOM", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {

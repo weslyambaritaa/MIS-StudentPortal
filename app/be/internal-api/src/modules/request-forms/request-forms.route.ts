@@ -5,7 +5,7 @@ import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES, type ActiveRoleAuthContext } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerBooking, TrainerProfile } from "../../database/models";
+import { Account, Attendance, BookingRoom, Certificate, Course, Evaluation, Industry, InvoiceDetail, Participant, Quotation, QuotationOrder, RequestForm, RequestFormAttachment, RequestFormCourse, RequestFormNumberSequence, RequestFormSession, Room, RoomReservation, SalesAccountAssignment, SessionTrainerAssignment, StudentMasterProfile, Training, TrainingSession, TrainingTrainerAssignment, TrainerBooking, TrainerProfile } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -34,7 +34,12 @@ type RequestFormRow = { id: string; request_form_number: string; quotation_id: s
 const pageNumber = (value: unknown, fallback: number, max: number) => value === undefined ? fallback : typeof value === "string" && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max ? Number(value) : null;
 const escapeLike = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
-const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+const validDate = (value: unknown): value is string => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
 
 async function nextRequestFormNumber(transaction: Transaction) {
   const year = Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date()));
@@ -168,30 +173,88 @@ async function readForm(id: string, actor: ActiveRoleAuthContext, subject?: stri
 async function sessionsOnDates(dates: string[], transaction?: Transaction) {
   if (!dates.length) return [];
   const sorted = [...dates].sort();
-  const start = new Date(`${sorted[0]}T00:00:00.000Z`);
-  const end = new Date(`${sorted[sorted.length - 1]}T23:59:59.999Z`);
+  const start = new Date(`${sorted[0]}T00:00:00+07:00`);
+  const end = new Date(`${sorted[sorted.length - 1]}T23:59:59.999+07:00`);
   const candidates = await TrainingSession.findAll({ where: { starts_at: { [Op.gte]: start, [Op.lte]: end } }, include: [{ model: Training, as: "training", where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, attributes: ["id"], required: true }], ...(transaction ? { transaction } : {}) });
   const wanted = new Set(dates);
-  return candidates.filter((session) => wanted.has(new Date(session.starts_at).toISOString().slice(0, 10)));
+  return candidates.filter((session) => wanted.has(localDateTimeParts(new Date(session.starts_at)).date));
 }
 
-async function unavailableTrainerIds(dates: string[], transaction?: Transaction) {
+function localDateTimeParts(value: Date) {
+  const local = new Date(value.getTime() + 7 * 60 * 60 * 1000).toISOString();
+  return { date: local.slice(0, 10), time: local.slice(11, 16) };
+}
+function sessionTimeForDate(session: TrainingSession, date: string) {
+  const startsAt = localDateTimeParts(new Date(session.starts_at));
+  const endsAt = localDateTimeParts(new Date(session.ends_at));
+  const day = startsAt.date;
+  if (day !== date) return null;
+  return { start: startsAt.time, end: endsAt.time };
+}
+async function trainingLabels(trainingIds: string[], transaction?: Transaction) {
+  if (!trainingIds.length) return new Map<string, { name: string; code: string }>();
+  const trainings = await Training.findAll({ where: { id: { [Op.in]: trainingIds } }, attributes: ["id", "name", "request_form_id"], ...(transaction ? { transaction } : {}) });
+  const forms = await RequestForm.findAll({ where: { id: { [Op.in]: trainings.map((training) => training.request_form_id) } }, attributes: ["id", "request_form_number"], ...(transaction ? { transaction } : {}) });
+  return new Map(trainings.map((training) => [training.id, { name: training.name, code: forms.find((form) => form.id === training.request_form_id)?.request_form_number ?? "Training" }]));
+}
+
+async function trainerScheduleConflicts(trainerId: string, dates: string[], startTime: string, endTime: string, transaction?: Transaction) {
   const sessions = await sessionsOnDates(dates, transaction);
-  if (!sessions.length) return new Set<string>();
-  const trainingIds = [...new Set(sessions.map((session) => session.training_id))];
-  const sessionIds = sessions.map((session) => session.id);
-  const [trainingAssignments, sessionAssignments] = await Promise.all([
-    TrainingTrainerAssignment.findAll({ where: { training_id: { [Op.in]: trainingIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
-    SessionTrainerAssignment.findAll({ where: { session_id: { [Op.in]: sessionIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
+  const matching = sessions.filter((session) => {
+    const date = localDateTimeParts(new Date(session.starts_at)).date;
+    const time = sessionTimeForDate(session, date);
+    const requestStart = new Date(`${date}T${startTime}:00+07:00`).getTime();
+    const requestEnd = new Date(`${date}T${endTime}:00+07:00`).getTime();
+    return dates.includes(date) && time && new Date(session.starts_at).getTime() < requestEnd && new Date(session.ends_at).getTime() > requestStart;
+  });
+  const trainingIds = [...new Set(matching.map((session) => session.training_id))];
+  const sessionIds = matching.map((session) => session.id);
+  const [trainingAssignments, sessionAssignments, standaloneBookings] = await Promise.all([
+    trainingIds.length ? TrainingTrainerAssignment.findAll({ where: { trainer_profile_id: trainerId, training_id: { [Op.in]: trainingIds }, ended_at: null }, attributes: ["training_id"], ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }) : Promise.resolve([]),
+    sessionIds.length ? SessionTrainerAssignment.findAll({ where: { trainer_profile_id: trainerId, session_id: { [Op.in]: sessionIds }, ended_at: null }, attributes: ["session_id"], ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }) : Promise.resolve([]),
+    TrainerBooking.findAll({ where: { trainer_profile_id: trainerId, booking_date: { [Op.in]: dates }, status: "BOOKED" }, attributes: ["id", "booking_date", "reason", "detail_booking"], ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }),
   ]);
-  return new Set([...trainingAssignments, ...sessionAssignments].map((assignment) => assignment.trainer_profile_id));
+  const assignedTrainingIds = new Set(trainingAssignments.map((assignment) => assignment.training_id));
+  const assignedSessionIds = new Set(sessionAssignments.map((assignment) => assignment.session_id));
+  const conflictingSessions = matching.filter((session) => assignedTrainingIds.has(session.training_id) || assignedSessionIds.has(session.id));
+  const labels = await trainingLabels([...new Set(conflictingSessions.map((session) => session.training_id))], transaction);
+  return {
+    classes: conflictingSessions.map((session) => { const label = labels.get(session.training_id); return { name: label?.name ?? "Training", code: label?.code ?? "Training", date: localDateTimeParts(new Date(session.starts_at)).date, startTime: localDateTimeParts(new Date(session.starts_at)).time, endTime: localDateTimeParts(new Date(session.ends_at)).time }; }),
+    bookings: standaloneBookings.map((booking) => ({ date: String(booking.booking_date).slice(0, 10), reason: booking.reason === "OTHERS" ? booking.detail_booking : booking.reason, detail: booking.detail_booking })),
+  };
 }
 
-async function unavailableRoomIds(dates: string[]) {
-  const sessions = await sessionsOnDates(dates);
-  if (!sessions.length) return new Set<string>();
-  const bookings = await BookingRoom.findAll({ where: { session_id: { [Op.in]: sessions.map((session) => session.id) } }, attributes: ["room_id"] });
-  return new Set(bookings.map((booking) => booking.room_id));
+async function roomScheduleConflicts(roomId: string, dates: string[], startTime: string, endTime: string, transaction?: Transaction) {
+  const sessions = await sessionsOnDates(dates, transaction);
+  const sessionIds = sessions.map((session) => session.id);
+  const sessionById = new Map(sessions.map((session) => [session.id, session]));
+  const [roomBookings, reservations] = await Promise.all([
+    sessionIds.length ? BookingRoom.findAll({ where: { room_id: roomId, session_id: { [Op.in]: sessionIds } }, attributes: ["session_id", "start_time", "end_time"], ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }) : Promise.resolve([]),
+    RoomReservation.findAll({ where: { room_id: roomId, booking_date: { [Op.in]: dates }, status: "BOOKED", start_time: { [Op.lt]: `${endTime}:00` }, end_time: { [Op.gt]: `${startTime}:00` } }, ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}) }),
+  ]);
+  const conflictingBookings = roomBookings.filter((booking) => {
+    const session = sessionById.get(booking.session_id);
+    const date = session ? localDateTimeParts(new Date(session.starts_at)).date : "";
+    if (!session || !date || !dates.includes(date)) return false;
+    const requestStart = new Date(`${date}T${startTime}:00+07:00`).getTime();
+    const requestEnd = new Date(`${date}T${endTime}:00+07:00`).getTime();
+    return new Date(session.starts_at).getTime() < requestEnd && new Date(session.ends_at).getTime() > requestStart;
+  });
+  const conflictingSessions = conflictingBookings.map((booking) => sessionById.get(booking.session_id)).filter((session): session is TrainingSession => Boolean(session));
+  const labels = await trainingLabels([...new Set(conflictingSessions.map((session) => session.training_id))], transaction);
+  return {
+    classes: conflictingSessions.map((session) => { const label = labels.get(session.training_id); return { name: label?.name ?? "Training", code: label?.code ?? "Training", date: localDateTimeParts(new Date(session.starts_at)).date, startTime: localDateTimeParts(new Date(session.starts_at)).time, endTime: localDateTimeParts(new Date(session.ends_at)).time }; }),
+    bookings: reservations.map((booking) => ({ date: String(booking.booking_date).slice(0, 10), reason: booking.reason === "OTHERS" ? booking.reason_detail ?? "Other booking" : booking.reason, detail: booking.detail_booking, startTime: booking.start_time.slice(0, 5), endTime: booking.end_time.slice(0, 5) })),
+  };
+}
+
+type ScheduleConflictSet = { classes: Array<{ name?: string; code?: string; date: string; startTime: string; endTime: string }>; bookings: Array<{ date: string; startTime?: string; endTime?: string }> };
+function conflictMessage(resource: "Trainer" | "Room", conflicts: ScheduleConflictSet) {
+  const classConflict = conflicts.classes[0];
+  if (classConflict) return `${resource} conflicts with ${classConflict.code} (${classConflict.name}) on ${classConflict.date}, ${classConflict.startTime}-${classConflict.endTime}.`;
+  const booking = conflicts.bookings[0];
+  if (booking) return `${resource} has a standalone booking on ${booking.date}${"startTime" in booking ? `, ${booking.startTime}-${booking.endTime}` : ""}.`;
+  return `${resource} is unavailable for the selected schedule.`;
 }
 
 async function saveCourses(requestFormId: string, courses: CourseInput[], transaction: Transaction) {
@@ -509,13 +572,44 @@ requestFormReviewRouter.put("/trainings/:id/participants", authorizeCapability("
   if (!Array.isArray(ids) || ids.some((id: unknown) => typeof id !== "string" || !isUuid(id)) || new Set(ids).size !== ids.length) throw new AppError(400, "Select a valid, unique list of Students");
   const transaction = await sequelize.transaction();
   try {
-    const training = await Training.findByPk(req.params.id, { attributes: ["id", "expected_students"], transaction, lock: transaction.LOCK.UPDATE });
+    const training = await Training.findByPk(req.params.id, { attributes: ["id", "name", "request_form_id", "expected_students", "status"], transaction, lock: transaction.LOCK.UPDATE });
     if (!training) throw new AppError(404, "Training not found");
     if (training.expected_students != null && ids.length > training.expected_students) throw new AppError(409, "Participant count cannot exceed the expected student count");
     const profiles = ids.length ? await StudentMasterProfile.findAll({ where: { portal_enabled: true, id: { [Op.in]: ids } }, attributes: ["id", "keycloak_subject", "name"], transaction }) : [];
     if (profiles.length !== ids.length) throw new AppError(400, "One or more Students are inactive or unavailable");
-    const current = await Participant.findAll({ where: { training_id: req.params.id }, attributes: ["id", "student_subject", "student_id"], transaction, lock: transaction.LOCK.UPDATE });
+    const targetSessions = await TrainingSession.findAll({ where: { training_id: training.id }, attributes: ["id", "starts_at", "ends_at"], include: [{ model: BookingRoom, as: "roomBookings", attributes: ["room_id"], include: [{ model: Room, as: "room", attributes: ["id", "name", "capacity"], required: false }], required: false }], transaction });
+    const roomBooking = targetSessions.flatMap((session) => session.get("roomBookings") as BookingRoom[]).find(Boolean);
+    const room = roomBooking?.get("room") as Room | null | undefined;
+    if (room && ids.length > Number(room.capacity)) throw new AppError(409, `Participant count (${ids.length}) exceeds ${room.name} room capacity (${room.capacity}).`);
     const subjects = new Set(profiles.map((profile) => profile.keycloak_subject));
+    if (subjects.size && targetSessions.length && ["SCHEDULED", "ONGOING"].includes(training.status)) {
+      for (const subject of [...subjects].sort()) {
+        await sequelize.query("SELECT pg_advisory_xact_lock(hashtextextended(:subject, 0))", { replacements: { subject }, transaction });
+      }
+      const sessionConflicts = await Promise.all(targetSessions.map(async (targetSession) => {
+        const matches = await TrainingSession.findAll({
+          where: { training_id: { [Op.ne]: training.id }, starts_at: { [Op.lt]: targetSession.ends_at }, ends_at: { [Op.gt]: targetSession.starts_at } },
+          attributes: ["id", "training_id", "starts_at", "ends_at"],
+          include: [{ model: Training, as: "training", attributes: ["id", "name", "request_form_id"], where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, required: true,
+            include: [{ model: Participant, as: "participants", attributes: ["student_subject", "full_name"], where: { student_subject: { [Op.in]: [...subjects] } }, required: true }] }],
+          transaction,
+        });
+        return matches;
+      }));
+      const conflicts = sessionConflicts.flat();
+      if (conflicts.length) {
+        const conflictingTrainingIds = [...new Set(conflicts.map((session) => session.training_id))];
+        const labels = await trainingLabels(conflictingTrainingIds, transaction);
+        const conflict = conflicts[0];
+        const local = localDateTimeParts(new Date(conflict.starts_at));
+        const end = localDateTimeParts(new Date(conflict.ends_at));
+        const label = labels.get(conflict.training_id);
+        const otherTraining = conflict.get("training") as Training & { participants?: Participant[] };
+        const conflictParticipant = (otherTraining.get("participants") as Participant[] | undefined)?.find((participant) => subjects.has(participant.student_subject ?? ""));
+        throw new AppError(409, `${conflictParticipant?.full_name ?? "A selected Student"} is already assigned to ${label?.code ?? "another Training"} (${label?.name ?? otherTraining.name}) on ${local.date}, ${local.time}-${end.time}.`);
+      }
+    }
+    const current = await Participant.findAll({ where: { training_id: req.params.id }, attributes: ["id", "student_subject", "student_id"], transaction, lock: transaction.LOCK.UPDATE });
     const removals = current.filter((participant) => participant.student_subject && !subjects.has(participant.student_subject));
     for (const participant of removals) {
       const [attendance, evaluations, certificates, invoiceDetails] = await Promise.all([
@@ -605,13 +699,11 @@ requestFormReviewRouter.get("/:id/approval-options", authorizeCapability("REQUES
   if (form.item.status !== "WAITING") throw new AppError(409, "Only a Waiting Request Form can be approved");
   if (form.courses.length !== 1) throw new AppError(409, "Approval requires exactly one Course in the Request Form");
   const dates = (form.courses[0].sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
-  const unavailableTrainers = await unavailableTrainerIds(dates);
-  const trainerProfiles = await TrainerProfile.findAll({ where: { status: "ACTIVE", id: { [Op.notIn]: [...unavailableTrainers] } }, attributes: ["id", "name", "email", "status", "rating"], order: [["name", "ASC"]], raw: true });
+  const trainerProfiles = await TrainerProfile.findAll({ where: { status: "ACTIVE" }, attributes: ["id", "name", "email", "status", "rating"], order: [["name", "ASC"]], raw: true });
   const bookings = trainerProfiles.length ? await TrainerBooking.findAll({ where: { trainer_profile_id: { [Op.in]: trainerProfiles.map((trainer) => trainer.id) }, booking_date: { [Op.in]: dates }, status: "BOOKED" }, attributes: ["id", "trainer_profile_id", "booking_date", "reason", "detail_booking"], order: [["booking_date", "ASC"]], raw: true }) : [];
   const trainers = trainerProfiles.map((trainer) => ({ ...trainer, name: trainer.name ?? trainer.email, booking_conflicts: bookings.filter((booking) => booking.trainer_profile_id === trainer.id).map((booking) => ({ id: booking.id, date: String(booking.booking_date).slice(0, 10), reason: booking.reason, detail_booking: booking.detail_booking })) }));
   const needsRoom = form.courses[0].location_type === "INTERNAL";
-  const busyRooms = needsRoom ? await unavailableRoomIds(dates) : new Set<string>();
-  const rooms = needsRoom ? await Room.findAll({ where: { status: "ACTIVE", capacity: { [Op.gte]: Number(form.courses[0].amount_student) }, id: { [Op.notIn]: [...busyRooms] } }, attributes: ["id", "room_code", "name", "capacity", "facilities"], order: [["name", "ASC"]], raw: true }) : [];
+  const rooms = needsRoom ? await Room.findAll({ where: { status: "ACTIVE", capacity: { [Op.gte]: Number(form.courses[0].amount_student) } }, attributes: ["id", "room_code", "name", "capacity", "facilities"], order: [["name", "ASC"]], raw: true }) : [];
   return res.json({ trainers, rooms, roomRequired: needsRoom, sessions: dates });
 }));
 requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
@@ -620,7 +712,6 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const baseFee = Number(req.body?.baseFee);
   const startTime = req.body?.startTime;
   const endTime = req.body?.endTime;
-  const replaceTrainerBookingIds = req.body?.replaceTrainerBookingIds;
   const validTime = (value: unknown): value is string => typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!isUuid(trainerId) || !Number.isFinite(baseFee) || baseFee < 0 || (roomId !== null && !isUuid(roomId)) || !validTime(startTime) || !validTime(endTime) || endTime <= startTime) throw new AppError(400, "Choose a Trainer, valid session times, enter a valid Base Fee, and choose a Room when required");
   const form = await readForm(req.params.id, req.auth!);
@@ -629,48 +720,48 @@ requestFormReviewRouter.patch("/:id/approve", authorizeCapability("REQUEST_FORM"
   const course = form.courses[0];
   const dates = (course.sessions as Array<{ date: string }>).map((session) => String(session.date).slice(0, 10));
   if (!dates.length) throw new AppError(409, "The Request Form has no requested session dates");
-  if (replaceTrainerBookingIds !== undefined && (!Array.isArray(replaceTrainerBookingIds) || replaceTrainerBookingIds.some((id: unknown) => typeof id !== "string" || !isUuid(id)))) throw new AppError(400, "Invalid Trainer booking confirmation.");
-  const unavailableTrainers = await unavailableTrainerIds(dates);
   const selectedTrainer = await TrainerProfile.findOne({ where: { id: trainerId, status: "ACTIVE" }, attributes: ["id"] });
-  if (!selectedTrainer || unavailableTrainers.has(trainerId)) throw new AppError(409, "The selected Trainer is inactive or unavailable on a requested date");
+  if (!selectedTrainer) throw new AppError(409, "The selected Trainer is inactive or unavailable.");
   const needsRoom = course.location_type === "INTERNAL";
   if (needsRoom !== Boolean(roomId)) throw new AppError(400, needsRoom ? "Choose a Room for this internal training location" : "A Room must not be assigned to an external or online training");
   if (roomId) {
-    const [availableRoom, unavailableRooms] = await Promise.all([
-      Room.findOne({ where: { id: roomId, status: "ACTIVE", capacity: { [Op.gte]: Number(course.amount_student) } }, attributes: ["id"] }),
-      unavailableRoomIds(dates),
-    ]);
-    if (!availableRoom || unavailableRooms.has(roomId)) throw new AppError(409, "The selected Room is inactive, too small, or unavailable on a requested date");
+    const availableRoom = await Room.findOne({ where: { id: roomId, status: "ACTIVE", capacity: { [Op.gte]: Number(course.amount_student) } }, attributes: ["id"] });
+    if (!availableRoom) throw new AppError(409, "The selected Room is inactive or too small for the expected participant count.");
+  }
+  for (const date of dates) {
+    const trainerConflicts = await trainerScheduleConflicts(trainerId, [date], startTime, endTime);
+    if (trainerConflicts.classes.length || trainerConflicts.bookings.length) throw new AppError(409, conflictMessage("Trainer", trainerConflicts));
+    if (roomId) {
+      const roomConflicts = await roomScheduleConflicts(roomId, [date], startTime, endTime);
+      if (roomConflicts.classes.length || roomConflicts.bookings.length) throw new AppError(409, conflictMessage("Room", roomConflicts));
+    }
   }
   const trainingId = randomUUID();
   const now = new Date();
   await sequelize.transaction(async (transaction) => {
     const lockedTrainer = await TrainerProfile.findByPk(trainerId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!lockedTrainer || lockedTrainer.status !== "ACTIVE") throw new AppError(409, "The selected Trainer is no longer active.");
-    const unavailableInTraining = await unavailableTrainerIds(dates, transaction);
-    if (unavailableInTraining.has(trainerId)) throw new AppError(409, "The selected Trainer is already assigned to another Training on a requested date.");
-    const conflictingBookings = await TrainerBooking.findAll({ where: { trainer_profile_id: trainerId, booking_date: { [Op.in]: dates }, status: "BOOKED" }, transaction, lock: transaction.LOCK.UPDATE });
-    const actualBookingIds = conflictingBookings.map((booking) => booking.id).sort();
-    const confirmedBookingIds = Array.isArray(replaceTrainerBookingIds) ? [...replaceTrainerBookingIds].sort() : [];
-    if (actualBookingIds.length && (actualBookingIds.length !== confirmedBookingIds.length || actualBookingIds.some((id, index) => id !== confirmedBookingIds[index]))) {
-      throw new AppError(409, "The selected Trainer has a standalone booking on a requested date. Review the conflict warning and approve again to replace it.");
+    const lockedRoom = roomId ? await Room.findByPk(roomId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
+    if (roomId && (!lockedRoom || lockedRoom.status !== "ACTIVE" || Number(lockedRoom.capacity) < Number(course.amount_student))) throw new AppError(409, "The selected Room is no longer active or has insufficient capacity.");
+    for (const date of dates) {
+      const trainerConflicts = await trainerScheduleConflicts(trainerId, [date], startTime, endTime, transaction);
+      if (trainerConflicts.classes.length || trainerConflicts.bookings.length) throw new AppError(409, conflictMessage("Trainer", trainerConflicts));
+      if (roomId) {
+        const roomConflicts = await roomScheduleConflicts(roomId, [date], startTime, endTime, transaction);
+        if (roomConflicts.classes.length || roomConflicts.bookings.length) throw new AppError(409, conflictMessage("Room", roomConflicts));
+      }
     }
-    if (!actualBookingIds.length && confirmedBookingIds.length) throw new AppError(409, "The Trainer booking changed. Refresh the approval options and try again.");
     await Training.create({ id: trainingId, account_id: form.item.account_id, name: String(form.item.training_title ?? "").slice(0, 255), course_id: course.course_id, syllabus_id: null, request_form_id: form.item.id, pic_profile_id: form.item.pic_profile_id, expected_students: Number(course.amount_student), training_type: course.delivery_type, status: "SCHEDULED", base_fee: baseFee }, { transaction });
     const sessionRows: Array<Record<string, unknown>> = [];
     const roomRows: Array<Record<string, unknown>> = [];
     for (let index = 0; index < dates.length; index += 1) {
       const sessionId = randomUUID();
       sessionRows.push({ id: sessionId, training_id: trainingId, session_number: index + 1, starts_at: new Date(`${dates[index]}T${startTime}:00+07:00`), ends_at: new Date(`${dates[index]}T${endTime}:00+07:00`), class_location: course.delivery_type.startsWith("ONLINE") ? "ONLINE" : "OFFLINE" });
-      if (roomId) roomRows.push({ id: randomUUID(), session_id: sessionId, room_id: roomId, booking_name: String(form.item.training_title ?? "").slice(0, 150), detail_booking: `Request Form ${form.item.request_form_number}`, start_time: "00:00:00", end_time: "23:59:59" });
+      if (roomId) roomRows.push({ id: randomUUID(), session_id: sessionId, room_id: roomId, booking_name: String(form.item.training_title ?? "").slice(0, 150), detail_booking: `Request Form ${form.item.request_form_number}`, start_time: `${startTime}:00`, end_time: `${endTime}:00` });
     }
     await TrainingSession.bulkCreate(sessionRows, { transaction });
     if (roomRows.length) await BookingRoom.bulkCreate(roomRows, { transaction });
     await TrainingTrainerAssignment.create({ id: randomUUID(), training_id: trainingId, trainer_profile_id: trainerId, assignment_type: "PRIMARY", assigned_at: now, ended_at: null, assigned_by_subject: req.auth!.userId, ended_by_subject: null }, { transaction });
-    if (conflictingBookings.length) {
-      await TrainerBooking.update({ status: "REPLACED_BY_TRAINING", replaced_by_training_id: trainingId }, { where: { id: { [Op.in]: actualBookingIds }, status: "BOOKED" }, transaction });
-      for (const booking of conflictingBookings) await appendRequestAuditTrail(req, { action: "UPDATE", objectType: "TRAINER_BOOKING", objectId: booking.id, before: { status: "BOOKED", booking_date: String(booking.booking_date).slice(0, 10) }, after: { status: "REPLACED_BY_TRAINING", replaced_by_training_id: trainingId, request_form_number: form.item.request_form_number }, processName: "trainer-booking-replaced-by-request-form" }, transaction);
-    }
     await appendRequestAuditTrail(req, { action: "CREATE", objectType: "TRAINING", objectId: trainingId, after: { request_form_id: form.item.id, request_form_number: form.item.request_form_number, account_id: form.item.account_id, pic_profile_id: form.item.pic_profile_id, course_id: course.course_id, expected_students: Number(course.amount_student), status: "SCHEDULED", training_type: course.delivery_type, trainer_id: trainerId, room_id: roomId, base_fee: baseFee, session_dates: dates }, processName: "request-form-approve-create-training" }, transaction);
     const [updatedCount] = await RequestForm.update(
       { status: "APPROVED", review_note: null, reviewed_by_subject: req.auth!.userId, approved_at: now, sla_due_at: null, sla_notified_at: null },

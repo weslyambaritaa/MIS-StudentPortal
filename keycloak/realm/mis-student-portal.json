@@ -14,8 +14,8 @@
   "permanentLockout": false,
   "failureFactor": 10,
   "bruteForceStrategy": "MULTIPLE",
-  "waitIncrementSeconds": 60,
-  "maxFailureWaitSeconds": 60,
+  "waitIncrementSeconds": 300,
+  "maxFailureWaitSeconds": 300,
   "eventsEnabled": true,
   "eventsExpiration": 34560000,
   "enabledEventTypes": [
