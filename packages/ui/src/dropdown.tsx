@@ -48,6 +48,9 @@ export interface DropdownProps<T = string> {
   /** Disable the dropdown */
   disabled?: boolean;
 
+  /** Accessible name when no visible label is rendered nearby. */
+  ariaLabel?: string;
+
   /** Name attribute for standard HTML form submission */
   name?: string;
 
@@ -164,6 +167,7 @@ export function Dropdown<T = string>({
   leftIcon,
   chevronIcon = "chevron-down",
   disabled = false,
+  ariaLabel,
   name,
   required = false,
   clearable = false,
@@ -419,13 +423,14 @@ export function Dropdown<T = string>({
       <button
         id={generatedId}
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => setOpen(!isOpen)}
         className={[
           "group/dropdown flex h-9 w-full items-center justify-between gap-2",
-          "rounded-full border border-zinc-950/60 bg-neutral-50 px-3 text-left text-sm",
+          "rounded-full border border-rose-600 bg-neutral-50 px-3 text-left text-sm",
           "transition-colors duration-150",
           "hover:border-rose-600",
           isOpen

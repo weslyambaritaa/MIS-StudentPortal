@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -1180,206 +1181,268 @@ export default function RequestFormPage({
                   <LordIcon src="file-text" size={20} colors="primary:#09090b,secondary:#09090b" />
                   <span>{formName}</span>
                 </div>
+{/* Attachment Dropzone */}
+<div className="flex flex-col gap-1 text-sm">
+  <span className="text-gray-600">
+    {mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"}{" "}
+    <span className="font-semibold text-rose-600">*</span>
+  </span>
 
-                {/* Attachment Dropzone */}
-                <div className="flex flex-col gap-1 text-sm">
-                  <span className="text-gray-600">
-                    {mode === "REGISTRATION" ? "Registration Attachment" : "RF Attachment"}{" "}
-                    <span className="text-[#de1641] font-semibold">*</span>
-                  </span>
-                  <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-6 text-center">
-                    <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white">
-                      <LordIcon src="upload" size={20} colors="primary:#ffffff,secondary:#ffffff" />
-                    </span>
-                    <span className="text-sm text-gray-600 font-['DM_Sans']">
-                      Drag / Drop files here or{" "}
-                      <span className="text-rose-600">Choose files from Computer</span>
-                    </span>
-                    <input
-                      className="sr-only"
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx"
-                      onChange={(e) => {
-                        if (e.target.files) addFiles(Array.from(e.target.files));
-                      }}
-                    />
-                  </label>
-                  <span className="text-sm text-zinc-950/60 font-['DM_Sans']">
-                    (Word, PDF), Max size 10MB
-                  </span>
-                  {files.map((f, index) => (
-                    <span
-                      key={`${f.name}-${f.size}-${index}`}
-                      className="flex items-center justify-between gap-2 text-xs text-rose-600"
-                    >
-                      {f.name}
-                      <IconButton
-                        size="sm"
-                        variant="danger"
-                        icon="trash"
-                        label={`Remove ${f.name}`}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setFiles((current) =>
-                            current.filter((_, fileIndex) => fileIndex !== index),
-                          );
-                        }}
-                      />
-                    </span>
-                  ))}
-                </div>
+  <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-6 text-center">
+    <span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white">
+      <LordIcon src="upload" size={20} colors="primary:#ffffff,secondary:#ffffff" />
+    </span>
+    <span className="text-sm text-gray-600">
+      Drag / Drop files here or{" "}
+      <span className="text-rose-600">Choose files from Computer</span>
+    </span>
+    <input
+      className="sr-only"
+      type="file"
+      multiple
+      accept=".pdf,.doc,.docx"
+      onChange={(event) => {
+        if (event.target.files) addFiles(Array.from(event.target.files));
+      }}
+    />
+  </label>
 
-                {/* Training Title */}
-                <div className="flex flex-col gap-[3px]">
-                  <span className="text-sm text-gray-600 font-['DM_Sans']">Training Title *</span>
-                  <div className="h-9 px-3 py-2 bg-neutral-50 rounded-[100px] outline outline-1 outline-offset-[-1px] outline-rose-600 flex items-center">
-                    <span className="text-sm text-slate-900/60 font-['DM_Sans'] truncate">
-                      {trainingTitle || "Example: Power BI Fundamental"}
-                    </span>
-                  </div>
-                </div>
+  <span className="text-sm text-zinc-950/60">(Word, PDF), Max size 10MB</span>
+  {files.map((file, index) => (
+    <span
+      key={`${file.name}-${file.size}-${index}`}
+      className="flex items-center justify-between gap-2 text-xs text-rose-600"
+    >
+      {file.name}
+      <IconButton
+        size="sm"
+        variant="danger"
+        icon="trash"
+        label={`Remove ${file.name}`}
+        onClick={(event) => {
+          event.preventDefault();
+          setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+        }}
+      />
+    </span>
+  ))}
+</div>
 
-                {/* Requested Date */}
-                <div className="flex flex-col gap-[3px]">
-                  <span className="text-sm text-gray-600 font-['DM_Sans']">Requested Date *</span>
-                  <MultiDateCalendar
-                    dates={lines[0]?.sessions.map((session) => session.date) ?? []}
-                    onChange={(dates) =>
-                      updateLine(0, { sessions: dates.map((date) => ({ date })) })
-                    }
-                  />
-                </div>
+{/* Training Title — tampilkan sekali */}
+<div className="flex flex-col gap-[3px]">
+  <span className="text-sm text-gray-600">Training Title *</span>
+  <div className="flex h-9 items-center rounded-full border border-rose-600 bg-neutral-50 px-3">
+    <span className="truncate text-sm text-slate-900/60">
+      {trainingTitle || "Example: Power BI Fundamental"}
+    </span>
+  </div>
+</div>
 
-                {/* Language */}
-                <div className="flex flex-col gap-[3px]">
-                  <Dropdown
-                    label="Language"
-                    required
-                    value={lines[0]?.language ?? "Indonesia"}
-                    onChange={(val) => updateLine(0, { language: val })}
-                    options={[
-                      { label: "Indonesia", value: "Indonesia" },
-                      { label: "English", value: "English" },
-                    ]}
-                  />
-                </div>
+{/* Isian yang berlaku untuk setiap course */}
+{lines.map((line, index) => (
+  <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">
+    {mode === "REGISTRATION" &&
+      !line.deliveryType.startsWith("ONLINE") &&
+      line.deliveryType !== "INHOUSE" && (
+        <fieldset className="space-y-2 text-sm">
+          <legend className="text-gray-600">Training Location *</legend>
+          <div className="flex gap-5">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                className="accent-rose-600"
+                name={`location-${index}`}
+                checked={line.locationType === "INTERNAL"}
+                onChange={() =>
+                  updateLine(index, {
+                    locationType: "INTERNAL",
+                    locationName: "",
+                    locationAddress: "",
+                  })
+                }
+              />
+              Internal Training Room
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                className="accent-rose-600"
+                name={`location-${index}`}
+                checked={line.locationType === "CLIENT"}
+                onChange={() => updateLine(index, { locationType: "CLIENT" })}
+              />
+              Client Location
+            </label>
+          </div>
+        </fieldset>
+      )}
 
-                {/* Request Form Specific: Class Category & Room Rental */}
-                {mode === "REQUEST" && (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm text-gray-600 font-['DM_Sans']">Class Category *</span>
-                      <div className="flex flex-wrap items-center gap-3">
-                        {/* Service Type radio group */}
-                        {(
-                          [
-                            ["STANDARD", "Standard"],
-                            ["CUSTOMIZED", "Costumized"],
-                            ["CEO", "CEO"],
-                          ] as const
-                        ).map(([val, label]) => {
-                          const active = lines[0]?.serviceType === val;
-                          return (
-                            <button
-                              type="button"
-                              key={val}
-                              onClick={() => updateLine(0, { serviceType: val })}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <div
-                                className={`size-3 rounded-full border border-rose-600 flex items-center justify-center ${
-                                  active ? "bg-rose-600" : "bg-white"
-                                }`}
-                              >
-                                {active && <div className="size-1 rounded-full bg-white" />}
-                              </div>
-                              <span className="text-zinc-950/60 text-sm font-normal font-['DM_Sans']">
-                                {label}
-                              </span>
-                            </button>
-                          );
-                        })}
-                        {/* Format radio group */}
-                        {(
-                          [
-                            ["ONLINE_PRIVATE", "Online"],
-                            ["PRIVATE", "Offline"],
-                            ["INHOUSE", "Hybrid"],
-                          ] as const
-                        ).map(([val, label]) => {
-                          const active = lines[0]?.deliveryType === val;
-                          return (
-                            <button
-                              type="button"
-                              key={val}
-                              onClick={() => updateCourseDeliveryType(0, val)}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <div
-                                className={`size-3 rounded-full border border-rose-600 flex items-center justify-center ${
-                                  active ? "bg-rose-600" : "bg-white"
-                                }`}
-                              >
-                                {active && <div className="size-1 rounded-full bg-white" />}
-                              </div>
-                              <span className="text-zinc-950/60 text-sm font-normal font-['DM_Sans']">
-                                {label}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+    {mode === "REQUEST" && line.deliveryType === "INHOUSE" && (
+      <Input
+        label="Location Training"
+        required
+        maxLength={500}
+        value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")}
+        onChange={(event) =>
+          updateLine(index, { locationName: "", locationAddress: event.target.value })
+        }
+        placeholder="Training location name and address"
+      />
+    )}
 
-                    {/* Room Rental */}
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm text-gray-600 font-['DM_Sans']">Room Rental</span>
-                        <div className="inline-flex items-center gap-6">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateLine(0, {
-                                roomRental: true,
-                                roomPc: lines[0]?.roomPc || "WITH",
-                              })
-                            }
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <div
-                              className={`size-3 rounded-full border border-rose-600 flex items-center justify-center ${
-                                lines[0]?.roomRental === true ? "bg-rose-600" : "bg-white"
-                              }`}
-                            >
-                              {lines[0]?.roomRental === true && (
-                                <div className="size-1 rounded-full bg-white" />
-                              )}
-                            </div>
-                            <span className="text-zinc-950/60 text-sm font-normal font-['DM_Sans']">
-                              Yes
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateLine(0, { roomRental: false, roomPc: null, roomServices: [] })
-                            }
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <div
-                              className={`size-3 rounded-full border border-rose-600 flex items-center justify-center ${
-                                lines[0]?.roomRental !== true ? "bg-rose-600" : "bg-white"
-                              }`}
-                            >
-                              {lines[0]?.roomRental !== true && (
-                                <div className="size-1 rounded-full bg-white" />
-                              )}
-                            </div>
-                            <span className="text-zinc-950/60 text-sm font-normal font-['DM_Sans']">
-                              No
-                            </span>
-                          </button>
+    {mode === "REGISTRATION" && line.locationType === "CLIENT" && (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          label="Location Name"
+          required
+          value={line.locationName}
+          onChange={(event) => updateLine(index, { locationName: event.target.value })}
+          placeholder="Client site / venue"
+        />
+        <Input
+          label="Location Address"
+          required
+          value={line.locationAddress}
+          onChange={(event) => updateLine(index, { locationAddress: event.target.value })}
+          placeholder="Full address"
+        />
+      </div>
+    )}
+
+    {line.locationType === "ONLINE" && (
+      <p className="text-sm text-zinc-950/60">
+        Online training does not require a physical location.
+      </p>
+    )}
+
+    <div className="space-y-1">
+      <span className="text-sm text-gray-600">Requested Date *</span>
+      <MultiDateCalendar
+        dates={line.sessions.map((session) => session.date)}
+        onChange={(dates) =>
+          updateLine(index, { sessions: dates.map((date) => ({ date })) })
+        }
+      />
+    </div>
+
+    <Dropdown
+      label="Language"
+      required
+      value={line.language}
+      onChange={(value) => updateLine(index, { language: value })}
+      options={[
+        { label: "Indonesia", value: "Indonesia" },
+        { label: "English", value: "English" },
+      ]}
+    />
+
+    {mode === "REQUEST" && (
+      <div className="space-y-3">
+        <fieldset className="space-y-1 text-sm">
+          <legend className="text-gray-600">Class Category *</legend>
+          <div className="flex flex-wrap gap-4">
+            {(["STANDARD", "CUSTOMIZED", "CEO"] as const).map((value) => (
+              <label key={value} className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  className="accent-rose-600"
+                  name={`service-${index}`}
+                  checked={line.serviceType === value}
+                  onChange={() => updateLine(index, { serviceType: value })}
+                />
+                {value === "CUSTOMIZED" ? "Customized" : value}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="space-y-1 text-sm">
+          <legend className="text-gray-600">Class Format *</legend>
+          <div className="flex flex-wrap gap-4">
+            {[
+              ["ONLINE_PRIVATE", "Online"],
+              ["PRIVATE", "Offline"],
+              ["INHOUSE", "Hybrid"],
+            ].map(([value, label]) => (
+              <label key={value} className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  className="accent-rose-600"
+                  name={`format-${index}`}
+                  checked={line.deliveryType === value}
+                  onChange={() => updateCourseDeliveryType(index, value)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+    )}
+
+    <fieldset className="space-y-1 text-sm">
+      <legend className="text-gray-600">Room Rental</legend>
+      <div className="flex gap-6">
+        {[
+          ["YES", "Yes"],
+          ["NO", "No"],
+        ].map(([value, label]) => (
+          <label key={value} className="inline-flex items-center gap-2">
+            <input
+              type="radio"
+              className="accent-rose-600"
+              name={`rental-${index}`}
+              checked={line.roomRental === (value === "YES")}
+              onChange={() =>
+                updateLine(index, {
+                  roomRental: value === "YES",
+                  roomPc: null,
+                  roomServices: [],
+                })
+              }
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+
+    {line.roomRental === true && (
+      <div className="space-y-2 rounded-xl bg-neutral-50 p-3">
+        <p className="text-sm font-medium">Room Rental Services</p>
+        <div className="flex flex-wrap gap-3 text-sm">
+          {(["WITH", "WITHOUT"] as const).map((value) => (
+            <label key={value} className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name={`pc-${index}`}
+                checked={line.roomPc === value}
+                onChange={() => updateLine(index, { roomPc: value })}
+              />
+              {value === "WITH" ? "With PC" : "Without PC"}
+            </label>
+          ))}
+          {["INTERNET", "LAN", "SNACKS", "LUNCH"].map((service) => (
+            <label key={service} className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={line.roomServices.includes(service)}
+                onChange={(event) =>
+                  updateLine(index, {
+                    roomServices: event.target.checked
+                      ? [...line.roomServices, service]
+                      : line.roomServices.filter((item) => item !== service),
+                  })
+                }
+              />
+              {service}
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
+  </article>
+))}
                         </div>
                       </div>
 

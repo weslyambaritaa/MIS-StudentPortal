@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ChevronDown, Info, Search, X } from "lucide-react";
@@ -100,7 +101,7 @@ export function StudentDialog({ value, accounts, busy, error, onClose, onSubmit 
         </ul>}
       </div>
       <label className="mb-5 block text-sm text-gray-600">Student Company Role<input maxLength={200} value={companyRole} onChange={(event) => setCompanyRole(event.target.value)} placeholder="Example: HR Specialist" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900" /></label>
-      {value && <label className="mb-5 block text-sm text-gray-600">Portal Status<select value={portalStatus} onChange={(event) => setPortalStatus(event.target.value as "ACTIVE" | "INACTIVE")} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>{value.portal_status === "HAVENT_LOGIN" && <span className="mt-1 block text-xs text-zinc-500">Haven’t Login is determined by the system until the first successful login.</span>}</label>}
+      {value && <label className="mb-5 block text-sm text-gray-600">Portal Status<DropdownSelect value={portalStatus} onChange={(event) => setPortalStatus(event.target.value as "ACTIVE" | "INACTIVE")} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></DropdownSelect>{value.portal_status === "HAVENT_LOGIN" && <span className="mt-1 block text-xs text-zinc-500">Haven’t Login is determined by the system until the first successful login.</span>}</label>}
       {!value && <div className="mb-6 rounded-3xl border border-blue-500 bg-blue-500/10 p-3 text-sm">
         <div className="flex items-center gap-1 font-medium text-blue-600"><Info size={18} />With Portal Account</div>
         <p className="mt-2 text-slate-600">An activation email will be sent to the Student. The link lets them set a password and access the portal.</p>

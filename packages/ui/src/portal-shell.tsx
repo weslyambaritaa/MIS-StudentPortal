@@ -9,6 +9,7 @@ import { Button } from "./button";
 import { Dropdown } from "./dropdown";
 import { IconButton } from "./icon-button";
 import { LogoutConfirmationModal } from "./logout-confirmation-modal";
+import { Dropdown } from "./dropdown";
 
 export type PortalNavigationItem = {
   key: string;

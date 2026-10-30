@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Trash2, X } from "lucide-react";
@@ -49,7 +50,7 @@ export function TrainingRoomDialog({ value, busy, onClose, onSubmit }: {
           <input required min={1} step={1} type="number" value={capacity} onChange={(event) => setCapacity(event.target.value)} placeholder="Example: 25" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900 outline-none" />
         </label>
         <label className="mb-4 block text-sm text-gray-600">Status
-          <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900 outline-none"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>
+          <DropdownSelect value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-slate-900 outline-none"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></DropdownSelect>
         </label>
         <section className="mb-6">
           <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-base font-medium text-rose-600">Room Facility</h3><Button type="button" variant="soft" leftIcon="plus" onClick={addFacility}>Add Facility</Button></div>
