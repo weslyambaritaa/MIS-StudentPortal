@@ -6,7 +6,7 @@ import { Button } from "@mis/ui/button";
 import { Dropdown } from "@mis/ui/dropdown";
 import { Modal } from "@mis/ui/modal";
 import { Textarea } from "@mis/ui/textarea";
-import { durationLabel, type RoomOption } from "./check-room-availability-modal";
+import { durationLabel, type RoomOption } from "../check-room-availability-panel";
 
 export type RoomBookingReason = "MEETING" | "EVENTS" | "WORKSHOP" | "OTHERS";
 

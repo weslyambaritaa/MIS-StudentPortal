@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
-import { Button } from "@mis/ui/button";
 import { DataTable } from "@mis/ui/data-table";
 import { Dropdown } from "@mis/ui/dropdown";
 import { Input } from "@mis/ui/input";
@@ -12,7 +11,7 @@ import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@mis/ui/toast";
 import { BookRoomModal, type RoomBookingReason } from "./dialog/book-room-modal";
-import { CheckRoomAvailabilityModal, type CheckRoomAvailabilityStatus, type RoomBookingConflict, type RoomOption } from "./dialog/check-room-availability-modal";
+import { CheckRoomAvailabilityPanel, type CheckRoomAvailabilityStatus, type RoomBookingConflict, type RoomOption } from "./check-room-availability-panel";
 
 type RoomBooking = { id: string; booking_date: string; start_time: string; end_time: string; reason: RoomBookingReason; reason_detail: string | null; detail_booking: string; room: { name: string; room_code: string } };
 type BookingList = { items: RoomBooking[]; page: number; pageSize: number; total: number };
@@ -23,7 +22,7 @@ const getEndTime = (time: string, duration: number) => {
   if (!time || !Number.isFinite(duration)) return "";
   const [hours, minutes] = time.split(":").map(Number);
   const end = hours * 60 + minutes + duration;
-  if (end > 24 * 60) return "";
+  if (end >= 24 * 60) return "";
   return `${String(Math.floor(end / 60) % 24).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 };
 
@@ -39,7 +38,6 @@ export default function BookingRoomPage() {
   const [reasonFilter, setReasonFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [startTime, setStartTime] = useState("09:00");
@@ -70,13 +68,14 @@ export default function BookingRoomPage() {
     return () => window.clearTimeout(timer);
   }, [draftSearch]);
 
-  const openAvailability = async () => {
-    setModalOpen(true); setAvailabilityStatus("idle"); setAvailabilityError(""); setConflict(undefined);
+  const loadRooms = useCallback(async () => {
     try {
       const result = await api<{ items: RoomOption[] }>("/api/v1/internal/rooms/eligible?participantCount=1");
       setRooms(result.items);
     } catch (cause) { setAvailabilityError(cause instanceof Error ? cause.message : "Could not load Training Rooms."); }
-  };
+  }, [api]);
+
+  useEffect(() => { void loadRooms(); }, [loadRooms]);
 
   const resetAvailability = () => { setAvailabilityStatus("idle"); setAvailabilityError(""); setConflict(undefined); };
   const checkAvailability = async () => {
@@ -100,7 +99,7 @@ export default function BookingRoomPage() {
     try {
       await api("/api/v1/internal/rooms/bookings", { method: "POST", body: JSON.stringify({ roomId: selectedRoomId, date: selectedDate, startTime, durationMinutes, reason: bookingReason, reasonDetail, detailBooking }) });
       showToast("Room booked successfully.");
-      setBookOpen(false); setModalOpen(false); setBookingReason(""); setReasonDetail(""); setDetailBooking("");
+      setBookOpen(false); setAvailabilityStatus("idle"); setAvailabilityError(""); setConflict(undefined); setBookingReason(""); setReasonDetail(""); setDetailBooking("");
       await load();
     } catch (cause) { setBookingError(cause instanceof Error ? cause.message : "Could not book this room."); }
     finally { setBookingBusy(false); }
@@ -120,9 +119,9 @@ export default function BookingRoomPage() {
     <div className="flex flex-col gap-6">
       <section className="flex flex-col justify-between gap-4 rounded-3xl border border-rose-50 bg-white p-5 sm:flex-row sm:items-center">
         <div><h1 className="text-3xl font-medium text-gray-600">Booking Room</h1><p className="mt-1 text-sm text-zinc-600">Check a room’s availability and book a time slot.</p></div>
-        <Button leftIcon={<CalendarDays size={18}/>} onClick={() => void openAvailability()}>Check Availability &amp; Book</Button>
       </section>
-      <section className="rounded-3xl border border-rose-50 bg-white p-5">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
+      <section className="min-w-0 rounded-3xl border border-rose-50 bg-white p-5">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <Input label="Search Room Name" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Search room or booking detail" leftIcon={<Search size={18}/>} containerClassName="w-full sm:max-w-72" className="border-rose-600" />
           <Dropdown label="Reason" value={reasonFilter} onChange={(value) => { setPage(1); setReasonFilter(value); }} options={[{ value: "ALL", label: "All Reason" }, ...REASONS]} className="border-rose-600 sm:w-48" />
@@ -131,8 +130,9 @@ export default function BookingRoomPage() {
         {loading ? <p role="status" className="py-8 text-center text-zinc-500">Loading room bookings...</p> : <DataTable columns={columns} rows={items} getRowKey={(item) => item.id} emptyMessage="No room bookings found." caption="Room bookings" />}
         <div className="mt-4"><Pagination page={page} totalPages={Math.max(1, Math.ceil(total / 8))} pageSize={items.length} totalItems={total} onPageChange={setPage}/></div>
       </section>
+      <CheckRoomAvailabilityPanel rooms={rooms} selectedDate={selectedDate} selectedRoomId={selectedRoomId} startTime={startTime} durationMinutes={durationMinutes} status={availabilityStatus} onDateChange={setSelectedDate} onRoomChange={setSelectedRoomId} onStartTimeChange={setStartTime} onDurationChange={setDurationMinutes} onSelectionChange={resetAvailability} onCheckAvailability={() => void checkAvailability()} onBookRoom={() => { setBookingError(""); setBookOpen(true); }} conflict={conflict} error={availabilityError}/>
+      </div>
     </div>
-    <CheckRoomAvailabilityModal open={modalOpen} onClose={() => setModalOpen(false)} rooms={rooms} selectedDate={selectedDate} selectedRoomId={selectedRoomId} startTime={startTime} durationMinutes={durationMinutes} status={availabilityStatus} onDateChange={setSelectedDate} onRoomChange={setSelectedRoomId} onStartTimeChange={setStartTime} onDurationChange={setDurationMinutes} onSelectionChange={resetAvailability} onCheckAvailability={() => void checkAvailability()} onBookRoom={() => { setBookingError(""); setBookOpen(true); }} conflict={conflict} error={availabilityError}/>
     {bookOpen && selectedRoom && <BookRoomModal room={selectedRoom} date={selectedDate} startTime={startTime} durationMinutes={durationMinutes} reason={bookingReason} reasonDetail={reasonDetail} detailBooking={detailBooking} busy={bookingBusy} error={bookingError} onReasonChange={setBookingReason} onReasonDetailChange={setReasonDetail} onDetailBookingChange={setDetailBooking} onClose={() => setBookOpen(false)} onSubmit={() => void saveBooking()}/>}
   </AppShell>;
 }
