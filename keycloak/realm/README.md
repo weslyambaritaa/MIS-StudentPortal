@@ -16,7 +16,27 @@ For a local realm, run the helper after Keycloak is available to apply settings 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\keycloak\scripts\configure-st01.ps1 -Apply
 ```
 
-The account is temporarily locked for 1 minute after 10 consecutive failed login attempts. A successful login resets the failure count. The realm uses English as its supported and default login language. The script reads local credentials without printing them and updates the existing realm through the Admin API. `mis-student-portal.json` carries non-secret bootstrap settings for a newly imported realm; applying runtime settings to an already-existing realm requires the helper.
+To update only the existing local realm's brute-force settings without changing SMTP or OIDC clients, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\keycloak\scripts\configure-login-lockout.ps1 -Apply
+```
+
+Without `-Apply`, this script prints the intended change and does not contact Keycloak or modify settings. It uses the local bootstrap admin values from the root `.env` and always targets `http://localhost:<KEYCLOAK_PORT>`; it is not a production deployment script.
+
+An account is temporarily locked for 5 minutes after 10 consecutive failed login attempts. This is a realm-wide setting and applies to every account in the shared MIS realm, including Student/PIC and internal roles. A successful login resets the failure count. The realm uses English as its supported and default login language. The script reads local credentials without printing them and updates the existing local realm through the Admin API. `mis-student-portal.json` carries non-secret bootstrap settings for a newly imported realm; applying runtime settings to an already-existing realm requires the helper.
+
+### Production rollout
+
+Realm import does not overwrite an existing production realm. Apply the setting in the production Keycloak Admin Console under **Realm settings → Security defenses → Brute Force Detection**:
+
+- Brute Force Detection: **On**
+- Max Login Failures: **10**
+- Wait Increment: **300 seconds**
+- Max Wait: **300 seconds**
+- Permanent Lockout: **Off**
+
+Save the realm settings. The rule applies across both frontends because they use this same realm. Verify with a dedicated test account, not a real user's account: submit 10 incorrect passwords, confirm another login is blocked, wait 5 minutes, then confirm the account can try again. A successful login resets the failure count. Do not run `configure-st01.ps1` against production as-is: it targets `localhost` and also updates local OIDC clients and SMTP settings.
 
 The browser OIDC clients `mis-student-portal-frontend` and `student-portal-frontend` are public and use PKCE with S256. They share this realm and its users/roles, but each has its own redirect URI and web-origin allowlist. Neither may have a client secret because browser code cannot keep one confidential. After importing an existing realm, run the helper above with `-Apply` to create/configure both clients; realm import only applies on first creation. The helper currently adds localhost origins for local development. Add the Student Portal production redirect URI and origin after its domain is decided. Backend service clients remain confidential and their secrets stay in local environment files or a deployment secret manager.
 

@@ -18,6 +18,9 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
 
   /** Size variant */
   size?: "sm" | "default" | "lg";
+
+  /** Hide the browser's built-in calendar glyph while keeping the date input usable. */
+  hideNativeDateIcon?: boolean;
 };
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
@@ -28,6 +31,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     className = "",
     containerClassName = "",
     size = "default",
+    hideNativeDateIcon = false,
     disabled,
     ...props
   },
@@ -89,7 +93,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           disabled={disabled}
-          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950/40 placeholder:transition-all group-hover/input:placeholder:text-rose-600 disabled:cursor-not-allowed"
+          className={`min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-zinc-950/40 placeholder:transition-all group-hover/input:placeholder:text-rose-600 disabled:cursor-not-allowed ${hideNativeDateIcon ? "[&::-webkit-calendar-picker-indicator]:opacity-0" : ""}`}
           {...props}
         />
 
