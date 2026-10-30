@@ -11,7 +11,7 @@ import { IconButton } from "@mis/ui/icon-button";
 import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@mis/ui/toast";
-import { CourseDialog, type CoursePayload, type CourseValue } from "./dialog/course-dialog";
+import { CourseDialog, fileAsBase64, type CoursePayload, type CourseValue } from "./dialog/course-dialog";
 import { CourseDetailsDialog } from "./dialog/course-details-dialog";
 
 type Category = { id: string; category_code: string; name: string };
@@ -57,11 +57,32 @@ export default function CoursesPage() {
     setBusy(true); setDialogError(null);
     try {
       const id = editor && editor.id;
-      await api(`/api/v1/internal/courses${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
-      showToast(id ? "Course updated successfully." : "Course added successfully.");
+      const { practiceFilesToAdd = [], practiceFileIdsToRemove = [], ...coursePayload } = payload;
+      const saved = await api<{ item: { id: string } }>(`/api/v1/internal/courses${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: JSON.stringify(coursePayload) });
+      const courseId = saved.item.id;
+      let practiceUpdateFailed = false;
+      for (const fileId of practiceFileIdsToRemove) {
+        try { await api(`/api/v1/internal/courses/${courseId}/practice-files/${fileId}`, { method: "DELETE" }); }
+        catch { practiceUpdateFailed = true; }
+      }
+      for (const practiceFile of practiceFilesToAdd) {
+        try {
+          const body = practiceFile.kind === "URL" ? practiceFile : { kind: "UPLOAD", fileName: practiceFile.file.name, contentBase64: await fileAsBase64(practiceFile.file) };
+          await api(`/api/v1/internal/courses/${courseId}/practice-files`, { method: "POST", body: JSON.stringify(body) });
+        }
+        catch { practiceUpdateFailed = true; }
+      }
+      showToast(practiceUpdateFailed ? "Course saved, but some Practice Files could not be updated. Reopen Edit Course and retry." : id ? "Course updated successfully." : "Course added successfully.");
       setEditor(undefined); await load();
     } catch (cause) { setDialogError(cause instanceof Error ? cause.message : "Failed to save Course"); }
     finally { setBusy(false); }
+  };
+
+  const openEditor = async (course: CourseValue) => {
+    setDetailsLoading(true); setError(null);
+    try { const response = await api<{ item: CourseValue }>(`/api/v1/internal/courses/${course.id}`); setEditor(response.item); setDialogError(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Failed to load Course for editing"); }
+    finally { setDetailsLoading(false); }
   };
 
   const openDetails = async (course: CourseValue) => {
@@ -91,7 +112,7 @@ export default function CoursesPage() {
     { key: "level", header: "LEVEL", render: row => categoryLabel(row.level) },
     { key: "syllabus", header: "SYLLABUS", render: row => row.latest_syllabus ? <span title={`${row.syllabus_version_count} version(s)`} className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-300/20 px-3 py-1 text-xs font-medium text-amber-700">{row.latest_syllabus.version}{row.syllabus_version_count > 1 ? ` +${row.syllabus_version_count - 1}` : ""}</span> : <span className="text-zinc-400">—</span> },
     { key: "status", header: "STATUS", render: row => <Badge variant={row.status === "ACTIVE" ? "success" : "danger"} showDot>{row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge> },
-    { key: "actions", header: "ACTION", className: "whitespace-nowrap", render: row => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17}/>} size="sm" onClick={() => void openDetails(row)}/><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17}/>} size="sm" onClick={() => { setDialogError(null); setEditor(row); }}/><IconButton label={`Delete ${row.name}`} icon={<Trash2 size={17}/>} variant="danger" size="sm" onClick={() => setDeleting(row)}/></div> },
+    { key: "actions", header: "ACTION", className: "whitespace-nowrap", render: row => <div className="flex items-center gap-1"><IconButton label={`View ${row.name}`} icon={<Eye size={17}/>} size="sm" onClick={() => void openDetails(row)}/><IconButton label={`Edit ${row.name}`} icon={<Pencil size={17}/>} size="sm" onClick={() => void openEditor(row)} disabled={detailsLoading}/><IconButton label={`Delete ${row.name}`} icon={<Trash2 size={17}/>} variant="danger" size="sm" onClick={() => setDeleting(row)}/></div> },
   ];
 
   return <AppShell title="Master Data | Course"><div className="flex flex-col gap-6">
