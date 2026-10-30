@@ -151,7 +151,7 @@ export const FEATURE_ACCESS_MATRIX: readonly FeatureAccessEntry[] = [
   { key: "course-category", label: "Course Category", icon: "category", roles: [ROLES.ADMIN], route: "/admin/course-categories", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
   { key: "trainer", label: "Trainer", icon: "people", roles: [ROLES.ADMIN], route: "/admin/trainers", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
   { key: "training-room", label: "Training Room", icon: "room", roles: [ROLES.ADMIN], route: "/admin/training-rooms", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } } },
-  comingSoon("booking-room", "Booking Room", "calendar", [ROLES.ADMIN], "Master Data"),
+  feature("booking-room", "Booking Room", "calendar", [ROLES.ADMIN], { [ROLES.ADMIN]: { kind: "section", title: "Master Data" } }, "/admin/booking-room"),
   { key: "list-training", label: "List Training", icon: "course", roles: [ROLES.ADMIN], route: "/admin/trainings", placementByRole: { [ROLES.ADMIN]: { kind: "section", title: "Training" } } },
   comingSoon("training-calendar", "Training Calendar", "calendar", [ROLES.ADMIN], "Training"),
   comingSoon("generate-certificate", "Generate Certificate", "certificate", [ROLES.ADMIN], "Document & System"),
