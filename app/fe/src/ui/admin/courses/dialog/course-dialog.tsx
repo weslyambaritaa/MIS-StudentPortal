@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { FileUp, Info, Link2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@mis/ui/button";
+import { Dropdown } from "@mis/ui/dropdown";
+import { DropBox } from "@mis/ui/drop-box";
 import { IconButton } from "@mis/ui/icon-button";
+import { Input } from "@mis/ui/input";
 
 export type CourseSyllabus = { id: string; url: string; download_url?: string | null; version: string; created_at?: string };
 export type CoursePracticeFile = { id: string; name: string; url: string; download_url?: string | null; source_type: "URL" | "UPLOAD"; created_at?: string };
@@ -50,13 +53,9 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
   const [status, setStatus] = useState<CourseValue["status"]>(value?.status ?? "ACTIVE");
   const [syllabusKind, setSyllabusKind] = useState<"UPLOAD" | "URL">("UPLOAD");
   const [file, setFile] = useState<File | null>(null);
-  const [syllabusDragging, setSyllabusDragging] = useState(false);
-  const syllabusInputRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState("");
   const [practiceKind, setPracticeKind] = useState<"UPLOAD" | "URL">("UPLOAD");
   const [practiceDrafts, setPracticeDrafts] = useState<PracticeDraft[]>([]);
-  const [practiceDragging, setPracticeDragging] = useState(false);
-  const practiceInputRef = useRef<HTMLInputElement>(null);
   const [practiceUrl, setPracticeUrl] = useState("");
   const [removedPracticeFileIds, setRemovedPracticeFileIds] = useState<string[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -67,21 +66,6 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
     else setLocalError(null);
     const accepted = files.filter(item => item.size <= 10 * 1024 * 1024);
     if (accepted.length) setPracticeDrafts(items => [...items, ...accepted.map(file => ({ key: crypto.randomUUID(), kind: "UPLOAD" as const, file }))]);
-  };
-
-  const handleSyllabusDrop = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setSyllabusDragging(false);
-    const droppedFile = event.dataTransfer.files[0];
-    if (droppedFile) setFile(droppedFile);
-  };
-
-  const handlePracticeDrop = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setPracticeDragging(false);
-    addPracticeFiles(Array.from(event.dataTransfer.files));
   };
 
   const submit = async (event: FormEvent) => {
@@ -115,34 +99,28 @@ export function CourseDialog({ value, categories, busy, error, onClose, onSubmit
     <form role="dialog" aria-modal="true" aria-labelledby="course-dialog-title" onSubmit={event => void submit(event)} className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-rose-50 bg-white p-5 shadow-xl">
       <header className="mb-6 flex items-start justify-between"><h2 id="course-dialog-title" className="text-2xl font-medium text-gray-600">{value ? "Edit Course" : "Add Course"}</h2><IconButton label="Close" icon={<X size={18} />} onClick={onClose} disabled={busy} /></header>
       {(error || localError) && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{localError ?? error}</p>}
-      <label className="mb-4 block text-sm text-gray-600">Course Code *<input required maxLength={50} value={courseCode} onChange={event => setCourseCode(event.target.value)} placeholder="Example: CRS-PY-02" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3" /></label>
-      <label className="mb-4 block text-sm text-gray-600">Course Name *<input autoFocus={!value} required maxLength={150} value={name} onChange={event => setName(event.target.value)} placeholder="Example: Python for Data Science" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3" /></label>
-      <label className="mb-4 block text-sm text-gray-600">Category *<select required value={categoryId} onChange={event => setCategoryId(event.target.value)} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="">Pick a Category</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-      <label className="mb-4 block text-sm text-gray-600">Duration *<span className="mt-1 flex h-9 overflow-hidden rounded-full border border-rose-600 bg-neutral-50"><input required type="number" min={1} max={365} step={1} value={durationDays} onChange={event => setDurationDays(event.target.value)} className="min-w-0 flex-1 bg-transparent px-3 outline-none"/><span className="flex items-center px-3 text-sm text-gray-500">Days</span></span></label>
-      <label className="mb-4 block text-sm text-gray-600">Course Level *<select required value={level} onChange={event => setLevel(event.target.value as CourseValue["level"])} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="BEGINNER">Fundamental</option><option value="INTERMEDIATE">Intermediate</option><option value="ADVANCED">Advanced</option></select></label>
-      {value && <label className="mb-4 block text-sm text-gray-600">Status *<select value={status} onChange={event => setStatus(event.target.value as CourseValue["status"])} className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>}
+      <Input label="Course Code *" required maxLength={50} value={courseCode} onChange={event => setCourseCode(event.target.value)} placeholder="Example: CRS-PY-02" containerClassName="mb-4" className="border-rose-600" />
+      <Input label="Course Name *" autoFocus={!value} required maxLength={150} value={name} onChange={event => setName(event.target.value)} placeholder="Example: Python for Data Science" containerClassName="mb-4" className="border-rose-600" />
+      <Dropdown label="Category *" required value={categoryId} onChange={setCategoryId} placeholder="Pick a Category" options={categories.map(category => ({ value: category.id, label: category.name }))} containerClassName="mb-4" className="border-rose-600" />
+      <div className="mb-4 flex items-end gap-2"><Input label="Duration *" required type="number" min={1} max={365} step={1} value={durationDays} onChange={event => setDurationDays(event.target.value)} containerClassName="min-w-0 flex-1" className="border-rose-600"/><span className="mb-[3px] flex h-9 items-center rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-500">Days</span></div>
+      <Dropdown label="Course Level *" required value={level} onChange={next => setLevel(next as CourseValue["level"])} options={[{ value: "BEGINNER", label: "Fundamental" }, { value: "INTERMEDIATE", label: "Intermediate" }, { value: "ADVANCED", label: "Advanced" }]} containerClassName="mb-4" className="border-rose-600" />
+      {value && <Dropdown label="Status *" value={status} onChange={next => setStatus(next as CourseValue["status"])} options={[{ value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }]} containerClassName="mb-4" className="border-rose-600" />}
       <section className="mb-6 rounded-xl bg-white p-3">
         <h3 className="mb-2 text-sm text-gray-600">Syllabus</h3>
         <div className="mb-3 flex rounded-full border border-rose-600 bg-neutral-50 p-1">
-          <button type="button" onClick={() => setSyllabusKind("UPLOAD")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${syllabusKind === "UPLOAD" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><FileUp size={16}/>Upload Syllabus</button>
-          <button type="button" onClick={() => setSyllabusKind("URL")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${syllabusKind === "URL" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><Link2 size={16}/>Via URL</button>
+          <Button type="button" size="sm" variant={syllabusKind === "UPLOAD" ? "primary" : "ghost"} className="flex-1" leftIcon={<FileUp size={16}/>} onClick={() => setSyllabusKind("UPLOAD")}>Upload Syllabus</Button>
+          <Button type="button" size="sm" variant={syllabusKind === "URL" ? "primary" : "ghost"} className="flex-1" leftIcon={<Link2 size={16}/>} onClick={() => setSyllabusKind("URL")}>Via URL</Button>
         </div>
-        {syllabusKind === "UPLOAD" ? <>
-          <input ref={syllabusInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={event => { setFile(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} />
-          <button type="button" onClick={() => syllabusInputRef.current?.click()} onDragEnter={event => { event.preventDefault(); setSyllabusDragging(true); }} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setSyllabusDragging(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSyllabusDragging(false); }} onDrop={handleSyllabusDrop} className={`flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600 ${syllabusDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>{file ? file.name : "Drag / Drop files here or Choose files from Computer"}</span><span className="text-xs text-zinc-500">PDF, maximum 10 MB</span></button>
-        </> : <label className="block text-sm text-gray-600">Syllabus URL<input type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/syllabus.pdf" className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3" /></label>}
+        {syllabusKind === "UPLOAD" ? <DropBox label={null} description="PDF, maximum 10 MB" file={file} onFileChange={setFile} accept="application/pdf,.pdf" showFilePreview={false} icon={<FileUp size={19}/>} dropzoneClassName="flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600" dropMessage={<span className="text-sm text-gray-600">{file ? file.name : <>Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></>}</span>} /> : <Input label="Syllabus URL" type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://example.com/syllabus.pdf" className="border-rose-600" />}
         {value?.latest_syllabus && <p className="mt-3 break-all text-xs text-zinc-500">Current latest: <a href={value.latest_syllabus.download_url ?? value.latest_syllabus.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">{value.latest_syllabus.version}</a>. Adding a syllabus will create a new version and keep older versions.</p>}
       </section>
       <section className="mb-6 rounded-xl bg-white p-3">
         <h3 className="mb-2 text-sm text-gray-600">Practice File</h3>
         <div className="mb-3 flex rounded-full border border-rose-600 bg-neutral-50 p-1">
-          <button type="button" onClick={() => setPracticeKind("UPLOAD")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${practiceKind === "UPLOAD" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><FileUp size={16}/>Upload File</button>
-          <button type="button" onClick={() => setPracticeKind("URL")} className={`flex h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-medium ${practiceKind === "URL" ? "bg-gradient-to-r from-red-400 to-rose-600 text-white" : "text-rose-600"}`}><Link2 size={16}/>Via URL</button>
+          <Button type="button" size="sm" variant={practiceKind === "UPLOAD" ? "primary" : "ghost"} className="flex-1" leftIcon={<FileUp size={16}/>} onClick={() => setPracticeKind("UPLOAD")}>Upload File</Button>
+          <Button type="button" size="sm" variant={practiceKind === "URL" ? "primary" : "ghost"} className="flex-1" leftIcon={<Link2 size={16}/>} onClick={() => setPracticeKind("URL")}>Via URL</Button>
         </div>
-        {practiceKind === "UPLOAD" ? <>
-          <input ref={practiceInputRef} type="file" multiple className="sr-only" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; addPracticeFiles(files); }} />
-          <button type="button" onClick={() => practiceInputRef.current?.click()} onDragEnter={event => { event.preventDefault(); setPracticeDragging(true); }} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setPracticeDragging(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPracticeDragging(false); }} onDrop={handlePracticeDrop} className={`flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600 ${practiceDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}><span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-r from-red-400 to-rose-600 text-white"><FileUp size={19}/></span><span>Drag / Drop files here or Choose files from Computer</span><span className="text-xs text-zinc-500">Multiple files, maximum 10 MB each</span></button>
-        </> : <div className="flex gap-2"><input type="url" maxLength={2048} value={practiceUrl} onChange={event => setPracticeUrl(event.target.value)} placeholder="https://example.com/practice-file" className="h-9 min-w-0 flex-1 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm"/><Button type="button" size="sm" onClick={addPracticeUrl} disabled={!practiceUrl.trim()}><Plus size={16}/>Add URL</Button></div>}
+        {practiceKind === "UPLOAD" ? <DropBox label={null} description="Multiple files, maximum 10 MB each" multiple onFilesChange={addPracticeFiles} showFilePreview={false} icon={<FileUp size={19}/>} dropzoneClassName="flex min-h-36 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center text-sm text-gray-600" dropMessage={<span className="text-sm text-gray-600">Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></span>} /> : <div className="flex gap-2"><Input aria-label="Practice File URL" type="url" maxLength={2048} value={practiceUrl} onChange={event => setPracticeUrl(event.target.value)} placeholder="https://example.com/practice-file" containerClassName="min-w-0 flex-1" className="border-rose-600"/><Button type="button" size="sm" onClick={addPracticeUrl} disabled={!practiceUrl.trim()} leftIcon={<Plus size={16}/>}>Add URL</Button></div>}
         {(value?.practice_files?.length || practiceDrafts.length) ? <ul className="mt-3 space-y-2">
           {value?.practice_files?.map(file => {
             const removed = removedPracticeFileIds.includes(file.id);
