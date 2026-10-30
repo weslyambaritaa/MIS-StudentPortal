@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, FileText, Trash2, Upload } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { IconButton } from "./icon-button";
 
@@ -21,6 +21,7 @@ export function DropBox({
   accept,
 }: DropBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
 
   const downloadFile = () => {
     if (!file) return;
@@ -40,16 +41,32 @@ export function DropBox({
         type="file"
         accept={accept}
         className="sr-only"
-        onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+        onChange={(event) => {
+          onFileChange(event.target.files?.[0] ?? null);
+          event.currentTarget.value = "";
+        }}
       />
       {!file ? (
         <button
           type="button"
-          className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-6 text-center"
+          className={`flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border p-6 text-center ${dragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}
           onClick={() => inputRef.current?.click()}
-          onDragOver={(event) => event.preventDefault()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            setDragging(true);
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+          }}
           onDrop={(event) => {
             event.preventDefault();
+            event.stopPropagation();
+            setDragging(false);
             onFileChange(event.dataTransfer.files?.[0] ?? null);
           }}
         >

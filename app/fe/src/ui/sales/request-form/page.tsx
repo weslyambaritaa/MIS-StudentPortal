@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@mis/ui/button";
@@ -175,6 +175,8 @@ export default function RequestFormPage({
   const [lines, setLines] = useState<DetailCourse[]>([emptyCourse()]);
   const [notes, setNotes] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
+  const [filesDragging, setFilesDragging] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const formName = mode === "REGISTRATION" ? "Registration Form" : "Request Form";
   const deliveryOptions: Array<[string, string]> = mode === "REGISTRATION"
     ? [["PUBLIC", "Public"], ["ONLINE_PUBLIC", "Online Public"]]
@@ -413,9 +415,7 @@ export default function RequestFormPage({
       setError(e instanceof Error ? e.message : "Could not load details");
     }
   }
-  async function addFiles(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    event.target.value = "";
+  function addFiles(selectedFiles: File[]) {
     const allowed = /\.(pdf|doc|docx)$/i;
     const invalid = selectedFiles.find((file) => !allowed.test(file.name) || file.size > 10 * 1024 * 1024);
     if (invalid) {
@@ -424,6 +424,12 @@ export default function RequestFormPage({
     }
     setError("");
     setFiles((current) => [...current, ...selectedFiles.filter((file) => !current.some((existing) => existing.name === file.name && existing.size === file.size))]);
+  }
+  function handleAttachmentDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setFilesDragging(false);
+    addFiles(Array.from(event.dataTransfer.files));
   }
   return (
     <AppShell title={`Main | ${formName}`}>
@@ -760,16 +766,16 @@ export default function RequestFormPage({
               </div>
               <div className="space-y-4 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">▣</span>{formName}</div>
-                <label className="flex cursor-pointer flex-col gap-1 text-sm text-gray-600">
+                <div className="flex flex-col gap-1 text-sm text-gray-600">
                   {mode === "REGISTRATION" ? "Registration Attachment *" : "RF Attachment *"}
-                  <span className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-5 text-center">
+                  <input ref={attachmentInputRef} className="sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(event) => { const selectedFiles = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; addFiles(selectedFiles); }} />
+                  <button type="button" onClick={() => attachmentInputRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setFilesDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFilesDragging(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFilesDragging(false); }} onDrop={handleAttachmentDrop} className={`flex min-h-32 w-full flex-col items-center justify-center gap-3 rounded-xl border p-5 text-center ${filesDragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}>
                     <span className="flex size-10 items-center justify-center rounded-full bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white"><Plus size={20} /></span>
                     <span className="text-sm text-gray-600">Drag / Drop files here or <span className="text-rose-600">Choose files from Computer</span></span>
-                    <input className="sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(e) => void addFiles(e)} />
-                  </span>
+                  </button>
                   <span className="text-sm text-zinc-950/60">(Word, PDF), Max size 10MB per file</span>
                   {files.map((f, index) => <span key={`${f.name}-${f.size}-${index}`} className="flex items-center justify-between gap-2 text-xs text-rose-600">{f.name}<button type="button" className="text-red-500" aria-label={`Remove ${f.name}`} onClick={(event) => { event.preventDefault(); setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); }}>Remove</button></span>)}
-                </label>
+                </div>
                 <label className="block text-sm text-gray-600">Training Title *<input readOnly className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none" placeholder="Generated from selected Course" value={trainingTitle} /></label>
                 {lines.map((line, index) => (
                   <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">

@@ -37,7 +37,7 @@ type Detail = {
   attachments: Array<{ id: string; file_name: string; file_size: number; download_url: string }>;
 };
 type ApprovalOptions = {
-  trainers: Array<{ id: string; name: string; email: string | null; status: string; rating: number }>;
+  trainers: Array<{ id: string; name: string; email: string | null; status: string; rating: number; booking_conflicts: Array<{ id: string; date: string; reason: string; detail_booking: string }> }>;
   rooms: Array<{ id: string; room_code: string; name: string; capacity: number; facilities: string | null }>;
   roomRequired: boolean;
   sessions: string[];
@@ -238,12 +238,18 @@ export default function RequestFormReviewPage() {
 
   async function approve() {
     if (!detail || !approvalOptions || !trainerId || !baseFee || !startTime || !endTime || endTime <= startTime || (approvalOptions.roomRequired && !roomId)) return;
+    const trainerBookingConflicts = approvalOptions.trainers.find((trainer) => trainer.id === trainerId)?.booking_conflicts ?? [];
+    if (trainerBookingConflicts.length) {
+      const conflictDates = trainerBookingConflicts.map((booking) => booking.date).join(", ");
+      const shouldReplace = window.confirm(`This Trainer already has a standalone booking on ${conflictDates}. If you continue, the Request Form Training will replace that booking. Continue?`);
+      if (!shouldReplace) return;
+    }
     setBusy(true);
     setDialogError("");
     try {
       await api(`/api/v1/internal/request-form-review/${detail.item.id}/approve`, {
         method: "PATCH",
-        body: JSON.stringify({ trainerId, roomId: approvalOptions.roomRequired ? roomId : null, baseFee: Number(baseFee), startTime, endTime }),
+        body: JSON.stringify({ trainerId, replaceTrainerBookingIds: trainerBookingConflicts.map((booking) => booking.id), roomId: approvalOptions.roomRequired ? roomId : null, baseFee: Number(baseFee), startTime, endTime }),
       });
       showToast(`${formName(detail.item)} approved and scheduled successfully.`);
       setApprovalOpen(false);
@@ -277,6 +283,7 @@ export default function RequestFormReviewPage() {
   const searchField = "h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-rose-100";
   const course = detail?.courses[0];
   const filteredTrainers = (approvalOptions?.trainers ?? []).filter((trainer) => trainer.name.toLowerCase().includes(trainerSearch.trim().toLowerCase()));
+  const selectedTrainerBookingConflicts = approvalOptions?.trainers.find((trainer) => trainer.id === trainerId)?.booking_conflicts ?? [];
   const detailRow = (label: string, value: string, icon: ReactNode) => <div className="grid grid-cols-[9rem_minmax(0,1fr)] items-start gap-3 text-sm"><div className="flex items-start gap-2 text-zinc-950/60"><span className="mt-0.5 shrink-0">{icon}</span><span>{label}</span></div><span className="break-words font-medium text-gray-600">{value}</span></div>;
   const choice = (label: string, selected: boolean) => <span key={label} className="inline-flex items-center gap-2 text-sm text-zinc-950/60"><span className={`relative size-3 shrink-0 rounded-full border ${selected ? "border-rose-600" : "border-zinc-400"}`}>{selected && <span className="absolute inset-[3px] rounded-full bg-rose-600" />}</span>{label}</span>;
 
@@ -433,6 +440,7 @@ export default function RequestFormReviewPage() {
             </div>}
           </span>
         </div>
+        {selectedTrainerBookingConflicts.length > 0 && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">This Trainer has a standalone booking on {selectedTrainerBookingConflicts.map((booking) => booking.date).join(", ")}. You can continue, but approving this Request Form will replace that booking.</p>}
         {approvalOptions.roomRequired ? <label className="block text-sm text-gray-600">Pick a Room (For {String(course.amount_student)} Students) *
           <span className="relative mt-1 block"><select className={`${searchField} appearance-none pr-9`} value={roomId} onChange={(event) => setRoomId(event.target.value)}><option value="">Pick a Room</option>{approvalOptions.rooms.map((room) => <option key={room.id} value={room.id}>{room.room_code} · {room.name} · Capacity {room.capacity}</option>)}</select><ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-600" /></span>
           {approvalOptions.rooms.length === 0 && <span className="mt-1 block text-xs text-red-600">No available room fits this class on all requested dates.</span>}

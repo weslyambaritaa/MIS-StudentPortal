@@ -4,9 +4,10 @@ import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Course, Evaluation, SessionTrainerAssignment, TrainerCertification, TrainerProfile, Training, TrainingSession, TrainingTrainerAssignment } from "../../database/models";
+import { Course, Evaluation, SessionTrainerAssignment, TrainerBooking, TrainerCertification, TrainerProfile, Training, TrainingSession, TrainingTrainerAssignment } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
+import { AppError } from "../../errors/app-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { appendRequestAuditTrail } from "../audit-trail/audit-trail.service";
 import { keycloakAccountProvisioner } from "../accounts/keycloak-account-provisioner";
@@ -112,6 +113,28 @@ async function loadTrainerAssignments(trainerIds: string[]): Promise<TrainerAssi
   return [...direct as unknown as TrainerAssignmentRow[], ...sessionRows];
 }
 
+async function scheduledTrainerIds(dates: string[], transaction?: import("sequelize").Transaction) {
+  if (!dates.length) return new Set<string>();
+  const sorted = [...dates].sort();
+  const start = new Date(`${sorted[0]}T00:00:00.000Z`);
+  const end = new Date(`${sorted[sorted.length - 1]}T23:59:59.999Z`);
+  const candidates = await TrainingSession.findAll({
+    where: { starts_at: { [Op.gte]: start, [Op.lte]: end } },
+    include: [{ model: Training, as: "training", where: { status: { [Op.in]: ["SCHEDULED", "ONGOING"] } }, attributes: ["id"], required: true }],
+    ...(transaction ? { transaction } : {}),
+  });
+  const wanted = new Set(dates);
+  const sessions = candidates.filter((session) => wanted.has(new Date(session.starts_at).toISOString().slice(0, 10)));
+  if (!sessions.length) return new Set<string>();
+  const trainingIds = [...new Set(sessions.map((session) => session.training_id))];
+  const sessionIds = sessions.map((session) => session.id);
+  const [trainingAssignments, sessionAssignments] = await Promise.all([
+    TrainingTrainerAssignment.findAll({ where: { training_id: { [Op.in]: trainingIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
+    SessionTrainerAssignment.findAll({ where: { session_id: { [Op.in]: sessionIds }, ended_at: null }, attributes: ["trainer_profile_id"], ...(transaction ? { transaction } : {}) }),
+  ]);
+  return new Set([...trainingAssignments, ...sessionAssignments].map((assignment) => assignment.trainer_profile_id));
+}
+
 const activateRequiredActionsEmail = (subject: string) =>
   keycloakAccountProvisioner.sendRequiredActionsEmail(
     subject,
@@ -134,6 +157,55 @@ trainersRouter.get(
       raw: true,
     }) as unknown as Array<{ specialization: string }>;
     return res.json({ items: rows.map((row) => row.specialization) });
+  })
+);
+
+trainersRouter.get(
+  "/booking-options",
+  authorizeActiveRole(ROLES.ADMIN),
+  authorizeCapability("TRAINER", ACCESS_ACTIONS.VIEW),
+  asyncHandler(async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const date = req.query.date;
+    if (typeof date !== "string" || !isDate(date)) return res.status(400).json({ message: "Choose a valid booking date." });
+    const [busyInTraining, busyInBooking] = await Promise.all([
+      scheduledTrainerIds([date]),
+      TrainerBooking.findAll({ where: { booking_date: date, status: "BOOKED" }, attributes: ["trainer_profile_id"] }),
+    ]);
+    const unavailable = new Set([...busyInTraining, ...busyInBooking.map((booking) => booking.trainer_profile_id)]);
+    const profiles = await TrainerProfile.findAll({ where: { status: "ACTIVE", id: { [Op.notIn]: [...unavailable] } }, attributes: ["id", "name", "specialization", "email", "status", "rating"], order: [["name", "ASC"]], raw: true });
+    return res.json({ items: profiles.map((trainer) => ({ ...trainer, name: trainer.name ?? trainer.email, availability: "AVAILABLE" })) });
+  })
+);
+
+trainersRouter.post(
+  "/bookings",
+  authorizeActiveRole(ROLES.ADMIN),
+  authorizeCapability("TRAINER", ACCESS_ACTIONS.EDIT),
+  asyncHandler(async (req, res) => {
+    const schema = Joi.object({
+      trainerId: Joi.string().guid({ version: ["uuidv4", "uuidv5"] }).required(),
+      date: Joi.string().custom((value, helpers) => isDate(value) ? value : helpers.error("date.format")).required(),
+      reason: Joi.string().valid("MEETING", "EVENTS", "WORKSHOP", "OTHERS").required(),
+      reasonDetail: Joi.when("reason", { is: "OTHERS", then: Joi.string().trim().min(1).max(2000).required(), otherwise: Joi.any().forbidden() }),
+      detailBooking: Joi.string().trim().min(1).max(4000).required(),
+    }).unknown(false);
+    const { error: validationError, value } = schema.validate(req.body, { abortEarly: false, convert: false });
+    if (validationError) return res.status(400).json({ message: "Choose a Trainer, date, Reason, and booking detail. Specify the Reason when you choose Others." });
+    const bookingId = randomUUID();
+    await sequelize.transaction(async (transaction) => {
+      const trainer = await TrainerProfile.findByPk(value.trainerId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!trainer || trainer.status !== "ACTIVE") throw new AppError(409, "Choose an active Trainer.");
+      const [busyInTraining, existingBooking] = await Promise.all([
+        scheduledTrainerIds([value.date], transaction),
+        TrainerBooking.findOne({ where: { trainer_profile_id: value.trainerId, booking_date: value.date, status: "BOOKED" }, transaction, lock: transaction.LOCK.UPDATE }),
+      ]);
+      if (busyInTraining.has(value.trainerId) || existingBooking) throw new AppError(409, "This Trainer is already booked or assigned to a Training on that date.");
+      const reasonDetail = value.reason === "OTHERS" ? value.reasonDetail.trim() : null;
+      await TrainerBooking.create({ id: bookingId, trainer_profile_id: value.trainerId, booking_date: value.date, reason: value.reason, reason_detail: reasonDetail, detail_booking: value.detailBooking.trim(), status: "BOOKED", created_by_subject: req.auth!.userId, replaced_by_training_id: null }, { transaction });
+      await appendRequestAuditTrail(req, { action: "CREATE", objectType: "TRAINER_BOOKING", objectId: bookingId, after: { trainer_profile_id: value.trainerId, booking_date: value.date, reason: value.reason, reason_detail: reasonDetail, detail_booking: value.detailBooking.trim(), status: "BOOKED" }, processName: "trainer-booking-create" }, transaction);
+    });
+    return res.status(201).json({ item: { id: bookingId, trainerId: value.trainerId, date: value.date, status: "BOOKED" } });
   })
 );
 
@@ -601,6 +673,8 @@ trainersRouter.delete(
   asyncHandler(async (req, res) => {
     const profile = await TrainerProfile.findByPk(req.params.id);
     if (!profile) return res.status(404).json({ message: "Trainer not found." });
+    if (await TrainerBooking.count({ where: { trainer_profile_id: profile.id } }))
+      return res.status(409).json({ message: "Trainer cannot be deleted because this Trainer has booking history. Deactivate the Trainer instead." });
     const assignments = await loadTrainerAssignments([profile.id]);
     const historyCount = new Set(assignments.map((row) => row.training_id)).size;
     if (historyCount > 0)
