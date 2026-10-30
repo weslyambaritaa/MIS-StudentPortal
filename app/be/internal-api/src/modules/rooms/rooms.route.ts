@@ -106,11 +106,12 @@ roomsRouter.get("/bookings", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
   const pageSize = pageNumber(req.query.pageSize, 8, 100);
   const reason = req.query.reason;
   const search = req.query.search;
-  if (!page || !pageSize || (reason !== undefined && reason !== "ALL" && !["MEETING", "EVENTS", "WORKSHOP", "OTHERS"].includes(String(reason))) || (search !== undefined && (typeof search !== "string" || search.length > 150))) return res.status(400).json({ message: "Invalid room booking filters." });
+  const date = req.query.date;
+  if (!page || !pageSize || (reason !== undefined && reason !== "ALL" && !["MEETING", "EVENTS", "WORKSHOP", "OTHERS"].includes(String(reason))) || (search !== undefined && (typeof search !== "string" || search.length > 150)) || (date !== undefined && !validDate(date))) return res.status(400).json({ message: "Invalid room booking filters." });
   const reasonFilter = typeof reason === "string" && ["MEETING", "EVENTS", "WORKSHOP", "OTHERS"].includes(reason) ? reason as "MEETING" | "EVENTS" | "WORKSHOP" | "OTHERS" : "ALL";
   const searchText = typeof search === "string" ? search : "";
   const searchPattern = searchText ? `%${searchText.replace(/[\\%_]/g, "\\$&")}%` : undefined;
-  const where = { status: "BOOKED", ...(reasonFilter !== "ALL" ? { reason: reasonFilter } : {}), ...(searchPattern ? { [Op.or]: [{ detail_booking: { [Op.iLike]: searchPattern } }, { "$room.name$": { [Op.iLike]: searchPattern } }, { "$room.room_code$": { [Op.iLike]: searchPattern } }] } : {}) };
+  const where = { status: "BOOKED", ...(typeof date === "string" ? { booking_date: date } : {}), ...(reasonFilter !== "ALL" ? { reason: reasonFilter } : {}), ...(searchPattern ? { [Op.or]: [{ detail_booking: { [Op.iLike]: searchPattern } }, { "$room.name$": { [Op.iLike]: searchPattern } }, { "$room.room_code$": { [Op.iLike]: searchPattern } }] } : {}) };
   const { rows, count } = await RoomReservation.findAndCountAll({ where, include: [{ model: Room, as: "room", attributes: ["name", "room_code"], required: true }], distinct: true, order: [["booking_date", "DESC"], ["start_time", "ASC"]], limit: pageSize, offset: (page - 1) * pageSize });
   return res.json({ items: rows.map((booking) => ({ ...booking.toJSON(), room: (booking.get("room") as Room).toJSON() })), page, pageSize, total: count });
 }));
