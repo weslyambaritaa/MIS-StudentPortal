@@ -88,8 +88,8 @@ $realm.bruteForceProtected = $true
 $realm.permanentLockout = $false
 $realm.failureFactor = 10
 $realm.bruteForceStrategy = 'MULTIPLE'
-$realm.waitIncrementSeconds = 60
-$realm.maxFailureWaitSeconds = 60
+$realm.waitIncrementSeconds = 300
+$realm.maxFailureWaitSeconds = 300
 $realm.smtpServer = [pscustomobject]@{
     host = $mailEnv['MAIL_HOST']
     port = $mailEnv['MAIL_PORT']
@@ -174,4 +174,4 @@ try {
     throw 'Keycloak rejected the ST-01 or frontend-client update. No credentials or server response details were printed.'
 }
 
-Write-Output 'ST-01 realm settings saved. MIS Internal and Student Portal clients are public and use PKCE S256; local redirect addresses were added. Reset link lifetime: 15 minutes; login accepts username or email; accounts lock for 1 minute after 10 consecutive failures. SMTP configured from keycloak/.env.'
+Write-Output 'ST-01 realm settings saved. MIS Internal and Student Portal clients are public and use PKCE S256; local redirect addresses were added. Reset link lifetime: 15 minutes; login accepts username or email; accounts lock for 5 minutes after 10 consecutive failures. SMTP configured from keycloak/.env.'
