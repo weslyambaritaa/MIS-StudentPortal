@@ -138,13 +138,11 @@ export default function BookingRoomPage() {
       </section>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
       <section className="min-w-0 rounded-3xl border border-rose-50 bg-white p-5">
-        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <h2 className="text-xl font-medium text-rose-600">Booked Room</h2>
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[10rem_8rem_8rem]">
-            <Input label="Search Room Name" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Example: Bright" leftIcon={<Search size={18}/>} containerClassName="w-full" className="border-rose-600" />
-            <Input ref={bookingDateInputRef} label="Date" type="date" value={bookingDate} onChange={(event) => { setPage(1); setBookingDate(event.target.value); }} onClick={openBookingDatePicker} rightIcon={<CalendarDays size={16}/>} onRightIconClick={openBookingDatePicker} rightIconActionLabel="Open date picker" hideNativeDateIcon containerClassName="w-full" className="border-rose-600 text-xs" />
-            <Dropdown label="Reason" value={reasonFilter} onChange={(value) => { setPage(1); setReasonFilter(value); }} options={[{ value: "ALL", label: "All Reason" }, ...REASONS]} className="border-rose-600" />
-          </div>
+        <h2 className="mb-4 text-xl font-medium text-rose-600">Booked Room</h2>
+        <div className="mb-6 grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
+          <Input label="Search Room Name" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Example: Bright" leftIcon={<Search size={18}/>} containerClassName="w-full min-w-0" className="w-full min-w-0 border-rose-600" />
+          <Input ref={bookingDateInputRef} label="Date" type="date" value={bookingDate} onChange={(event) => { setPage(1); setBookingDate(event.target.value); }} onClick={openBookingDatePicker} rightIcon={<CalendarDays size={16}/>} onRightIconClick={openBookingDatePicker} rightIconActionLabel="Open date picker" hideNativeDateIcon containerClassName="w-full min-w-0" className="w-full min-w-0 border-rose-600" />
+          <Dropdown label="Reason" value={reasonFilter} onChange={(value) => { setPage(1); setReasonFilter(value); }} options={[{ value: "ALL", label: "All Reason" }, ...REASONS]} containerClassName="w-full min-w-0" className="w-full min-w-0 border-rose-600" />
         </div>
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {loading ? <p role="status" className="py-8 text-center text-zinc-500">Loading room bookings...</p> : <DataTable columns={columns} rows={items} getRowKey={(item) => item.id} emptyMessage="No room bookings found." caption="Room bookings" />}
