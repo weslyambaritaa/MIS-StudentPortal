@@ -1,7 +1,8 @@
 "use client";
 
 import { Download, FileText, Trash2, Upload } from "lucide-react";
-import { useRef } from "react";
+import type { ReactNode } from "react";
+import { useRef, useState } from "react";
 
 import { IconButton } from "./icon-button";
 
@@ -9,7 +10,13 @@ type DropBoxProps = {
   label?: string | null;
   description?: string;
   file?: File | null;
-  onFileChange: (file: File | null) => void;
+  onFileChange?: (file: File | null) => void;
+  multiple?: boolean;
+  onFilesChange?: (files: File[]) => void;
+  showFilePreview?: boolean;
+  dropMessage?: ReactNode;
+  icon?: ReactNode;
+  dropzoneClassName?: string;
   accept?: string;
 };
 
@@ -18,9 +25,16 @@ export function DropBox({
   description = "Description",
   file,
   onFileChange,
+  multiple = false,
+  onFilesChange,
+  showFilePreview = true,
+  dropMessage,
+  icon,
+  dropzoneClassName = "flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border p-6 text-center",
   accept,
 }: DropBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
 
   const downloadFile = () => {
     if (!file) return;
@@ -39,27 +53,48 @@ export function DropBox({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={multiple}
         className="sr-only"
-        onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+        onChange={(event) => {
+          const selectedFiles = Array.from(event.target.files ?? []);
+          if (multiple) onFilesChange?.(selectedFiles);
+          else onFileChange?.(selectedFiles[0] ?? null);
+          event.currentTarget.value = "";
+        }}
       />
-      {!file ? (
+      {!file || !showFilePreview || multiple ? (
         <button
           type="button"
-          className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-rose-600 bg-neutral-50 p-6 text-center"
+          className={`${dropzoneClassName} ${dragging ? "border-rose-600 bg-rose-50" : "border-rose-600 bg-neutral-50"}`}
           onClick={() => inputRef.current?.click()}
-          onDragOver={(event) => event.preventDefault()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            setDragging(true);
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+          }}
           onDrop={(event) => {
             event.preventDefault();
-            onFileChange(event.dataTransfer.files?.[0] ?? null);
+            event.stopPropagation();
+            setDragging(false);
+            const droppedFiles = Array.from(event.dataTransfer.files);
+            if (multiple) onFilesChange?.(droppedFiles);
+            else onFileChange?.(droppedFiles[0] ?? null);
           }}
         >
           <span className="flex size-10 items-center justify-center rounded-[100px] bg-radial-[at_50%_0%] from-red-400 to-rose-600 text-white">
-            <Upload size={20} />
+            {icon ?? <Upload size={20} />}
           </span>
-          <span className="text-sm text-gray-600">
+          {dropMessage ?? <span className="text-sm text-gray-600">
             Tarik / Lepaskan file disini atau{" "}
             <span className="text-rose-600">Pilih file Dari Komputer</span>
-          </span>
+          </span>}
         </button>
       ) : (
         <div className="flex items-center gap-3 rounded-xl border border-rose-50 bg-neutral-50 p-3">
@@ -81,7 +116,7 @@ export function DropBox({
             variant="danger"
             icon={<Trash2 size={18} />}
             onClick={() => {
-              onFileChange(null);
+              onFileChange?.(null);
               if (inputRef.current) inputRef.current.value = "";
             }}
           />

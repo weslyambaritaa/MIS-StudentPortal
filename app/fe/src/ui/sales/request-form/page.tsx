@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@mis/ui/badge";
 import { Button, AddButton } from "@mis/ui/button";
@@ -10,7 +10,7 @@ import { Dropdown } from "@mis/ui/dropdown";
 import { EmptyState } from "@mis/ui/empty-state";
 import { IconButton } from "@mis/ui/icon-button";
 import { Input } from "@mis/ui/input";
-import { LordIcon } from "@mis/ui/lord-icon";
+import { DropBox } from "@mis/ui/drop-box";
 import { Pagination } from "@mis/ui/pagination";
 import { useToast } from "@mis/ui/toast";
 import { useApi } from "@/hooks/use-api";
@@ -372,13 +372,13 @@ export default function RequestFormPage({
       };
       const value = editingId
         ? await api<Details>(`/api/v1/internal/request-forms/${editingId}`, {
-            method: "PUT",
-            body: JSON.stringify(body),
-          })
+          method: "PUT",
+          body: JSON.stringify(body),
+        })
         : await api<Details>("/api/v1/internal/request-forms", {
-            method: "POST",
-            body: JSON.stringify(body),
-          });
+          method: "POST",
+          body: JSON.stringify(body),
+        });
       setEditingId(value.item.id);
       await uploadFiles(value.item.id);
       if (submit)
@@ -445,9 +445,7 @@ export default function RequestFormPage({
       setError(e instanceof Error ? e.message : "Could not load details");
     }
   }
-  async function addFiles(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    event.target.value = "";
+  function addFiles(selectedFiles: File[]) {
     const allowed = /\.(pdf|doc|docx)$/i;
     const invalid = selectedFiles.find((file) => !allowed.test(file.name) || file.size > 10 * 1024 * 1024);
     if (invalid) {
@@ -539,87 +537,87 @@ export default function RequestFormPage({
           ) : (
             <>
               <div className="overflow-x-auto rounded-xl border border-[#E9E9E9]">
-            <table className="table-fixed w-full min-w-[960px] text-left text-sm">
-              <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
-                <tr>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Request Form #</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Quotation</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Course</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Type</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Students</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Date</th>
-                  <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
-                  <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
-                    <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
-                    <td className="px-3 py-3 font-medium">
-                      {item.quotation_code ?? "-"}
-                    </td>
-                    <td className="px-3 py-3 font-medium">
-                      {item.account_name}
-                      <div className="text-xs font-normal text-zinc-950/50">
-                        {item.pic_name}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      {item.requested_course ?? `${item.course_count} course(s)`}
-                    </td>
-                    <td className="px-3 py-3">
-                      {item.delivery_type ? deliveryTypeLabel(item.delivery_type) : "-"}
-                    </td>
-                    <td className="px-3 py-3">{item.students ?? "-"}</td>
-                    <td className="px-3 py-3">
-                      {formatSessionDates(item.requested_dates?.split(",") ?? [])}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={statusVariant(item.status)} showDot>
-                        {statusLabel(item.status)}
-                      </Badge>
-                    </td>
-                    <td className="w-28 whitespace-nowrap px-3 py-2">
-                      <div className="flex items-center gap-1">
-                        <IconButton
-                          label="View request form"
-                          icon="eye"
-                          size="sm"
-                          onClick={() => void showDetails(item.id)}
-                        />
-                        {(item.status === "DRAFT" || item.status === "REVISION") && (
-                          <IconButton
-                            label="Edit form"
-                            icon="pencil-line"
-                            size="sm"
-                            onClick={() => void openEdit(item.id)}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {loading && (
-                  <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-zinc-500">
-                      Loading {formName}s…
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 w-full">
-            <Pagination
-              page={page}
-              totalPages={Math.max(1, Math.ceil(total / 8))}
-              pageSize={items.length}
-              totalItems={total}
-              onPageChange={setPage}
-            />
-          </div>
+                <table className="table-fixed w-full min-w-[960px] text-left text-sm">
+                  <thead className="bg-neutral-100 text-sm font-normal text-zinc-950/60 border-b border-[#E9E9E9]">
+                    <tr>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Request Form #</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Quotation</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Account</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Course</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Type</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Students</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Requested Date</th>
+                      <th className="px-3 py-3 font-normal text-zinc-950/40 uppercase">Status</th>
+                      <th className="w-28 whitespace-nowrap px-3 py-3 font-normal text-zinc-950/60 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => (
+                      <tr key={item.id} className="border-t border-[#E9E9E9] text-zinc-700 transition-colors hover:bg-neutral-50/50">
+                        <td className="whitespace-nowrap px-3 py-3 font-medium">{item.request_form_number}</td>
+                        <td className="px-3 py-3 font-medium">
+                          {item.quotation_code ?? "-"}
+                        </td>
+                        <td className="px-3 py-3 font-medium">
+                          {item.account_name}
+                          <div className="text-xs font-normal text-zinc-950/50">
+                            {item.pic_name}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.requested_course ?? `${item.course_count} course(s)`}
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.delivery_type ? deliveryTypeLabel(item.delivery_type) : "-"}
+                        </td>
+                        <td className="px-3 py-3">{item.students ?? "-"}</td>
+                        <td className="px-3 py-3">
+                          {formatSessionDates(item.requested_dates?.split(",") ?? [])}
+                        </td>
+                        <td className="px-3 py-3">
+                          <Badge variant={statusVariant(item.status)} showDot>
+                            {statusLabel(item.status)}
+                          </Badge>
+                        </td>
+                        <td className="w-28 whitespace-nowrap px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <IconButton
+                              label="View request form"
+                              icon="eye"
+                              size="sm"
+                              onClick={() => void showDetails(item.id)}
+                            />
+                            {(item.status === "DRAFT" || item.status === "REVISION") && (
+                              <IconButton
+                                label="Edit form"
+                                icon="pencil-line"
+                                size="sm"
+                                onClick={() => void openEdit(item.id)}
+                              />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {loading && (
+                      <tr>
+                        <td colSpan={9} className="px-3 py-10 text-center text-zinc-500">
+                          Loading {formName}s…
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 w-full">
+                <Pagination
+                  page={page}
+                  totalPages={Math.max(1, Math.ceil(total / 8))}
+                  pageSize={items.length}
+                  totalItems={total}
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
         </section>
@@ -872,39 +870,39 @@ export default function RequestFormPage({
                   <article key={index} className="space-y-3 rounded-2xl border border-rose-50 p-4">
                     {mode === "REGISTRATION" && !line.deliveryType.startsWith("ONLINE") && line.deliveryType !== "INHOUSE" && <fieldset className="space-y-2 text-sm"><legend className="text-gray-600">Training Location <span className="text-[#de1641] font-semibold">*</span></legend><div className="flex gap-5"><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "INTERNAL"} onChange={() => updateLine(index, { locationType: "INTERNAL", locationName: "", locationAddress: "" })} />Internal Training Room</label><label className="inline-flex items-center gap-2"><input type="radio" className="accent-rose-600" name={`location-${index}`} checked={line.locationType === "CLIENT"} onChange={() => updateLine(index, { locationType: "CLIENT" })} />Client Location</label></div></fieldset>}
                     {mode === "REQUEST" && line.deliveryType === "INHOUSE" && <Input
-                        label="Location Training"
-                        required
-                        maxLength={500}
-                        value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")}
-                        onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })}
-                        placeholder="Training location name and address"
-                      />}
+                      label="Location Training"
+                      required
+                      maxLength={500}
+                      value={[line.locationName, line.locationAddress].filter(Boolean).join(" · ")}
+                      onChange={(e) => updateLine(index, { locationName: "", locationAddress: e.target.value })}
+                      placeholder="Training location name and address"
+                    />}
                     {mode === "REGISTRATION" && line.locationType === "CLIENT" && <div className="grid gap-2 sm:grid-cols-2"><Input
-                          label="Location Name"
-                          required
-                          value={line.locationName}
-                          onChange={(e) => updateLine(index, { locationName: e.target.value })}
-                          placeholder="Client site / venue"
-                        /><Input
-                          label="Location Address"
-                          required
-                          value={line.locationAddress}
-                          onChange={(e) => updateLine(index, { locationAddress: e.target.value })}
-                          placeholder="Full address"
-                        /></div>}
+                      label="Location Name"
+                      required
+                      value={line.locationName}
+                      onChange={(e) => updateLine(index, { locationName: e.target.value })}
+                      placeholder="Client site / venue"
+                    /><Input
+                        label="Location Address"
+                        required
+                        value={line.locationAddress}
+                        onChange={(e) => updateLine(index, { locationAddress: e.target.value })}
+                        placeholder="Full address"
+                      /></div>}
                     {line.locationType === "ONLINE" && <p className="text-sm text-zinc-950/60">Online training does not require a physical location.</p>}
                     <label className="block text-sm text-gray-600">Requested Date <span className="text-[#de1641] font-semibold">*</span></label>
                     <MultiDateCalendar dates={line.sessions.map((session) => session.date)} onChange={(dates) => updateLine(index, { sessions: dates.map((date) => ({ date })) })} />
                     <Dropdown
-                        label="Language"
-                        required
-                        value={line.language}
-                        onChange={(val) => updateLine(index, { language: val })}
-                        options={[
-                          { label: "Indonesia", value: "Indonesia" },
-                          { label: "English", value: "English" },
-                        ]}
-                      />
+                      label="Language"
+                      required
+                      value={line.language}
+                      onChange={(val) => updateLine(index, { language: val })}
+                      options={[
+                        { label: "Indonesia", value: "Indonesia" },
+                        { label: "English", value: "English" },
+                      ]}
+                    />
                     <fieldset className="space-y-1 text-sm">
                       <legend className="text-gray-600">Class Type <span className="text-[#de1641] font-semibold">*</span> (Pilih Satu)</legend>
                       <div className="flex flex-wrap gap-x-6 gap-y-2 text-zinc-950/60">{[["STANDARD", "Standard"], ["CUSTOMIZED", "Customized"], ["CEO", "CEO"]].map(([value, label]) => <label className="inline-flex items-center gap-2" key={value}><input className="accent-rose-600" type="radio" name={`service-${index}`} checked={line.serviceType === value} onChange={() => updateLine(index, { serviceType: value })} />{label}</label>)}</div>

@@ -7,6 +7,7 @@ export { SalesAccountAssignment } from "./sales-account-assignment.model";
 export { SessionTrainerAssignment } from "./session-trainer-assignment.model";
 export { SessionTrainerReplacement } from "./session-trainer-replacement.model";
 export { TrainerProfile } from "./trainer-profile.model";
+export { TrainerBooking } from "./trainer-booking.model";
 export { TrainerCertification } from "./trainer-certification.model";
 export { TrainingTrainerAssignment } from "./training-trainer-assignment.model";
 export { Training } from "./training.model";
@@ -20,5 +21,5 @@ export {
   Attendance, AuditTrail, BookingRoom, Certificate, CertificateTemplate, ClassMaterial, Course,
   CourseCategory, Evaluation, ImportBatch, ImportRow, Industry, Invoice, InvoiceDetail, QuotationDocument,
   NotificationLog, NotificationTemplate, ProvisioningLog, Quotation, QuotationOrder, RequestForm,
-  RequestFormCourse, RequestFormSession, RequestFormAttachment, RequestFormNumberSequence, Room, Syllabus,
+  RequestFormCourse, RequestFormSession, RequestFormAttachment, RequestFormNumberSequence, Room, Syllabus, CoursePracticeFile,
 } from "./en03-domain.models";

@@ -5,7 +5,7 @@ import { Router } from "express";
 import { ACCESS_ACTIONS, ROLES } from "@mis/shared-types";
 import { env } from "../../config/env";
 import { sequelize } from "../../database/sequelize";
-import { Course, CourseCategory, QuotationOrder, Syllabus, Training } from "../../database/models";
+import { Course, CourseCategory, CoursePracticeFile, QuotationOrder, Syllabus, Training } from "../../database/models";
 import { authorizeActiveRole } from "../../middlewares/authorize.middleware";
 import { authorizeCapability } from "../../middlewares/authorize-capability.middleware";
 import { AppError } from "../../errors/app-error";
@@ -17,6 +17,7 @@ import { validateBody } from "../../utils/joi-validation";
 export const coursesRouter = Router();
 const LEVELS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 type SyllabusInput = { kind: "URL"; url: string } | { kind: "UPLOAD"; fileName: string; contentBase64: string };
+type PracticeFileInput = { kind: "URL"; url: string } | { kind: "UPLOAD"; fileName: string; contentBase64: string };
 type CourseInput = { courseCode: string; name: string; categoryId: string; durationDays: number; level: typeof LEVELS[number]; status?: "ACTIVE" | "INACTIVE"; syllabus?: SyllabusInput };
 const escapeLike = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 const parsePage = (value: unknown, fallback: number, max: number) => value === undefined ? fallback : typeof value === "string" && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max ? Number(value) : null;
@@ -83,6 +84,71 @@ async function persistSyllabus(courseId: string, input: SyllabusInput, transacti
   }
   const uploaded = await uploadSyllabus(Buffer.from(input.contentBase64, "base64"), `course-${courseId}-${randomUUID()}`);
   return Syllabus.create({ id: randomUUID(), course_id: courseId, file_url: uploaded.url, cloudinary_public_id: uploaded.publicId }, { transaction });
+}
+
+function parsePracticeFileInput(body: unknown): PracticeFileInput {
+  const raw = validateBody<Record<string, unknown>>(Joi.alternatives().try(
+    Joi.object({ kind: Joi.valid("URL").required(), url: Joi.string().uri({ scheme: ["http", "https"] }).max(2048).required() }).unknown(false),
+    Joi.object({ kind: Joi.valid("UPLOAD").required(), fileName: Joi.string().trim().min(1).max(255).required(), contentBase64: Joi.string().max(14_000_000).pattern(/^[A-Za-z0-9+/]+={0,2}$/).required() }).unknown(false),
+  ), body);
+  if (raw.kind === "URL" && typeof raw.url === "string") {
+    let parsed: URL;
+    try { parsed = new URL(raw.url.trim()); } catch { throw new AppError(400, "Enter a valid Practice File URL"); }
+    if (!(parsed.protocol === "http:" || parsed.protocol === "https:")) throw new AppError(400, "Practice File URL must use HTTP or HTTPS");
+    return { kind: "URL", url: parsed.toString() };
+  }
+  if (raw.kind === "UPLOAD" && typeof raw.fileName === "string" && typeof raw.contentBase64 === "string") {
+    const fileName = raw.fileName.replaceAll("\\", "/").split("/").pop()?.trim();
+    const buffer = Buffer.from(raw.contentBase64, "base64");
+    if (!fileName || !buffer.length || buffer.byteLength > 10 * 1024 * 1024) throw new AppError(400, "Each Practice File must be no larger than 10 MB");
+    return { kind: "UPLOAD", fileName: fileName.slice(0, 255), contentBase64: raw.contentBase64 };
+  }
+  throw new AppError(400, "Choose a Practice File upload or enter a URL");
+}
+
+async function uploadPracticeFile(buffer: Buffer, fileName: string, publicId: string) {
+  if (!env.cloudinaryConfigured) throw new AppError(503, "Practice File storage is not configured");
+  cloudinary.config({ cloud_name: env.cloudinaryCloudName, api_key: env.cloudinaryApiKey, api_secret: env.cloudinaryApiSecret, secure: true });
+  return new Promise<{ url: string; publicId: string; resourceType: string; format: string | null }>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({ resource_type: "auto", type: "authenticated", access_mode: "authenticated", folder: "course-practice-files", public_id: publicId, filename_override: fileName, use_filename: false, unique_filename: false, overwrite: false }, (error, result) => {
+      if (error || !result?.secure_url || !result.public_id) return reject(error ?? new Error("Cloudinary returned no Practice File URL"));
+      resolve({ url: result.secure_url, publicId: result.public_id, resourceType: result.resource_type, format: result.format ?? null });
+    });
+    stream.end(buffer);
+  });
+}
+
+function practiceDownloadUrl(row: Record<string, unknown>) {
+  if (typeof row.cloudinary_public_id !== "string" || !row.cloudinary_public_id || !env.cloudinaryConfigured) return row.file_url;
+  cloudinary.config({ cloud_name: env.cloudinaryCloudName, api_key: env.cloudinaryApiKey, api_secret: env.cloudinaryApiSecret, secure: true });
+  return cloudinary.utils.private_download_url(row.cloudinary_public_id, typeof row.cloudinary_format === "string" ? row.cloudinary_format : "",
+  {
+    resource_type: typeof row.cloudinary_resource_type === "string" ? row.cloudinary_resource_type : "raw",
+    type: "authenticated",
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+  });
+}
+
+function practiceFileDto(row: Record<string, unknown>) {
+  return { id: row.id, name: row.file_name, url: row.file_url, download_url: practiceDownloadUrl(row), source_type: row.source_type, created_at: row.created_at };
+}
+
+async function practiceFilesForCourse(courseId: string) {
+  const rows = await CoursePracticeFile.findAll({ where: { course_id: courseId }, order: [["created_at", "ASC"], ["id", "ASC"]], raw: true }) as unknown as Record<string, unknown>[];
+  return rows.map(practiceFileDto);
+}
+
+async function persistPracticeFile(courseId: string, input: PracticeFileInput, transaction: Transaction) {
+  if (input.kind === "URL") {
+    const parsed = new URL(input.url);
+    const lastPathPart = parsed.pathname.split("/").filter(Boolean).pop();
+    let fileName = lastPathPart ?? parsed.hostname;
+    try { fileName = decodeURIComponent(fileName); } catch { /* Keep the encoded filename if its URL escape is malformed. */ }
+    fileName = fileName.slice(0, 255);
+    return CoursePracticeFile.create({ id: randomUUID(), course_id: courseId, file_name: fileName, file_url: input.url, source_type: "URL", cloudinary_public_id: null, cloudinary_resource_type: null, cloudinary_format: null }, { transaction });
+  }
+  const uploaded = await uploadPracticeFile(Buffer.from(input.contentBase64, "base64"), input.fileName, `practice-${randomUUID()}`);
+  return CoursePracticeFile.create({ id: randomUUID(), course_id: courseId, file_name: input.fileName, file_url: uploaded.url, source_type: "UPLOAD", cloudinary_public_id: uploaded.publicId, cloudinary_resource_type: uploaded.resourceType, cloudinary_format: uploaded.format }, { transaction });
 }
 
 function versionLabel(createdAt: unknown) {
@@ -159,6 +225,36 @@ coursesRouter.get("/:id/syllabuses", authorizeActiveRole(ROLES.ADMIN), authorize
   return res.json({ items: rows.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) })) });
 }));
 
+coursesRouter.post("/:id/practice-files", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
+  const course = await Course.findByPk(req.params.id);
+  if (!course) return res.status(404).json({ message: "Course not found" });
+  const input = parsePracticeFileInput(req.body);
+  const transaction = await sequelize.transaction();
+  try {
+    const item = await persistPracticeFile(course.id, input, transaction);
+    await appendRequestAuditTrail(req, { action: "CREATE", objectType: "COURSE_PRACTICE_FILE", objectId: item.id, after: { course_id: course.id, file_name: item.file_name, source_type: item.source_type }, processName: "course-practice-file-create" }, transaction);
+    await transaction.commit();
+    return res.status(201).json({ item: practiceFileDto(item.get({ plain: true }) as Record<string, unknown>) });
+  } catch (error) { await transaction.rollback(); throw error; }
+}));
+
+coursesRouter.delete("/:id/practice-files/:fileId", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.EDIT), asyncHandler(async (req, res) => {
+  const transaction = await sequelize.transaction();
+  let asset: CoursePracticeFile | null = null;
+  try {
+    asset = await CoursePracticeFile.findOne({ where: { id: req.params.fileId, course_id: req.params.id }, transaction, lock: transaction.LOCK.UPDATE });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ message: "Practice File not found" }); }
+    await appendRequestAuditTrail(req, { action: "DELETE", objectType: "COURSE_PRACTICE_FILE", objectId: asset.id, before: { course_id: asset.course_id, file_name: asset.file_name, source_type: asset.source_type }, processName: "course-practice-file-delete" }, transaction);
+    await asset.destroy({ transaction });
+    await transaction.commit();
+  } catch (error) { await transaction.rollback(); throw error; }
+  if (asset?.cloudinary_public_id && env.cloudinaryConfigured) {
+    cloudinary.config({ cloud_name: env.cloudinaryCloudName, api_key: env.cloudinaryApiKey, api_secret: env.cloudinaryApiSecret, secure: true });
+    await cloudinary.uploader.destroy(asset.cloudinary_public_id, { resource_type: (asset.cloudinary_resource_type ?? "raw") as "image" | "video" | "raw", type: "authenticated" }).catch(() => undefined);
+  }
+  return res.status(204).end();
+}));
+
 coursesRouter.get("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.VIEW), asyncHandler(async (req, res) => {
   const course = await Course.findByPk(req.params.id, { include: [{ model: CourseCategory, as: "category", attributes: ["name"], required: true }] });
   if (!course) return res.status(404).json({ message: "Course not found" });
@@ -167,7 +263,7 @@ coursesRouter.get("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapability(
   const row: Record<string, any> = { ...courseFields, category_name: category.name };
   const versions = await Syllabus.findAll({ where: { course_id: req.params.id }, order: [["created_at", "DESC"], ["id", "DESC"]], raw: true }) as unknown as Record<string, unknown>[];
   const syllabuses = versions.map(row => ({ id: row.id, url: row.file_url, download_url: syllabusDownloadUrl(row.cloudinary_public_id), created_at: row.created_at, version: versionLabel(row.created_at) }));
-  return res.json({ item: { ...row, duration_days: Math.max(1, Math.ceil(Number(row.duration_minutes) / 480)), syllabuses } });
+  return res.json({ item: { ...row, duration_days: Math.max(1, Math.ceil(Number(row.duration_minutes) / 480)), syllabuses, practice_files: await practiceFilesForCourse(req.params.id) } });
 }));
 
 coursesRouter.post("/", authorizeActiveRole(ROLES.ADMIN), authorizeCapability("COURSE", ACCESS_ACTIONS.CREATE), asyncHandler(async (req, res) => {
@@ -224,14 +320,20 @@ coursesRouter.delete("/:id", authorizeActiveRole(ROLES.ADMIN), authorizeCapabili
     ]);
     if (quotationCount + trainingCount > 0) { await transaction.rollback(); return res.status(409).json({ message: "This Course is used by a Quotation or Training and cannot be deleted. You can deactivate it instead." }); }
     const assets = await Syllabus.findAll({ attributes: ["cloudinary_public_id"], where: { course_id: course.id, cloudinary_public_id: { [Op.ne]: null } }, transaction });
+    const practiceAssets = await CoursePracticeFile.findAll({ attributes: ["cloudinary_public_id", "cloudinary_resource_type"], where: { course_id: course.id, cloudinary_public_id: { [Op.ne]: null } }, transaction });
     const before = { course_code: course.course_code, name: course.name, category_id: course.category_id };
     await appendRequestAuditTrail(req, { action: "DELETE", objectType: "COURSE", objectId: course.id, before, processName: "course-delete" }, transaction);
     await Syllabus.destroy({ where: { course_id: course.id }, transaction });
+    await CoursePracticeFile.destroy({ where: { course_id: course.id }, transaction });
     await course.destroy({ transaction });
     await transaction.commit();
     if (env.cloudinaryConfigured && assets.length) {
       configureCloudinary();
       await Promise.all(assets.map(asset => cloudinary.uploader.destroy(asset.cloudinary_public_id!, { resource_type: "image", type: "authenticated" }).catch(() => undefined)));
+    }
+    if (env.cloudinaryConfigured && practiceAssets.length) {
+      cloudinary.config({ cloud_name: env.cloudinaryCloudName, api_key: env.cloudinaryApiKey, api_secret: env.cloudinaryApiSecret, secure: true });
+      await Promise.all(practiceAssets.map(asset => cloudinary.uploader.destroy(asset.cloudinary_public_id!, { resource_type: (asset.cloudinary_resource_type ?? "raw") as "image" | "video" | "raw", type: "authenticated" }).catch(() => undefined)));
     }
     return res.status(204).end();
   } catch (error) { await transaction.rollback(); if ((error as { name?: string }).name === "SequelizeForeignKeyConstraintError") return res.status(409).json({ message: "This Course is in use and cannot be deleted. You can deactivate it instead." }); throw error; }

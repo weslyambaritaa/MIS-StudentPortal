@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { BUSINESS_ROLES, type BusinessRole } from "@mis/shared-types";
 import { AppShell } from "@/components/layout/app-shell";
+import { Dropdown } from "@mis/ui/dropdown";
+import { Input } from "@mis/ui/input";
 import { Pagination } from "@mis/ui/pagination";
 import { useApi } from "@/hooks/use-api";
 import { AuditDetailDialog, type AuditDetail } from "./dialog/audit-detail-dialog";
@@ -78,24 +80,15 @@ export default function AuditTrailPage() {
           <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
             <h2 className="text-2xl font-medium text-rose-600">Activity Within the System</h2>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">User Role
-                <select value={filters.role} onChange={(event) => updateFilter({ ...filters, role: event.target.value })} className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-rose-200">
-                  <option value="">All Role</option>
-                  {BUSINESS_ROLES.map((role: BusinessRole) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}
-                </select>
-              </label>
-              <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">From Date
-                <input id="audit-from-date" aria-label="From Date" type="date" value={filters.from} max={filters.to || undefined} onChange={(event) => {
+              <Dropdown label="User Role" value={filters.role} onChange={(role) => updateFilter({ ...filters, role })} placeholder="All Role" options={BUSINESS_ROLES.map((role: BusinessRole) => ({ value: role, label: role[0].toUpperCase() + role.slice(1) }))} containerClassName="w-full sm:w-44" className="border-rose-600" />
+              <Input label="From Date" id="audit-from-date" aria-label="From Date" type="date" value={filters.from} max={filters.to || undefined} onChange={(event) => {
                   const from = event.target.value;
                   updateFilter({ ...filters, from, to: filters.to && from && filters.to < from ? from : filters.to });
-                }} className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-rose-200" />
-              </label>
-              <label className="flex w-full flex-col gap-[3px] text-sm text-gray-600 sm:w-44">To Date
-                <input id="audit-to-date" aria-label="To Date" type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => {
+                }} containerClassName="w-full sm:w-44" className="border-rose-600" />
+              <Input label="To Date" id="audit-to-date" aria-label="To Date" type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => {
                   const to = event.target.value;
                   updateFilter({ ...filters, to, from: filters.from && to && filters.from > to ? to : filters.from });
-                }} className="h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-rose-200" />
-              </label>
+                }} containerClassName="w-full sm:w-44" className="border-rose-600" />
             </div>
           </div>
 
