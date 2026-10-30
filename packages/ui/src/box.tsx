@@ -2,6 +2,7 @@
 
 import type { ChangeEvent, ReactNode } from "react";
 import { LordIcon, type LordIconName } from "./lord-icon";
+import { DropdownSelect } from "./dropdown-select";
 
 export type BoxOption = {
   label: string;
@@ -80,37 +81,25 @@ export function Box({
   return (
     <label className="flex min-w-0 flex-col gap-[3px] text-sm font-medium text-gray-600">
       {label && <span>{label}</span>}
+      {options ? (
+        <DropdownSelect
+          name={name}
+          value={value}
+          onChange={onChange as ((event: ChangeEvent<HTMLSelectElement>) => void) | undefined}
+          required={required}
+          disabled={disabled}
+          placeholder={placeholder}
+          leftIcon={leftIcon}
+          rightIcon={rightIcon}
+          className="w-full"
+        >
+          <option value="">{placeholder}</option>
+          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </DropdownSelect>
+      ) : (
       <span className={controlClass}>
         {renderIcon(leftIcon, "left")}
-        {options ? (
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <select
-              name={name}
-              value={value}
-              onChange={onChange}
-              required={required}
-              disabled={disabled}
-              className={`${fieldClass} appearance-none pr-6 cursor-pointer ${
-                !value ? "text-zinc-950 opacity-40 group-hover/box:text-rose-600 group-hover/box:opacity-100" : ""
-              }`}
-            >
-              <option value="">{placeholder}</option>
-              {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <LordIcon
-              src="chevron-down"
-              size={20}
-              trigger="hover"
-              target="select"
-              colors="primary:#6b7280,secondary:#9ca3af"
-              className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 shrink-0 transition-colors duration-150 group-hover/box:[--lord-icon-primary:#de1641] group-hover/box:[--lord-icon-secondary:#de1641]"
-            />
-          </div>
-        ) : multiline ? (
+        {multiline ? (
           <textarea
             name={name}
             value={value}
@@ -135,6 +124,7 @@ export function Box({
         )}
         {renderIcon(rightIcon, "right")}
       </span>
+      )}
     </label>
   );
 }

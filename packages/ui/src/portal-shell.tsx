@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, LogOut, Menu, User, X } from "lucide-react";
 import { Button } from "./button";
 import { IconButton } from "./icon-button";
 import { LogoutConfirmationModal } from "./logout-confirmation-modal";
+import { Dropdown } from "./dropdown";
 
 export type PortalNavigationItem = {
   key: string;
@@ -149,7 +150,7 @@ export function PortalShell({
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {headerActions}
-        {availableRoles.length > 0 && activeRole && <label className="flex items-center gap-2 text-sm text-zinc-700"><span className="hidden sm:inline">Role</span><select aria-label="Active role" className="max-w-36 rounded-full border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-rose-400" value={activeRole} onChange={(event) => onRoleChange(event.target.value)}>{availableRoles.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}</select></label>}
+        {availableRoles.length > 0 && activeRole && <div className="flex items-center gap-2 text-sm text-zinc-700"><span className="hidden sm:inline">Role</span><Dropdown ariaLabel="Active role" className="w-36" containerClassName="max-w-36" value={activeRole} options={availableRoles.map((role) => ({ value: role, label: roleLabel(role) }))} onChange={onRoleChange} /></div>}
         <Button variant="danger" size="default" leftIcon={<LogOut size={16} strokeWidth={1.7} />} onClick={() => setLogoutOpen(true)}>Logout</Button>
       </div>
     </header>

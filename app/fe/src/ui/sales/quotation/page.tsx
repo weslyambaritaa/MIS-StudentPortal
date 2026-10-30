@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, X } from "lucide-react";
@@ -471,7 +472,7 @@ export default function QuotationPage() {
             <section className="flex flex-col gap-1">
               <h3 className="text-base font-medium text-rose-600">Class / Course Type</h3>
               <div className="relative">
-                <select
+                <DropdownSelect
                   className={`${field} appearance-none pr-10`}
                   value={form.classType}
                   onChange={(e) =>
@@ -483,7 +484,7 @@ export default function QuotationPage() {
                       {typeLabel(type)}
                     </option>
                   ))}
-                </select>
+                </DropdownSelect>
                 <ChevronDown
                   size={16}
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
@@ -505,7 +506,7 @@ export default function QuotationPage() {
             <label className={label}>
               Account *
               <span className="relative">
-                <select
+                <DropdownSelect
                   required
                   className={`${field} appearance-none pr-9`}
                   value={form.accountId}
@@ -517,7 +518,7 @@ export default function QuotationPage() {
                       {a.name}
                     </option>
                   ))}
-                </select>
+                </DropdownSelect>
                 <ChevronDown
                   size={16}
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
@@ -527,7 +528,7 @@ export default function QuotationPage() {
             <label className={label}>
               Person in Charge *
               <span className="relative">
-                <select
+                <DropdownSelect
                   required
                   className={`${field} appearance-none pr-9`}
                   value={form.picId}
@@ -540,7 +541,7 @@ export default function QuotationPage() {
                       {p.name} · {p.email}
                     </option>
                   ))}
-                </select>
+                </DropdownSelect>
                 <ChevronDown
                   size={16}
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
@@ -551,7 +552,7 @@ export default function QuotationPage() {
               Current Status *
               {editor ? (
                 <span className="relative">
-                  <select
+                  <DropdownSelect
                     className={`${field} appearance-none pr-9 text-slate-900/40`}
                     value={form.status}
                     onChange={(e) => setForm((current) => ({ ...current, status: e.target.value as typeof current.status }))}
@@ -560,7 +561,7 @@ export default function QuotationPage() {
                     <option value="APPROVED">Approved</option>
                     <option value="CANCELLED">Cancelled</option>
                     <option value="REVISION">Revision</option>
-                  </select>
+                  </DropdownSelect>
                   <ChevronDown
                     size={16}
                     className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"
@@ -618,7 +619,7 @@ export default function QuotationPage() {
                 <label className={label}>
                   Requested Course *
                   <span className="relative">
-                    <select
+                    <DropdownSelect
                       required
                       className={`${field} appearance-none pr-9`}
                       value={line.courseId}
@@ -630,7 +631,7 @@ export default function QuotationPage() {
                           {c.name} - {Math.max(1, Math.ceil(c.duration_minutes / 480))} day(s)
                         </option>
                       ))}
-                    </select>
+                    </DropdownSelect>
                     <ChevronDown
                       size={16}
                       className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-900/40"

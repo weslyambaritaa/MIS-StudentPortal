@@ -19,3 +19,4 @@ export * from "./toast";
 export * from "./lord-icon";
 export * from "./under-construction";
 export * from "./dropdown";
+export * from "./dropdown-select";

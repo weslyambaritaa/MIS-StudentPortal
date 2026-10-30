@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Search, Trash2 } from "lucide-react";
@@ -91,7 +92,7 @@ export default function TrainingRoomsPage() {
                 <input type="number" min="1" value={minCapacity} onChange={(event) => { setPage(1); setMinCapacity(event.target.value); }} placeholder="All Capacity" className="h-9 w-36 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm outline-none" />
               </label>
               <label className="flex flex-col gap-[3px] text-sm text-gray-600">Status
-                <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-36 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm outline-none"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>
+                <DropdownSelect value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }} className="h-9 w-36 rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm outline-none"><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></DropdownSelect>
               </label>
             </div>
           </div>

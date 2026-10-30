@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Download, Search } from "lucide-react";
@@ -105,9 +106,9 @@ export default function AccessLogsPage() {
 
       <form onSubmit={submitFilters} className="mt-6 grid gap-3 rounded-3xl border border-rose-50 bg-white p-5 md:grid-cols-3 xl:grid-cols-6">
         <label className="text-sm text-gray-600">Penyimpanan
-          <select value={filters.storage} onChange={(event) => setFilters({ ...filters, storage: event.target.value as Filters["storage"] })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800">
+          <DropdownSelect value={filters.storage} onChange={(event) => setFilters({ ...filters, storage: event.target.value as Filters["storage"] })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800">
             <option value="active">Aktif (≤ 12 bulan)</option><option value="archive">Arsip (&gt; 12 bulan)</option>
-          </select>
+          </DropdownSelect>
         </label>
         <label className="text-sm text-gray-600">Jenis kejadian
           <input value={filters.eventType} onChange={(event) => setFilters({ ...filters, eventType: event.target.value })} maxLength={100} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" placeholder="LOGIN, UPDATE…" />
@@ -116,9 +117,9 @@ export default function AccessLogsPage() {
           <input value={filters.actorSubject} onChange={(event) => setFilters({ ...filters, actorSubject: event.target.value })} maxLength={255} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" placeholder="Keycloak subject" />
         </label>
         <label className="text-sm text-gray-600">Hasil
-          <select value={filters.outcome} onChange={(event) => setFilters({ ...filters, outcome: event.target.value })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800">
+          <DropdownSelect value={filters.outcome} onChange={(event) => setFilters({ ...filters, outcome: event.target.value })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800">
             <option value="">Semua</option><option value="SUCCESS">Berhasil</option><option value="FAILURE">Gagal</option><option value="UNKNOWN">Tidak diketahui</option>
-          </select>
+          </DropdownSelect>
         </label>
         <label className="text-sm text-gray-600">Dari
           <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} className="mt-1 h-10 w-full rounded-full border border-rose-100 bg-neutral-50 px-3 text-gray-800" />

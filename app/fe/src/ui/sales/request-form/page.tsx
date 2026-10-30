@@ -1,4 +1,5 @@
 "use client";
+import { DropdownSelect } from "@mis/ui/dropdown-select";
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
@@ -621,7 +622,7 @@ export default function RequestFormPage({
                 </div>
                 {sourceTab === "QUOTATION" && <label className="block text-sm">
                   Pick approved Quotation
-                  <select
+                  <DropdownSelect
                     className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200"
                     value={quotationId}
                     disabled={Boolean(editingId && quotationId)}
@@ -664,7 +665,7 @@ export default function RequestFormPage({
                         {q.quotation_code} — {q.account_name} / {q.pic_name}
                       </option>
                     ))}
-                  </select>
+                  </DropdownSelect>
                 </label>}
                 {quotationId && (
                   <section className="space-y-3">
@@ -701,7 +702,7 @@ export default function RequestFormPage({
                   <>
                     <label className="block text-sm">
                       Account *
-                      <select
+                      <DropdownSelect
                         className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200"
                         value={accountId}
                         onChange={(e) => {
@@ -715,11 +716,11 @@ export default function RequestFormPage({
                             {a.name}
                           </option>
                         ))}
-                      </select>
+                      </DropdownSelect>
                     </label>
                     <label className="block text-sm">
                       PIC *
-                      <select
+                      <DropdownSelect
                         className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200"
                         value={picId}
                         onChange={(e) => setPicId(e.target.value)}
@@ -730,11 +731,11 @@ export default function RequestFormPage({
                             {p.name} — {p.email}
                           </option>
                         ))}
-                      </select>
+                      </DropdownSelect>
                     </label>
                   </>
                 )}
-                {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><span className="text-sm font-medium text-gray-600">Course</span><label className="block text-sm text-gray-600">Requested Course *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Format *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"} onChange={(e) => updateCourseFormat(index, e.target.value as "ONLINE" | "OFFLINE")}><option value="OFFLINE">Offline</option><option value="ONLINE">Online</option></select></label></div><label className="block text-sm text-gray-600">Class Type *<select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateCourseDeliveryType(index, e.target.value)}>{deliveryOptions.filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>)}</section>}
+                {sourceTab === "MANUAL" && <section className="space-y-3"><h4 className="text-base font-medium text-gray-600">Course Detail</h4>{lines.map((line, index) => <div className="space-y-2 rounded-xl border border-rose-50 bg-neutral-50 p-3" key={index}><span className="text-sm font-medium text-gray-600">Course</span><label className="block text-sm text-gray-600">Requested Course *<DropdownSelect className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.courseId} onChange={(e) => updateLine(index, { courseId: e.target.value })}><option value="">Pick a Course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</DropdownSelect></label><div className="grid grid-cols-2 gap-2"><label className="text-sm text-gray-600">Student Amount *<input className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" type="number" min={1} value={line.amountStudent} onChange={(e) => updateLine(index, { amountStudent: Number(e.target.value) })} /></label><label className="text-sm text-gray-600">Class Format *<DropdownSelect className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType.startsWith("ONLINE") ? "ONLINE" : "OFFLINE"} onChange={(e) => updateCourseFormat(index, e.target.value as "ONLINE" | "OFFLINE")}><option value="OFFLINE">Offline</option><option value="ONLINE">Online</option></DropdownSelect></label></div><label className="block text-sm text-gray-600">Class Type *<DropdownSelect className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.deliveryType} onChange={(e) => updateCourseDeliveryType(index, e.target.value)}>{deliveryOptions.filter(([value]) => line.deliveryType.startsWith("ONLINE") ? value.startsWith("ONLINE") : !value.startsWith("ONLINE")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</DropdownSelect></label></div>)}</section>}
               </div>
               <div className="space-y-4 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2 text-base font-medium text-slate-900"><span className="flex size-5 items-center justify-center text-zinc-950/60">▣</span>{formName}</div>
@@ -753,9 +754,9 @@ export default function RequestFormPage({
                     <label className="block text-sm text-gray-600">Requested Date *</label>
                     <MultiDateCalendar dates={line.sessions.map((session) => session.date)} onChange={(dates) => updateLine(index, { sessions: dates.map((date) => ({ date })) })} />
                     <label className="block text-sm text-gray-600">Language *
-                      <select className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.language} onChange={(e) => updateLine(index, { language: e.target.value })}>
+                      <DropdownSelect className="mt-1 h-9 w-full rounded-full border border-rose-600 bg-neutral-50 px-3 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-rose-200" value={line.language} onChange={(e) => updateLine(index, { language: e.target.value })}>
                         <option>Indonesia</option><option>English</option>
-                      </select>
+                      </DropdownSelect>
                     </label>
                     <fieldset className="space-y-1 text-sm">
                       <legend className="text-gray-600">Class Type * (Pilih Satu)</legend>
